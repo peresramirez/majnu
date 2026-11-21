@@ -125,22 +125,24 @@ function CountdownPage({
       aria-label={label}
       aria-disabled={locked || undefined}
       onClick={() => (door.locked ? onLocked(door) : onOpen(door))}
-      className={`tearoff relative flex flex-col overflow-hidden rounded-[14px] text-center ${focusRing}`}
+      className={`tearoff relative flex w-full flex-col overflow-hidden rounded-[14px] text-center ${focusRing}`}
       data-state={locked ? "locked" : opened ? "opened" : "ready"}
       data-today={today || undefined}
       style={{ boxShadow: locked ? "none" : "0 14px 28px -18px rgba(0,0,0,0.55)" }}
     >
       <span
         aria-hidden="true"
-        className="relative flex h-9 items-center justify-center text-[11px] font-bold uppercase tracking-[0.2em]"
+        className="relative flex h-9 items-center justify-center text-[11px] font-bold uppercase tracking-[0.14em]"
         style={locked ? { background: "var(--wrap-shade)", color: "var(--wrap-ink)" } : { background: "var(--accent)", color: "var(--accent-ink)" }}
       >
-        <span className="absolute left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-black/25" />
-        <span className="absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-black/25" />
+        {/* Binder holes, kept to the edges so the label fits a 100 px page */}
+        <span className="absolute left-2.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-black/25" />
+        <span className="absolute right-2.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-black/25" />
         <span className={`flex items-center gap-1 ${locked ? "opacity-70" : ""}`}>
           {locked ? (
             <>
-              <LockIcon className="h-3 w-3" /> Locked
+              <LockIcon className="h-3 w-3" />
+              <span className="hidden sm:inline">Locked</span>
             </>
           ) : opened ? (
             "Opened"
@@ -267,17 +269,23 @@ export function Calendar({ content, variant }: { content: PublicCalendarContent;
     noticeTimer.current = setTimeout(() => setNotice(null), 2600)
   }, [])
 
-  const progress =
+  // A date never breaks across lines ("2 December", not "2 / December").
+  const nextOn = firstLocked ? formatDay(firstLocked.opensOn).replace(" ", "\u00a0") : ""
+  const progress: { lead: string; next: string | null } =
     openCount === 0 && firstLocked
-      ? `The first door opens on ${formatDay(firstLocked.opensOn)}`
+      ? { lead: `The first door opens on ${nextOn}`, next: null }
       : openCount < total && firstLocked
-        ? `${openCount} of ${total} doors open. The next one opens on ${formatDay(firstLocked.opensOn)}.`
-        : "Every door is open"
+        ? { lead: `${openCount} of ${total} doors open`, next: `The next one opens on ${nextOn}` }
+        : { lead: "Every door is open", next: null }
 
   const Tile = variant === "advent" ? AdventDoor : CountdownPage
 
   return (
-    <main className="relative min-h-[100svh] overflow-hidden" style={{ background: "var(--page)", color: "var(--page-ink)" }}>
+    <main
+      className="relative min-h-[100svh] overflow-hidden"
+      // Lining figures: old-style ones make 1, 10 and 11 read as I, IO and II.
+      style={{ background: "var(--page)", color: "var(--page-ink)", fontVariantNumeric: "lining-nums" }}
+    >
       <div className="relative mx-auto max-w-[760px] px-4 pb-12 pt-10 sm:pt-16">
         <header className="cal-rise mx-auto max-w-[520px] text-center">
           <p className="text-[12px] font-semibold uppercase tracking-[0.28em] text-[var(--page-muted)]">For {firstName(content.recipientName)}</p>
@@ -289,28 +297,50 @@ export function Calendar({ content, variant }: { content: PublicCalendarContent;
               {content.intro}
             </p>
           ) : null}
-          <p className="mt-6 inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-[13px] font-medium" style={{ background: "color-mix(in srgb, var(--page-ink) 8%, transparent)" }}>
+          <p
+            className={`mt-6 inline-flex max-w-full items-center gap-3 px-4 py-2 text-left text-[13px] leading-snug ${progress.next ? "rounded-[20px]" : "rounded-full"}`}
+            style={{ background: "color-mix(in srgb, var(--page-ink) 8%, transparent)" }}
+          >
             <MoonPhase lit={total ? openCount / total : 0} size={18} className="shrink-0 text-[var(--accent)]" />
-            <span>{progress}</span>
+            <span>
+              <span className="block font-semibold">{progress.lead}</span>
+              {progress.next ? <span className="block text-[var(--page-muted)]">{progress.next}</span> : null}
+            </span>
           </p>
         </header>
 
-        <div
-          className={`cal-rise mt-9 grid ${variant === "advent" ? "grid-cols-4 gap-2.5 sm:grid-cols-6 sm:gap-3" : "grid-cols-3 gap-3 sm:grid-cols-4"}`}
-          style={{ animationDelay: "160ms" }}
-        >
-          {doors.map((door) => (
-            <Tile
-              key={door.day}
-              door={door}
-              total={total}
-              opened={opened.has(door.day)}
-              today={!!today && door.opensOn.slice(0, 10) === today && !door.locked}
-              onOpen={openDoor}
-              onLocked={lockedTap}
-            />
-          ))}
-        </div>
+        {variant === "advent" ? (
+          <div className="cal-rise mt-9 grid grid-cols-4 gap-2.5 sm:grid-cols-6 sm:gap-3" style={{ animationDelay: "160ms" }}>
+            {doors.map((door) => (
+              <Tile
+                key={door.day}
+                door={door}
+                total={total}
+                opened={opened.has(door.day)}
+                today={!!today && door.opensOn.slice(0, 10) === today && !door.locked}
+                onOpen={openDoor}
+                onLocked={lockedTap}
+              />
+            ))}
+          </div>
+        ) : (
+          // Countdowns run from 1 to 31 days: rows are centred, so three days
+          // sit in the middle rather than in the left of a four-column grid.
+          <div className="cal-rise mt-9 flex flex-wrap justify-center gap-3" style={{ animationDelay: "160ms" }}>
+            {doors.map((door) => (
+              <div key={door.day} className="flex w-[calc((100%-24px)/3)] sm:w-[calc((100%-36px)/4)]">
+                <Tile
+                  door={door}
+                  total={total}
+                  opened={opened.has(door.day)}
+                  today={!!today && door.opensOn.slice(0, 10) === today && !door.locked}
+                  onOpen={openDoor}
+                  onLocked={lockedTap}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <p className="mt-12 text-center text-[26px]" style={signOffStyle}>
           From {content.senderName}
@@ -330,6 +360,7 @@ export function Calendar({ content, variant }: { content: PublicCalendarContent;
 
       <style>{`
         .door { perspective: 700px; }
+        .door, .tearoff { font-variant-numeric: lining-nums; }
         .door-leaf { transform-origin: 0 50%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
         .door[data-state="opened"] .door-leaf { transform: rotateY(-108deg); }
         .door[data-state="locked"] { cursor: default; }
