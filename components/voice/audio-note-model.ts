@@ -4,7 +4,7 @@
 // happens around it: loading the saved note, listening back to a new one,
 // saving, re-recording and removing.
 //
-//   loading ──loaded──▶ empty | saved
+//   loading ──loaded──▶ empty | saved        (a calendar: unavailable, shown as nothing)
 //   empty | saved ──recorded──▶ draft ──save──▶ saving ──saved──▶ saved
 //                                 │ discard ▶ back        └─save_failed▶ draft
 //   saved ──remove──▶ confirm ──confirm──▶ removing ──removed──▶ empty
@@ -16,6 +16,8 @@ export type NoteNotice = { kind: "error"; message: string } | { kind: "saved" } 
 
 export type NoteState =
   | { view: "loading" }
+  // The gift cannot have a note (a calendar): the recorder shows nothing.
+  | { view: "unavailable" }
   | { view: "empty"; notice: NoteNotice | null }
   | { view: "saved"; note: AudioNoteSummary; notice: NoteNotice | null }
   | { view: "confirm_remove"; note: AudioNoteSummary }
@@ -27,6 +29,7 @@ export type NoteState =
 export type NoteEvent =
   | { type: "loaded"; note: AudioNoteSummary | null }
   | { type: "load_failed"; message: string }
+  | { type: "not_available" }
   | { type: "recorded"; recording: Recording }
   | { type: "discard" }
   | { type: "save" }
@@ -69,9 +72,11 @@ export function noteReducer(state: NoteState, event: NoteEvent): NoteState {
       return state.view === "loading" ? settled(event.note, null) : state
     case "load_failed":
       return state.view === "loading" ? { view: "empty", notice: { kind: "error", message: event.message } } : state
+    case "not_available":
+      return state.view === "loading" ? { view: "unavailable" } : state
     case "recorded":
       // A new recording replaces any draft; it never replaces a save in flight.
-      if (state.view === "saving" || state.view === "removing" || state.view === "loading") return state
+      if (state.view === "saving" || state.view === "removing" || state.view === "loading" || state.view === "unavailable") return state
       return { view: "draft", recording: event.recording, saved: savedNote(state), notice: null }
     case "discard":
       return state.view === "draft" ? settled(state.saved, { kind: "discarded" }) : state
@@ -104,6 +109,7 @@ export function noteStatus(state: NoteState, recipient: string | null): string {
   const who = recipient ?? "They"
   switch (state.view) {
     case "loading":
+    case "unavailable":
       return ""
     case "saving":
       return "Saving the voice note…"

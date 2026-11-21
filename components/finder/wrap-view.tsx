@@ -6,6 +6,7 @@ import { ArrowLeft, Maximize2 } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { TemplateCard } from "@/components/letters/template-card"
 import { SharePanel } from "@/components/share/share-panel"
+import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
 import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import type { WrapTemplateId } from "@/lib/finder/events"
 import { WRAP_TEMPLATES, type WrapDetails, type WrapState } from "./finder-state"
@@ -115,6 +116,8 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
   const [details, setDetails] = useState<WrapDetails>({ recipientName: "", senderName: "", note: "" })
   // The finished page, larger, in a dialog over the finder.
   const [enlarged, setEnlarged] = useState<string | null>(null)
+  // Bumped when the voice note changes, so the preview reloads with it.
+  const [noteVersion, setNoteVersion] = useState(0)
   const busy = wrap.stage === "wrapping"
 
   function submit(e: FormEvent) {
@@ -123,7 +126,8 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
   }
 
   if (wrap.stage === "ready") {
-    const src = previewUrl(wrap.letterId, wrap.templateId)
+    const base = previewUrl(wrap.letterId, wrap.templateId)
+    const src = noteVersion ? `${base}${base.includes("?") ? "&" : "?"}note=${noteVersion}` : base
     // From md up this fills the finder exactly: the preview takes the height
     // that is left, the share panel sits beside it, and nothing scrolls.
     return (
@@ -137,6 +141,8 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
           {/* On phones the link comes first: sending it is the point. */}
           <div className="order-first space-y-4 md:order-none md:col-start-2 md:row-start-1 md:min-h-0 md:overflow-y-auto">
             <SharePanel url={shareUrl(wrap.slug)} />
+            {/* A voice note: most senders add it here, right after wrapping. */}
+            <AudioNoteRecorder letterId={wrap.letterId} recipientName={details.recipientName || null} onChange={() => setNoteVersion((v) => v + 1)} />
             {/* The personalised wrapper: a guest is asked to create a free account first. */}
             <MakeItUnique letterId={wrap.letterId} />
             <div className="space-y-2 text-sm leading-relaxed text-night-lilac">

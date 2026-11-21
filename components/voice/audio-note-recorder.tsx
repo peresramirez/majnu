@@ -90,6 +90,7 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
     void api.load(letterId).then((outcome) => {
       if (!live) return
       if (outcome.ok) dispatch({ type: "loaded", note: outcome.note })
+      else if (outcome.code === "not_a_letter") dispatch({ type: "not_available" })
       else dispatch({ type: "load_failed", message: outcome.message })
     })
     return () => {
@@ -162,7 +163,11 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
   const recorderError = recorderNotice?.kind === "error" ? recorderNotice.message : null
   const noteNotice = "notice" in state ? state.notice : null
   const noteError = noteNotice?.kind === "error" ? noteNotice.message : null
-  const status = recording || recorderError ? statusMessage(recorder.state) : noteStatus(state, name)
+  // The recorder speaks while recording, on its errors and right after a
+  // recording ("Recorded. Listen back, then save it."); the note's own states
+  // (saving, saved, removed) speak otherwise.
+  const justRecorded = state.view === "draft" && !noteError && recorderNotice?.kind === "recorded"
+  const status = recording || recorderError || justRecorded ? statusMessage(recorder.state) : noteStatus(state, name)
   const canRecord = mounted && recorder.supported
   const busy = state.view === "saving" || state.view === "removing" || state.view === "loading"
 
@@ -172,6 +177,8 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
     : draft
       ? `Listen back, ${formatSeconds(listenSeconds)}`
       : `Listen, ${formatSeconds(listenSeconds)}`
+
+  if (state.view === "unavailable") return null
 
   const listenButton = (ref?: typeof mainAction) => (
     <button

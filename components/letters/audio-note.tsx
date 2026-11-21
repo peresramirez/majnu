@@ -8,6 +8,10 @@
 // shows how far it is. Nothing is fetched until the first tap. The audio comes
 // from /l/<slug>/audio on our own domain.
 //
+// It never covers a template's own first line: the renderer reserves a band
+// for it at the top (AUDIO_SPACE_CSS), and over a design the frame starts
+// below the band (AudioNoteOverlay).
+//
 // Accessible: a real button with a name that says what it does, the caption
 // (what was said, from the transcription) linked as its description for
 // screen readers, and a live region for play, pause and errors. With reduced
@@ -20,6 +24,18 @@ import type { Theme } from "@/lib/letters/schema"
 import { focusRing } from "./chrome"
 import { firstName } from "./names"
 import { themeStyle } from "./theme"
+
+// The band the pill sits in: its top offset (the notch, if any), its 44 px
+// height and 10 px of air.
+export const AUDIO_SPACE = "calc(max(10px, env(safe-area-inset-top)) + 54px)"
+
+// Every template draws its page in a top-level <main> whose first screen is
+// `min-h-[100svh]`. With a voice note, <main> gets the band as top padding (its
+// own background, stars and gradient fill it, so there is no seam) and each
+// first-screen block gets that much less height, so a template's button at
+// the bottom of the first screen stays on it. Set on the renderer's root with
+// `data-audio-space`.
+export const AUDIO_SPACE_CSS = `[data-audio-space]{--audio-space:${AUDIO_SPACE}}[data-audio-space] main{padding-top:var(--audio-space)}[data-audio-space] main [class~="min-h-[100svh]"]{min-height:calc(100svh - var(--audio-space))}`
 
 // What a page passes to <LetterRenderer audio>: the note's URL, its length and
 // what was said, if it is known.
@@ -94,8 +110,9 @@ export function AudioNote({ audio, senderName }: { audio: LetterAudio; senderNam
           />
         </span>
       </button>
+      {/* `hidden`: read once, as the button's description, not again as text. */}
       {caption ? (
-        <p id={captionId} className="sr-only">
+        <p id={captionId} hidden>
           {name ? `${name} says: ` : "The note says: "}
           {caption}
         </p>
@@ -108,10 +125,15 @@ export function AudioNote({ audio, senderName }: { audio: LetterAudio; senderNam
 }
 
 // The same button over a Daytona design, which runs in a full-screen iframe and
-// has no template variables of its own: the letter's palette is set here.
+// has no template variables of its own: the letter's palette is set here. The
+// pill sits in a band of the letter's page colour, and the page starts the
+// frame below it (`top-[var(--audio-space)]`), so the design's own top is
+// never covered.
 export function AudioNoteOverlay({ audio, senderName, theme }: { audio: LetterAudio; senderName: string; theme: Theme }) {
   return (
     <div style={themeStyle(theme)}>
+      <style>{`:root{--audio-space:${AUDIO_SPACE}}`}</style>
+      <div aria-hidden="true" className="fixed inset-x-0 top-0 h-[var(--audio-space)]" style={{ background: "var(--page-flat)" }} />
       <AudioNote audio={audio} senderName={senderName} />
     </div>
   )

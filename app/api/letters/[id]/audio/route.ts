@@ -3,7 +3,8 @@
 // Guests (anonymous accounts) count as users, so they can add notes to the
 // gifts they wrapped.
 //
-// GET     200 { note: AudioNoteSummary | null }
+// GET     200 { note: AudioNoteSummary | null }; 409 not_a_letter for a calendar,
+//         so a recorder that does not know the gift's kind can hide itself.
 // POST    multipart (see lib/audio/upload.ts) → 200 { note }. Replaces the
 //         letter's note if it had one; the old file is deleted.
 // DELETE  200 { ok: true, deleted }. Removes the note and its file.
@@ -65,6 +66,7 @@ export async function GET(_request: Request, { params }: Context): Promise<Respo
   try {
     const letter = await getOwnedLetter(supabase, id, user.id)
     if (!letter) return fail(404, "not_found")
+    if (letter.kind !== "letter") return fail(409, "not_a_letter")
     const note = await getMyAudioNote(supabase, id)
     return Response.json({ note: note ? toSummary(note) : null }, { headers: NO_STORE })
   } catch (error) {

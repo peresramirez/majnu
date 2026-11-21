@@ -267,6 +267,12 @@ describe("GET /api/letters/<id>/audio", () => {
     expect(note).toMatchObject({ seconds: 12.4, caption: CAPTION })
   })
 
+  it("is 409 for a calendar, so a recorder that does not know the kind hides itself", async () => {
+    const res = await GET(new Request("http://localhost/x"), context(CALENDAR))
+    expect(res.status).toBe(409)
+    expect((await json(res)).error).toBe("not_a_letter")
+  })
+
   it("is 401 signed out and 404 for someone else's letter", async () => {
     await POST(upload(), context())
     user = null

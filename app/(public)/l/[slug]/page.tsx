@@ -73,14 +73,15 @@ export default async function LetterPage({ params }: Props) {
     // this page, its cookies or storage. ?v= makes a new design load fresh.
     return (
       <>
+        {audio && letter.kind === "letter" ? <AudioNoteOverlay audio={audio} senderName={letter.content.senderName} theme={letter.content.theme} /> : null}
         <iframe
           src={`/l/${letter.slug}/design?v=${design.id}`}
           sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
           title={`A letter for ${letter.content.recipientName}`}
-          className="fixed inset-0 h-[100svh] w-full border-0"
+          // With a voice note the frame starts below the band its button sits in.
+          className={audio ? "fixed inset-x-0 top-[var(--audio-space)] h-[calc(100svh-var(--audio-space))] w-full border-0" : "fixed inset-0 h-[100svh] w-full border-0"}
         />
-        {audio && letter.kind === "letter" ? <AudioNoteOverlay audio={audio} senderName={letter.content.senderName} theme={letter.content.theme} /> : null}
         <OpenBeacon slug={letter.slug} ownerPreview={letter.ownerPreview} />
       </>
     )

@@ -61,6 +61,13 @@ describe("noteReducer", () => {
     expect(run(initialNoteState(null), { type: "remove" })).toEqual(initialNoteState(null))
   })
 
+  it("shows nothing for a gift that cannot have a note", () => {
+    const unavailable = run({ view: "loading" }, { type: "not_available" })
+    expect(unavailable).toEqual({ view: "unavailable" })
+    expect(run(unavailable, { type: "recorded", recording })).toBe(unavailable)
+    expect(noteStatus(unavailable, "Anna")).toBe("")
+  })
+
   it("loads once", () => {
     expect(run({ view: "loading" }, { type: "loaded", note })).toEqual({ view: "saved", note, notice: null })
     expect(run({ view: "loading" }, { type: "loaded", note: null })).toEqual({ view: "empty", notice: null })
