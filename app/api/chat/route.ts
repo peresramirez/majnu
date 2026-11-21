@@ -20,8 +20,9 @@ import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
-// Part of the spending guard: one message cannot carry a whole book.
-export const MAX_MESSAGE_LENGTH = 4000
+// Part of the spending guard: one message cannot carry a whole book. Not
+// exported: a route file may only export its handlers and route config.
+const MAX_MESSAGE_LENGTH = 4000
 
 const ChatRequestBody = z.object({
   letterId: z.string().min(1).max(100).optional(),
