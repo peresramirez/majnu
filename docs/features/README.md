@@ -14,3 +14,4 @@ Every page follows the same outline:
 
 | Page | Feature |
 |---|---|
+| [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |
