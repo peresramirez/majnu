@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Watcher's Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Pinyon+Script&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #2b1a0e; --ink-soft: rgba(43,26,14,.6); --paper: #e9d8b4; --table: #140d08; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+               background: radial-gradient(ellipse at center, #2a1b10 0%, #120b06 70%) fixed, var(--table);
+               font-family: "IM Fell English", Georgia, serif; }
+  canvas#map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  canvas#map:active { cursor: grabbing; }
+
+  /* ---------- closed map (intro) ---------- */
+  /* The dark table sits in its own layer: when the map opens it fades away and the full parchment
+     (already drawn behind) shows through, while the two halves of the folded map swing open. */
+  #cover { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; perspective: 1800px; z-index: 20; }
+  /* the table: the same look is also the page background, so when this layer goes the map sheet
+     (clipped to the folded card, then unfolding and growing) appears on the same table */
+  #cover::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, #2a1b10 0%, #120b06 70%);
+                   transition: opacity .15s ease; }
+  #cover.open::before { opacity: 0; }
+  canvas#map { will-change: clip-path; }
+  #cover.open { pointer-events: none; }
+  #cover.gone { visibility: hidden; }
+  .folded { position: relative; width: min(440px, 88vw); height: min(780px, 88vh); transform-style: preserve-3d; }
+  .flap { position: absolute; top: 0; height: 100%; width: 50%; background-size: 200% 100%;
+          box-shadow: 0 30px 80px rgba(0,0,0,.6); backface-visibility: visible;
+          transition: transform 1s cubic-bezier(.45,.05,.25,1), opacity .35s ease .8s, box-shadow 1s ease; }
+  #cover.open .flap { opacity: 0; box-shadow: 0 0 0 rgba(0,0,0,0); }
+  .flap.l { left: 0; transform-origin: left center; background-position: 0 0; border-radius: 3px 0 0 3px; }
+  .flap.r { right: 0; transform-origin: right center; background-position: 100% 0; border-radius: 0 3px 3px 0; }
+  .flap.l::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 14px;
+                   background: linear-gradient(90deg, transparent, rgba(60,35,15,.28)); }
+  .flap.r::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+                   background: linear-gradient(-90deg, transparent, rgba(60,35,15,.28)); }
+  #cover.open .flap.l { transform: rotateY(-178deg); }
+  #cover.open .flap.r { transform: rotateY(178deg); }
+  .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          text-align: center; padding: 34px 30px; pointer-events: none; transition: opacity .5s; }
+  #cover.open .face { opacity: 0; transition: opacity .35s; }
+  .face svg { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); }
+  .presents { font-style: italic; font-size: 17px; color: var(--ink-soft); margin-bottom: 6px; position: relative; }
+  .title { font-family: "IM Fell English SC", serif; font-size: clamp(34px, 7vw, 50px); line-height: 1.02; letter-spacing: 1px; position: relative; }
+  .subtitle { font-style: italic; font-size: 17px; margin: 14px 0 6px; max-width: 320px; position: relative; }
+  .motto { font-family: "Pinyon Script", cursive; font-size: 26px; color: var(--ink-soft); position: relative; margin-top: 4px; }
+  .ask { pointer-events: auto; margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: relative; }
+  .ask input { width: 260px; background: transparent; border: none; border-bottom: 1px solid var(--ink-soft); color: var(--ink);
+               font: italic 18px "IM Fell English", serif; text-align: center; padding: 6px 4px; outline: none; }
+  .ask input::placeholder { color: rgba(43,26,14,.45); }
+  .seal { pointer-events: auto; width: 74px; height: 74px; border-radius: 50%; border: none; cursor: pointer;
+          background: radial-gradient(circle at 35% 30%, #b4352b, #7c1a14 60%, #4e0f0b);
+          box-shadow: 0 4px 10px rgba(0,0,0,.45), inset 0 -3px 8px rgba(0,0,0,.35), inset 0 3px 6px rgba(255,255,255,.15);
+          color: #f1d7b9; font: 30px "IM Fell English SC", serif; transition: transform .2s; }
+  .seal:hover { transform: scale(1.06) rotate(-6deg); }
+  .hintline { font-style: italic; font-size: 14px; color: var(--ink-soft); }
+  .whisper { min-height: 20px; font-style: italic; font-size: 15px; color: #7c1a14; }
+
+  /* ---------- open map controls ---------- */
+  #corner { position: fixed; left: 18px; top: 14px; z-index: 5; font-style: italic; font-size: 16px; color: var(--ink);
+            text-shadow: 0 0 6px rgba(233,216,180,.9); pointer-events: none; line-height: 1.35; }
+  #corner b { font-family: "IM Fell English SC", serif; font-style: normal; font-weight: normal; font-size: 22px; display: block; }
+  #actions { position: fixed; right: 18px; bottom: 16px; z-index: 5; display: flex; gap: 16px; }
+  #actions button { background: none; border: none; cursor: pointer; color: var(--ink); font: italic 16px "IM Fell English", serif;
+                    text-shadow: 0 0 6px rgba(233,216,180,.9); border-bottom: 1px dashed var(--ink-soft); padding: 2px 0; }
+  #actions button:hover { color: #7c1a14; }
+  #namer { position: fixed; z-index: 30; display: none; transform: translateX(-50%); width: 180px; padding: 6px 10px;
+           background: rgba(242,228,196,.97); border: 1px solid var(--ink); border-radius: 4px; color: var(--ink);
+           font: 20px "IM Fell English SC", serif; text-align: center; outline: none; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div id="corner"></div>
+<div id="actions">
+  <button id="turn">Turn the map</button>
+  <button id="mirror">Mirror the map</button>
+  <button id="center">Return to the watcher</button>
+  <button id="forget">Forget the room</button>
+  <button id="fold">Fold the map</button>
+</div>
+
+<div id="cover">
+  <div class="folded" id="folded">
+    <div class="flap l" id="flapL"></div>
+    <div class="flap r" id="flapR"></div>
+    <div class="face">
+      <svg viewBox="0 0 100 180" preserveAspectRatio="none" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="97" height="177" fill="none" stroke="#2b1a0e" stroke-width=".6" opacity=".7"/>
+        <rect x="3.5" y="3.5" width="93" height="173" fill="none" stroke="#2b1a0e" stroke-width=".25" opacity=".6"/>
+        <g fill="none" stroke="#2b1a0e" stroke-width=".35" opacity=".65">
+          <path d="M8 10 q8 -6 16 0 t16 0"/><path d="M92 10 q-8 -6 -16 0 t-16 0"/>
+          <path d="M8 170 q8 6 16 0 t16 0"/><path d="M92 170 q-8 6 -16 0 t-16 0"/>
+        </g>
+      </svg>
+      <div class="presents">the engineers of the pushback tug present</div>
+      <div class="title">The<br>Watcher's<br>Map</div>
+      <div class="subtitle">a faithful chart of all that stands still and all that wanders</div>
+      <div class="motto">nihil latet quod movetur</div>
+      <div class="ask">
+        <input id="words" placeholder="whisper the words to open it…" autocomplete="off" spellcheck="false">
+        <button class="seal" id="seal" title="Break the seal">W</button>
+        <div class="whisper" id="whisper"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('map'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  const INK = '43,26,14';
+
+  // ---------------------------------------------------------------- parchment
+  let paper = null;
+  function makeParchment(w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+    const base = g.createRadialGradient(w * .5, h * .45, Math.min(w, h) * .1, w * .5, h * .5, Math.max(w, h) * .75);
+    base.addColorStop(0, '#efe0bd'); base.addColorStop(.6, '#e3cfa3'); base.addColorStop(1, '#b89463');
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < (w * h) / 900; i++) {                       // stains
+      const x = rnd() * w, y = rnd() * h, r = 20 + rnd() * 140;
+      const s = g.createRadialGradient(x, y, 0, x, y, r);
+      const a = 0.025 + rnd() * 0.05;
+      s.addColorStop(0, `rgba(120,80,35,${a})`); s.addColorStop(.7, `rgba(120,80,35,${a * .4})`); s.addColorStop(1, 'rgba(120,80,35,0)');
+      g.fillStyle = s; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    for (let i = 0; i < (w * h) / 40; i++) {                        // fibres and grain
+      g.fillStyle = `rgba(${rnd() < .5 ? '90,60,30' : '255,245,220'},${rnd() * .08})`;
+      g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 2, 1);
+    }
+    for (const fx of [1 / 3, 2 / 3]) {                               // fold creases
+      const x = w * fx, cr = g.createLinearGradient(x - 10, 0, x + 10, 0);
+      cr.addColorStop(0, 'rgba(90,60,30,0)'); cr.addColorStop(.48, 'rgba(90,60,30,.16)');
+      cr.addColorStop(.52, 'rgba(255,248,230,.18)'); cr.addColorStop(1, 'rgba(255,248,230,0)');
+      g.fillStyle = cr; g.fillRect(x - 10, 0, 20, h);
+    }
+    const y = h / 2, cr = g.createLinearGradient(0, y - 8, 0, y + 8);
+    cr.addColorStop(0, 'rgba(90,60,30,0)'); cr.addColorStop(.5, 'rgba(90,60,30,.12)'); cr.addColorStop(1, 'rgba(255,248,230,0)');
+    g.fillStyle = cr; g.fillRect(0, y - 8, w, 16);
+    const v = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .35, w / 2, h / 2, Math.max(w, h) * .72);   // burnt edges
+    v.addColorStop(0, 'rgba(60,35,12,0)'); v.addColorStop(1, 'rgba(60,35,12,.55)');
+    g.fillStyle = v; g.fillRect(0, 0, w, h);
+    return c;
+  }
+  // the cover uses the same paper
+  (() => {
+    const c = makeParchment(880, 1560);
+    const url = c.toDataURL('image/jpeg', .85);
+    $('flapL').style.backgroundImage = $('flapR').style.backgroundImage = `url(${url})`;
+  })();
+
+  function resize() {
+    DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    paper = makeParchment(Math.round(W * DPR), Math.round(H * DPR)); staticKey = '';
+    if (!opened) { cv.style.transition = 'none'; cv.style.clipPath = 'inset(50% 50% 50% 50%)'; }   // closed: no sheet visible
+  }
+  addEventListener('resize', resize);
+
+  // ---------------------------------------------------------------- view (pan / zoom)
+  const view = { s: 90, x: 0, y: 0 };          // pixels per metre; pan offset in pixels
+  let autoFitted = false;
+  // Orientation, so the map matches the real room:
+  //   TURN   rotates the whole map (0/90/180/270°). 180° = you look at the map while facing the sensor.
+  //   MIRROR swaps left and right (e.g. sensor mounted upside down).
+  // Default for our setup, checked by walking: walking towards the camera must move you UP on the map.
+  // (TURN 180 without mirror = flipped top-to-bottom compared with before, left/right unchanged.)
+  let TURN = 180, MIRROR = false;
+  // The watcher's compass keeps pointing up, which is the LiDAR's front in our setup (cables down).
+  // It points along -x of the scan here; set to 1 if the compass should follow the scan's x axis instead.
+  const COMPASS_FORWARD = -1;
+  try {
+    const t = localStorage.getItem('orient3_turn'), m = localStorage.getItem('orient3_mirror');
+    if (t !== null) TURN = +t; if (m !== null) MIRROR = m === '1';
+  } catch (e) {}
+  const toS = (x, y) => {
+    let u = MIRROR ? y : -y, v = -x;                        // sensor frame -> screen (forward up, left left)
+    const a = TURN * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
+    return [W / 2 + view.x + (u * c - v * s) * view.s, H * 0.5 + view.y + (u * s + v * c) * view.s];
+  };
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; view.x += e.clientX - drag.x; view.y += e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; staticKey = ''; });
+  cv.addEventListener('pointerup', e => {
+    const click = drag && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5;   // a click, not a drag
+    drag = null;
+    if (click) clickAt(e.clientX, e.clientY);
+  });
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = Math.exp(-e.deltaY * 0.0015), mx = e.clientX - W / 2 - view.x, my = e.clientY - H * 0.5 - view.y;
+    view.s = Math.min(800, Math.max(15, view.s * f)); view.x -= mx * (f - 1); view.y -= my * (f - 1); staticKey = '';
+  }, { passive: false });
+  $('center').onclick = () => { autoFitted = false; fitView(); };
+  const saveOrientation = () => { staticKey = ''; try { localStorage.setItem('orient3_turn', TURN); localStorage.setItem('orient3_mirror', MIRROR ? '1' : '0'); } catch (e) {} };
+  $('mirror').onclick = () => { MIRROR = !MIRROR; saveOrientation(); };
+  $('turn').onclick = () => { TURN = (TURN + 90) % 360; saveOrientation(); };
+
+  function fitView() {
+    // fit most of the room (80 % of the mapped points), not the single farthest one
+    const segs = data && data.segments || [];
+    const rs = [];
+    for (const s of segs) for (const [x, y] of s.pts) rs.push(Math.hypot(x, y));
+    rs.sort((a, b) => a - b);
+    const R = Math.max(1.5, Math.min(10, rs.length ? rs[Math.floor(rs.length * 0.8)] : 3));
+    view.s = Math.max(20, Math.min(W, H) / (2.0 * R)); view.x = 0; view.y = 0; staticKey = ''; autoFitted = true;
+  }
+
+  // ---------------------------------------------------------------- ink helpers
+  function hash(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
+  // a hand-drawn line: slight, deterministic wobble, drawn twice for an ink-bleed look
+  function inkLine(g, pts, width, alpha, seed) {
+    if (pts.length < 2) return;
+    for (const pass of [0, 1]) {
+      g.beginPath();
+      pts.forEach(([x, y], i) => {
+        const j = (hash(seed + i * 3.1 + pass * 11) - .5) * (pass ? 1.6 : 0.9);
+        const k = (hash(seed + i * 7.7 + pass * 5) - .5) * (pass ? 1.6 : 0.9);
+        i ? g.lineTo(x + j, y + k) : g.moveTo(x + j, y + k);
+      });
+      g.strokeStyle = `rgba(${INK},${pass ? alpha * .35 : alpha})`;
+      g.lineWidth = pass ? width * 2.2 : width; g.lineCap = g.lineJoin = 'round'; g.stroke();
+    }
+  }
+  // text written along a path (like the lettered walls of old maps)
+  function textAlong(g, pts, text, size, offset, alpha) {
+    let L = 0; const segL = [];
+    for (let i = 0; i + 1 < pts.length; i++) { const d = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); segL.push(d); L += d; }
+    if (L < size * 6) return;
+    g.font = `${size}px "Pinyon Script", cursive`; g.fillStyle = `rgba(${INK},${alpha})`; g.textBaseline = 'middle';
+    let pos = size, seg = 0, acc = 0, ci = 0;
+    while (pos < L - size) {
+      while (seg < segL.length - 1 && acc + segL[seg] < pos) { acc += segL[seg]; seg++; }
+      const t = (pos - acc) / (segL[seg] || 1), a = pts[seg], b = pts[seg + 1];
+      const x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
+      let ang = Math.atan2(b[1] - a[1], b[0] - a[0]); if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+      const ch = text[ci % text.length]; ci++;
+      g.save(); g.translate(x - Math.sin(ang) * offset, y + Math.cos(ang) * offset); g.rotate(ang); g.fillText(ch, 0, 0); g.restore();
+      pos += g.measureText(ch).width * 1.02 + 0.5;
+    }
+  }
+  const ROMAN = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  const roman = n => ROMAN.reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, '');
+
+  // ---------------------------------------------------------------- static layer (walls, objects)
+  let staticCanvas = document.createElement('canvas'), staticKey = '';
+  function drawStatic(segs) {
+    staticCanvas.width = W * DPR; staticCanvas.height = H * DPR;
+    const g = staticCanvas.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // distance rings: faint dotted circles around the watcher
+    g.setLineDash([2, 7]); g.strokeStyle = `rgba(${INK},.25)`; g.lineWidth = 1;
+    const [ox, oy] = toS(0, 0);
+    for (const r of [1, 2, 3, 5, 8]) {
+      g.beginPath(); g.arc(ox, oy, r * view.s, 0, 7); g.stroke();
+      g.font = 'italic 12px "IM Fell English", serif'; g.fillStyle = `rgba(${INK},.4)`; g.fillText(`${r} paces`, ox + 4, oy - r * view.s - 4);
+    }
+    g.setLineDash([]);
+    const labelBoxes = [];
+    for (const s of [...segs].sort((a, b) => b.span - a.span)) {   // biggest objects claim their label spot first
+      const pts = s.pts.map(([x, y]) => toS(x, y));
+      if (s.cls === 'structure') {
+        inkLine(g, pts, 2.1, .85, s.id * 13);
+        // a second, thinner line inside: the wall's thickness, like an architect's plan
+        const off = pts.map(([x, y], i) => {
+          const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+          const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+          const nx = -dy / l, ny = dx / l, toward = ((ox - x) * nx + (oy - y) * ny) > 0 ? 1 : -1;   // inner side faces the watcher
+          return [x + nx * 7 * toward, y + ny * 7 * toward];
+        });
+        inkLine(g, off, .8, .55, s.id * 29);
+        textAlong(g, off, ' here stands the wall · solid and still ·', Math.max(10, Math.min(15, view.s * .12)), 8 * 0, .55);
+      } else {
+        inkLine(g, pts, 1.5, .8, s.id * 17);
+        // hatching behind the object's face
+        g.strokeStyle = `rgba(${INK},.22)`; g.lineWidth = .8;
+        for (let i = 0; i < pts.length; i += 2) {
+          const [x, y] = pts[i], dx = x - ox, dy = y - oy, l = Math.hypot(dx, dy) || 1;
+          g.beginPath(); g.moveTo(x, y); g.lineTo(x + dx / l * 7 + 3, y + dy / l * 7 - 3); g.stroke();
+        }
+        if (view.s > 40 && s.span > 0.25) {                       // only label things bigger than 25 cm
+          const [lx, ly] = toS(s.cx, s.cy), txt = `objectum ${roman(s.id)}`;
+          g.font = 'italic 13px "IM Fell English", serif';
+          const w = g.measureText(txt).width;
+          if (!labelBoxes.some(b => Math.abs(b.x - lx) < (b.w + w) / 2 + 6 && Math.abs(b.y - ly) < 18)) {
+            labelBoxes.push({ x: lx, y: ly, w });
+            g.fillStyle = `rgba(${INK},.7)`; g.textAlign = 'center'; g.fillText(txt, lx, ly - 12); g.textAlign = 'left';
+          }
+        }
+      }
+    }
+    // the watcher (the LiDAR): an eye inside a compass rose
+    g.save(); g.translate(ox, oy);
+    // filled point = the direction the LiDAR faces in our setup (towards the screen's viewer = down)
+    { const [fx, fy] = toS(COMPASS_FORWARD, 0); g.rotate(Math.atan2(fy - oy, fx - ox) + Math.PI / 2); }
+    g.strokeStyle = `rgba(${INK},.85)`; g.fillStyle = `rgba(${INK},.85)`; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(0, 0, 18, 0, 7); g.stroke(); g.beginPath(); g.arc(0, 0, 14, 0, 7); g.stroke();
+    for (let i = 0; i < 4; i++) {
+      g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -30); g.lineTo(4, -14); g.lineTo(-4, -14); g.closePath();
+      i === 3 ? g.fill() : g.stroke();
+    }
+    g.beginPath(); g.ellipse(0, 0, 9, 5, 0, 0, 7); g.stroke(); g.beginPath(); g.arc(0, 0, 2.6, 0, 7); g.fill();
+    g.restore();
+    g.font = 'italic 14px "IM Fell English", serif'; g.fillStyle = `rgba(${INK},.8)`; g.textAlign = 'center';
+    g.fillText('the watcher', ox, oy + 40); g.textAlign = 'left';
+  }
+
+  // ---------------------------------------------------------------- footsteps
+  // short one-word names; a repeat gets a small numeral (Wren ii)
+  const NAMES = ['Wren', 'Finch', 'Rook', 'Lark', 'Fox', 'Hare', 'Owl', 'Lynx', 'Otter', 'Raven', 'Stoat', 'Moth', 'Elk', 'Crow', 'Badger'];
+  const ME = 'PJ', ME_RADIUS = 1.5;   // the person closest to the watcher (you, at the laptop) is named PJ
+  const INKS = ['#6b1d1d', '#1f4d2b', '#1d2f5c', '#4a1f4d', '#7a5410', '#2b1a0e', '#5c2f1d', '#28505a'];
+  const tracks = new Map();          // id -> { steps: [{x,y,a,side,t}], last: {x,y}, side, heading, seen }
+  const STRIDE = 0.32, STEP_LIFE = 4.5;
+
+  function updateSteps(movers, now) {
+    for (const m of movers) {
+      let t = tracks.get(m.id);
+      if (!t) {
+        // short name: the first one nobody on the map is using right now
+        const used = new Set([...tracks.values()].filter(o => now - o.seen < STEP_LIFE).map(o => o.auto));
+        const auto = NAMES.find(n => !used.has(n)) || `${NAMES[m.id % NAMES.length]} ${m.id % 10}`;
+        t = { steps: [], last: { x: m.x, y: m.y }, side: 1, heading: 0, born: now, auto }; tracks.set(m.id, t);
+        // a named person the tracker lost a moment ago and found again nearby keeps their name
+        const i = lostNames.findIndex(L => now - L.t < 15 && Math.hypot(L.x - m.x, L.y - m.y) < 1.2);
+        if (i >= 0) { t.name = lostNames[i].name; lostNames.splice(i, 1); }
+      }
+      t.seen = now; t.data = m;
+      const dx = m.x - t.last.x, dy = m.y - t.last.y, d = Math.hypot(dx, dy);
+      if (d >= STRIDE) {
+        t.heading = Math.atan2(dy, dx);
+        const n = Math.min(4, Math.floor(d / STRIDE));
+        for (let i = 1; i <= n; i++) {
+          const f = i / n, px = t.last.x + dx * f, py = t.last.y + dy * f;
+          const ox = -Math.sin(t.heading) * 0.07 * t.side, oy = Math.cos(t.heading) * 0.07 * t.side;
+          t.steps.push({ x: px + ox, y: py + oy, a: t.heading, side: t.side, t: now });
+          t.side = -t.side;
+        }
+        t.last = { x: m.x, y: m.y };
+      }
+    }
+    for (const [id, t] of tracks) {
+      t.steps = t.steps.filter(s => now - s.t < STEP_LIFE);
+      if (t.name && !t.nameLost && now - t.seen > 1.2) {                 // remember where a named person vanished
+        lostNames.push({ name: t.name, x: t.data.x, y: t.data.y, t: now }); t.nameLost = true;
+      }
+      if (now - t.seen > STEP_LIFE && !t.steps.length) tracks.delete(id);
+    }
+    // PJ: if nobody visible carries the name, give it to the closest person near the watcher
+    const visible = [...tracks.values()].filter(t => now - t.seen < 1.2);
+    if (!visible.some(t => t.name === ME)) {
+      let best = null, bd = ME_RADIUS;
+      for (const t of visible) {
+        if (t.name) continue;
+        const d = Math.hypot(t.data.x, t.data.y);
+        if (d < bd) { best = t; bd = d; }
+      }
+      if (best) { best.name = ME; best.nameLost = false; }
+    }
+  }
+  const lostNames = [];
+
+  // ---------------------------------------------------------------- naming people (click a ribbon or feet)
+  let hitTargets = [];          // [{id, x, y, w, top}] from the last frame
+  const namer = document.createElement('input');
+  namer.id = 'namer'; namer.placeholder = 'a name…'; namer.autocomplete = 'off'; namer.spellcheck = false;
+  document.body.appendChild(namer);
+  let namingId = null;
+  function startNaming(id, x, y) {
+    namingId = id; const t = tracks.get(id);
+    namer.value = t && t.name || ''; namer.style.left = `${x}px`; namer.style.top = `${y}px`;
+    namer.style.display = 'block'; namer.focus(); namer.select();
+  }
+  function stopNaming(save) {
+    if (save && namingId !== null) {
+      const t = tracks.get(namingId), v = namer.value.trim();
+      if (t) {
+        if (v === ME) for (const o of tracks.values()) if (o !== t && o.name === ME) o.name = undefined;   // only one PJ
+        for (let i = lostNames.length - 1; i >= 0; i--) if (v && lostNames[i].name === v) lostNames.splice(i, 1);
+        t.name = v || undefined; t.nameLost = false;
+      }
+    }
+    namingId = null; namer.style.display = 'none';
+  }
+  namer.addEventListener('keydown', e => { if (e.key === 'Enter') stopNaming(true); if (e.key === 'Escape') stopNaming(false); });
+  namer.addEventListener('blur', () => stopNaming(true));
+  function clickAt(x, y) {
+    for (const h of hitTargets) {
+      const onRibbon = Math.abs(x - h.x) < h.w / 2 && y > h.top - 6 && y < h.top + 30;
+      const onFeet = Math.hypot(x - h.fx, y - h.fy) < 34;
+      if (onRibbon || onFeet) { startNaming(h.id, h.x, h.top + 34); return; }
+    }
+  }
+
+  // one footprint: sole + heel + toes, drawn in ink, pointing along angle a (sensor frame)
+  function footprint(x, y, a, side, alpha, color) {
+    const [sx, sy] = toS(x, y), k = Math.max(.55, Math.min(1.6, view.s / 90));
+    // walking direction on screen (works for normal and mirrored maps)
+    const [ex, ey] = toS(x + Math.cos(a) * 0.1, y + Math.sin(a) * 0.1);
+    const screenAng = Math.atan2(ey - sy, ex - sx);
+    const s = MIRROR ? -side : side;                                   // mirrored map: left and right feet swap
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(screenAng + Math.PI / 2); ctx.scale(k * (s > 0 ? -1 : 1), k);
+    ctx.fillStyle = hexA(color, alpha);
+    ctx.beginPath(); ctx.ellipse(0, -2, 4.2, 7.5, 0.12, 0, 7); ctx.fill();        // sole
+    ctx.beginPath(); ctx.ellipse(-.6, 9, 3.4, 4, 0, 0, 7); ctx.fill();            // heel
+    [[-3.4, -11.5, 1.7], [-.8, -12.8, 1.5], [1.6, -12.3, 1.3], [3.6, -10.8, 1.1], [5, -8.8, .9]].forEach(([tx, ty, r]) => {
+      ctx.beginPath(); ctx.arc(tx, ty, r, 0, 7); ctx.fill();
+    });
+    ctx.restore();
+  }
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // a ribbon banner with a name, like the labels on old maps
+  function ribbon(x, y, text, color, alpha, lift = 0, named = false) {
+    ctx.save(); ctx.globalAlpha = alpha;
+    // people you named get a bigger ribbon in small capitals
+    ctx.font = named ? '20px "IM Fell English SC", serif' : 'italic 16px "IM Fell English", serif';
+    const w = ctx.measureText(text).width + 28, h = 24, x0 = x - w / 2, y0 = y - h - 22;
+    ctx.fillStyle = 'rgba(242,228,196,.93)'; ctx.strokeStyle = color; ctx.lineWidth = 1.3;
+    // tails
+    for (const s of [-1, 1]) {
+      const ex = s < 0 ? x0 : x0 + w;
+      ctx.beginPath(); ctx.moveTo(ex, y0 + 5); ctx.lineTo(ex + s * 14, y0 + 8); ctx.lineTo(ex + s * 8, y0 + h / 2 + 6);
+      ctx.lineTo(ex + s * 14, y0 + h + 4); ctx.lineTo(ex, y0 + h + 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x, y0 - 6, x0 + w, y0); ctx.lineTo(x0 + w, y0 + h);
+    ctx.quadraticCurveTo(x, y0 + h - 6, x0, y0 + h); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y0 + h / 2 - 1);
+    // thread from the ribbon down to the feet (longer when the ribbon was lifted to avoid another)
+    ctx.beginPath(); ctx.moveTo(x, y0 + h + 1); ctx.lineTo(x, y + lift - 8); ctx.strokeStyle = hexA(color, .5); ctx.lineWidth = .8; ctx.stroke();
+    ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  // ---------------------------------------------------------------- data
+  let data = null, scansSeen = 0, rate = 0, rateN = 0, rateT = performance.now(), connected = false;
+  async function poll() {
+    try {
+      const s = await (await fetch('/scan.json', { cache: 'no-store' })).json();
+      connected = true;
+      if (s.scans !== scansSeen) { scansSeen = s.scans; rateN++; data = s; updateSteps(s.movers || [], performance.now() / 1000); }
+    } catch (e) { connected = false; }
+    const now = performance.now(); if (now - rateT > 1000) { rate = rateN * 1000 / (now - rateT); rateN = 0; rateT = now; }
+    setTimeout(poll, 60);
+  }
+
+  // ---------------------------------------------------------------- render
+  let opened = false, revealT0 = 0;
+  function frame(tms) {
+    const now = tms / 1000;
+    ctx.clearRect(0, 0, W, H);
+    if (paper) ctx.drawImage(paper, 0, 0, W, H);
+    if (opened && data) {
+      if (!autoFitted && (data.segments || []).length) fitView();
+      const segs = data.segments || [];
+      const key = segs.map(s => `${s.id}:${s.pts.length}:${s.cx}`).join('|') + `|${view.s.toFixed(1)}|${view.x}|${view.y}|${W}x${H}`;
+      if (key !== staticKey) { drawStatic(segs); staticKey = key; }
+      // ink spreads out from the watcher when the map opens
+      const p = Math.min(1, (now - revealT0) / 2.6);
+      ctx.save();
+      if (p < 1) { const [ox, oy] = toS(0, 0); ctx.beginPath(); ctx.arc(ox, oy, Math.hypot(W, H) * p * p, 0, 7); ctx.clip(); }
+      ctx.drawImage(staticCanvas, 0, 0, W, H);
+      ctx.restore();
+
+      // the nose gear, if found
+      const gear = data.gear;
+      if (gear && p >= 1) {
+        const [gx, gy] = toS(gear.cx, gear.cy);
+        ctx.strokeStyle = `rgba(${INK},.85)`; ctx.lineWidth = 1.6;
+        const half = (data.tyre.spacing / 2) * view.s, R = (data.tyre.d / 2) * view.s, Wt = data.tyre.w * view.s;
+        for (const s of [-1, 1]) { ctx.strokeRect(gx - s * half - Wt / 2, gy - R * 2, Wt, R * 2); }
+        ribbon(gx, gy - R * 2, `the nose gear · ${gear.dist.toFixed(2)} paces`, '#6b1d1d', 1);
+      }
+
+      // footsteps and names
+      const labels = [];
+      if (p >= 1) {
+        for (const [id, t] of tracks) {
+          const color = INKS[id % INKS.length];
+          for (const s of t.steps) {
+            const age = now - s.t, a = age < .25 ? age / .25 : Math.max(0, 1 - (age - .25) / (STEP_LIFE - .25));
+            footprint(s.x, s.y, s.a, s.side, .85 * a, color);
+          }
+          const m = t.data, gone = now - t.seen;
+          if (!m || gone > 1.2) continue;
+          // standing still: a pair of feet side by side, gently fading in and out
+          if (!t.steps.length || now - t.steps[t.steps.length - 1].t > 1) {
+            const breathe = .55 + .25 * Math.sin(now * 2 + id);
+            for (const side of [-1, 1]) {
+              const ox = -Math.sin(t.heading) * 0.07 * side, oy = Math.cos(t.heading) * 0.07 * side;
+              footprint(m.x + ox, m.y + oy, t.heading, side, breathe, color);
+            }
+          }
+          const [sx, sy] = toS(m.x, m.y);
+          // unique name per track: after the list runs out, add a numeral (… the Second, … iii)
+          const name = t.name || t.auto;
+          labels.push({ id, x: sx, y: sy, named: !!t.name, text: name + (m.new && !t.name ? ' · new' : ''), color, alpha: Math.max(.3, 1 - gone / 1.2) });
+        }
+      }
+      // ribbons must not overlap: stack them upwards where they would collide
+      ctx.font = 'italic 16px "IM Fell English", serif';
+      labels.sort((a, b) => b.y - a.y);
+      const placed = []; hitTargets = [];
+      for (const L of labels) {
+        const w = ctx.measureText(L.text).width + 56; L.lift = 0;
+        hitTargets.push(L);
+        for (let tries = 0; tries < 12; tries++) {
+          const top = L.y - 46 - L.lift;
+          const hit = placed.find(P => Math.abs(P.x - L.x) < (P.w + w) / 2 && Math.abs(P.top - top) < 30);
+          if (!hit) break;
+          L.lift += 30;
+        }
+        placed.push({ x: L.x, w, top: L.y - 46 - L.lift });
+        L.w = w; L.top = L.y - 46 - L.lift; L.fx = L.x; L.fy = L.y;      // for click-to-name
+        ribbon(L.x, L.y - L.lift, L.text, L.color, L.alpha, L.lift, L.named);
+      }
+
+      const n = (data.movers || []).length, objs = segs.filter(s => s.cls === 'object').length;
+      $('corner').innerHTML = `<b>The Watcher's Map</b>` +
+        `${n === 0 ? 'no soul wanders here' : n === 1 ? 'one soul wanders' : `${n} souls wander`} · ` +
+        `${objs} things stand still<br>${Math.round(rate)} glances each second · the room is ${Math.round((data.map?.learned || 0) * 100)}% known`;
+    } else if (opened) {
+      ctx.font = 'italic 22px "IM Fell English", serif'; ctx.fillStyle = `rgba(${INK},.7)`; ctx.textAlign = 'center';
+      ctx.fillText(connected ? 'the ink is gathering… (waiting for the sensor)' : 'the map is silent: start  python3 parchment_map/serve.py', W / 2, H / 2);
+      ctx.textAlign = 'left';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------------------------------------------------------------- opening and folding
+  const ANSWERS = ['the ink obeys…', 'the paper stirs…', 'it listens…'];
+  function openMap() {
+    if (opened) return;
+    $('whisper').textContent = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+    setTimeout(() => {
+      // The map sheet is the canvas, clipped to a rectangle that
+      //   1) starts as the folded card,
+      //   2) unfolds to twice its width while the two halves swing outwards,
+      //   3) grows until it fills the screen.
+      const r = $('folded').getBoundingClientRect();
+      const card = clipRect(r.left, r.top, r.right, r.bottom);
+      const half = r.width / 2;
+      const unfolded = clipRect(r.left - half, r.top, r.right + half, r.bottom);
+      setClip(card, 0);
+      opened = true; autoFitted = false; revealT0 = performance.now() / 1000 + 1.0;     // ink starts as it grows
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        $('cover').classList.add('open');
+        setClip(unfolded, 1.0, 'cubic-bezier(.45,.05,.25,1)');
+        setTimeout(() => { if (opened) setClip('inset(0px 0px 0px 0px round 0px)', 1.2, 'cubic-bezier(.65,0,.25,1)'); }, 1000);
+        setTimeout(() => { if (opened) { $('cover').classList.add('gone'); $('corner').style.display = ''; $('actions').style.display = ''; } }, 2100);
+      }));
+    }, 450);
+  }
+  const clipRect = (l, t, r, b) => `inset(${Math.max(0, t)}px ${Math.max(0, W - r)}px ${Math.max(0, H - b)}px ${Math.max(0, l)}px round 3px)`;
+  function setClip(v, secs, ease = 'ease') {
+    cv.style.transition = secs ? `clip-path ${secs}s ${ease}` : 'none';
+    cv.style.clipPath = v;
+  }
+  $('seal').onclick = openMap;
+  $('words').addEventListener('keydown', e => { if (e.key === 'Enter') openMap(); });
+  $('fold').onclick = () => {
+    // fold back: the sheet shrinks to the card, then the two halves swing closed over it
+    const r = $('folded').getBoundingClientRect(), half = r.width / 2;
+    $('corner').style.display = 'none'; $('actions').style.display = 'none';
+    setClip(clipRect(r.left - half, r.top, r.right + half, r.bottom), 1.0, 'cubic-bezier(.65,0,.25,1)');
+    setTimeout(() => {
+      $('cover').classList.remove('gone');
+      requestAnimationFrame(() => requestAnimationFrame(() => $('cover').classList.remove('open')));
+      setClip(clipRect(r.left, r.top, r.right, r.bottom), 1.0, 'cubic-bezier(.45,.05,.25,1)');
+    }, 1000);
+    setTimeout(() => { opened = false; }, 2100);
+    $('words').value = ''; $('whisper').textContent = '';
+    $('corner').style.display = 'none'; $('actions').style.display = 'none';
+  };
+  $('forget').onclick = () => { fetch('/map/reset'); tracks.clear(); staticKey = ''; };
+  $('corner').style.display = 'none'; $('actions').style.display = 'none';
+
+  resize(); poll(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
