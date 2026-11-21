@@ -208,7 +208,9 @@ describe("redesignLetter", () => {
       labels: { app: "majnu", purpose: "redesign" },
     })
     expect(params.labels?.job).toMatch(/^[0-9a-f-]{36}$/)
-    expect(params.envVars).toBeUndefined()
+    // No environment for the sandbox itself: the key goes into the one command's env only.
+    expect(Object.keys(params)).not.toContain("envVars")
+    expect(Object.keys(params)).not.toContain("env")
     expect(JSON.stringify(params)).not.toContain(ANTHROPIC_KEY)
     expect(options.timeout).toBeGreaterThan(0)
 

@@ -75,8 +75,8 @@ Dotted lines are being built (the gift finder) or run outside the app (the Dayto
 | **Supabase Postgres** | Letters, profiles, open events and Daytona designs, all behind row-level security, in eu-central-1 (Frankfurt) | [`supabase/migrations/`](../supabase/migrations/) |
 | **Anthropic** | The model behind every agent (`MAJNU_MODEL`, default `claude-opus-5-5`), through the official TypeScript SDK and our own key | [`lib/agents/`](../lib/agents/) |
 | **Tavily** | Web search for gift ideas, used by the research agent when `TAVILY_API_KEY` is set; otherwise Anthropic's own web search | [`lib/agents/tavily.ts`](../lib/agents/tavily.ts) |
-| **Stripe** | The Full moon subscription: hosted Checkout, a signed webhook, the customer portal. Built, not yet enforced (`MAJNU_BILLING` unset) | [`lib/billing/`](../lib/billing/) |
-| **Daytona** | A sandbox where Claude Code writes a one-off HTML design for a letter. Run by hand for now | [`lib/daytona/`](../lib/daytona/), [`daytona/sandbox/`](../daytona/sandbox/) |
+| **Stripe** | The personalised wrapper, €2.99 once: hosted Checkout in payment mode, a signed webhook, automatic refunds when a design fails | [`lib/billing/`](../lib/billing/) |
+| **Daytona** | A sandbox where Claude Code writes the personalised wrapper's one-off HTML design, reached with `fetch` from a Cloudflare Queue consumer in the same Worker | [`lib/daytona/`](../lib/daytona/), [`daytona/sandbox/`](../daytona/sandbox/), [`worker.ts`](../worker.ts) |
 | **Cloudflare Turnstile** | The invisible bot check in front of anonymous sign-in for the gift finder. The site key is in `.env.production` and the secret in Supabase; no code uses it yet | [`.env.production`](../.env.production) |
 | **Cloudflare Email Routing** | Forwards `hello@majnu.app` to the operator's inbox. The app sends no email | [setup.md](setup.md#services) |
 | **GitHub Actions** | Type check, tests and build on every push; live connection checks every hour | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
@@ -218,8 +218,8 @@ The developer talks to one Claude Code session, the **lead**. The lead splits wo
 | [Letters chat](features/letters-chat.md) | The main agent, the builder and research sub-agents, the chat route and its NDJSON events, stored history, the model settings verified live |
 | [Templates and gift pages](features/templates-and-gift-pages.md) | The letter contract, the seven templates, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
 | [Sharing and tracking](features/sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, the statistics and My gifts |
-| [Billing](features/billing.md) | Plans, the Stripe subscription, the return page, the webhook, the portal, `MAJNU_BILLING` and what is left before it goes on |
-| [Daytona redesign](features/daytona-redesign.md) | The snapshot, the sandbox job, the page checker, storage and the design route, costs per run, the production plan |
+| [Billing](features/billing.md) | The personalised wrapper: the dialog and consent, one-time Checkout, the return page and webhook, the `purchases` table, refunds and the Purchases tab |
+| [Daytona redesign](features/daytona-redesign.md) | The snapshot, the sandbox job and its REST client, the queue consumer, the page checker, storage and the design route, costs per run |
 | [Data and security](features/data-and-security.md) | The schema and migrations, row-level security, server-only writes, the spending guard, secrets and deploying |
 | [Landing page and brand](features/landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [Agent workflow](features/agent-workflow.md) | How the repository is built with a lead session and parallel task sessions |
@@ -231,8 +231,7 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 | Part | State in the code |
 |---|---|
 | Sign-in, the three app tabs, the chat with all three agents, seven templates, gift pages, the share panel, open tracking, spending limits, legal pages, brand | Built |
-| Stripe subscription | Built and tested; plans not enforced until `MAJNU_BILLING=on` ([#14](https://github.com/peresramirez/majnu/issues/14)) |
-| Daytona redesign | Built and run once by hand; not offered in the chat, which needs a queue consumer |
+| Personalised wrapper (Stripe Checkout in payment mode, the queue consumer, refunds) | Built and checked in test mode up to an automatic refund; a successful paid design run waits on the Anthropic key's limit ([#39](https://github.com/peresramirez/majnu/issues/39)) |
 | Gift finder, anonymous accounts, Turnstile | Contract frozen, code being built ([#31](https://github.com/peresramirez/majnu/issues/31) to [#34](https://github.com/peresramirez/majnu/issues/34)) |
 | Gift list on invitations | Decided, not started ([#35](https://github.com/peresramirez/majnu/issues/35)) |
 

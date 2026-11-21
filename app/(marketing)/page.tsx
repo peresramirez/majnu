@@ -12,6 +12,7 @@ import { Wordmark } from "@/components/brand/wordmark"
 import { firstName } from "@/components/letters/names"
 import { TemplateCard } from "@/components/letters/template-card"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
+import { free, wrapper } from "@/lib/plans"
 
 const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
@@ -28,21 +29,7 @@ const examples = [
 ] as const
 
 // Everything is free but one thing: a design Majnu makes for one gift. The
-// copy lives here until lib/plans.ts describes the new model (docs/plan.md).
-const freeFeatures = [
-  "Find a gift: three ideas from shops in your country",
-  "Personalise the search with a few questions",
-  "Wrap it in one of our designs",
-  "Share it by link, WhatsApp or QR code",
-  "See when it is opened",
-  "Advent calendars, with a free account",
-]
-
-const wrapperFeatures = [
-  "A design Majnu makes for this one gift",
-  "Made around the person and what you want to say",
-  "Paid once, for one gift. No subscription",
-]
+// pricing cards read their wording and price from lib/plans.ts.
 
 const questions = [
   {
@@ -67,7 +54,11 @@ const questions = [
   },
   {
     q: "What does Majnu cost?",
-    a: "Finding a gift, personalising the search, wrapping it in one of our designs, sending the link and seeing when it is opened are all free. A personalised wrapper, a design Majnu makes for one gift, costs €2.99 once.",
+    a: `Finding a gift, personalising the search, wrapping it in one of our designs, sending the link and seeing when it is opened are all free. A ${wrapper.name.toLowerCase()}, a design Majnu makes for one gift, costs ${wrapper.price} once, VAT included. Nothing renews and there is nothing to cancel.`,
+  },
+  {
+    q: "What happens when I buy a personalised wrapper?",
+    a: "On your wrapped gift, choose “Make it unique” and describe the look you want. Majnu starts on it as soon as you pay and it is ready in about two minutes, on the same link. If the design cannot be made, you are refunded in full automatically. You need a free account to buy one, so your receipt has a home.",
   },
 ]
 
@@ -161,14 +152,14 @@ export default function LandingPage() {
               <div className="flex flex-col rounded-3xl bg-night-plum p-8 ring-1 ring-inset ring-night-petal/15">
                 <div className="flex items-center gap-3 text-night-rose">
                   <MoonPhase lit={0.22} size={28} />
-                  <h3 className="font-display text-2xl text-night-petal">Free</h3>
+                  <h3 className="font-display text-2xl text-night-petal">{free.name}</h3>
                 </div>
                 <p className="mt-6">
-                  <span className="font-display text-5xl">€0</span>
+                  <span className="font-display text-5xl">{free.price}</span>
                 </p>
-                <p className="mt-2 text-night-lilac">Find a gift, wrap it in one of our designs, share it and see when it is opened.</p>
+                <p className="mt-2 text-night-lilac">{free.summary}</p>
                 <ul className="mt-8 flex-1 space-y-3 text-[15px]">
-                  {freeFeatures.map((f) => (
+                  {free.features.map((f) => (
                     <li key={f} className="flex gap-3">
                       <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
                       <span>{f}</span>
@@ -176,31 +167,33 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <a href="#find" className={`mt-10 ${primaryButton}`}>
-                  Find a gift <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  {free.cta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </a>
               </div>
               <div className="flex flex-col rounded-3xl bg-night-velvet p-8 ring-1 ring-inset ring-night-petal/15">
                 <div className="flex items-center gap-3 text-night-rose">
                   <MoonPhase lit={1} size={28} />
-                  <h3 className="font-display text-2xl text-night-petal">Personalised wrapper</h3>
+                  <h3 className="font-display text-2xl text-night-petal">{wrapper.name}</h3>
                 </div>
                 <p className="mt-6">
-                  <span className="font-display text-5xl">€2.99</span>
-                  <span className="ml-2 text-night-lilac">once, for one gift</span>
+                  <span className="font-display text-5xl">{wrapper.price}</span>
+                  <span className="ml-2 text-night-lilac">{wrapper.period}</span>
                 </p>
-                <p className="mt-2 text-night-lilac">Instead of one of our designs, Majnu makes a page for this gift alone.</p>
+                <p className="mt-2 text-night-lilac">{wrapper.summary}</p>
                 <ul className="mt-8 flex-1 space-y-3 text-[15px]">
-                  {wrapperFeatures.map((f) => (
+                  {wrapper.features.map((f) => (
                     <li key={f} className="flex gap-3">
                       <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
                       <span>{f}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-10 text-sm leading-relaxed text-night-lilac">You only pay if you want one, for the gift you choose.</p>
+                <p className="mt-10 text-sm leading-relaxed text-night-lilac">
+                  You only pay if you want one, for the gift you choose: tap &ldquo;Make it unique&rdquo; once it is wrapped. Needs a free account.
+                </p>
               </div>
             </div>
-            <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros, paid once by card through Stripe. There is no subscription.</p>
+            <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros including VAT, paid once through Stripe. Nothing renews.</p>
           </div>
         </section>
 

@@ -1,5 +1,6 @@
-// POST /api/stripe/webhook: Stripe's events about subscriptions, checkouts and
-// invoices, verified against STRIPE_WEBHOOK_SECRET before anything is read.
+// POST /api/stripe/webhook: Stripe's events about personalised wrapper
+// checkouts, verified against STRIPE_WEBHOOK_SECRET before anything is read.
+// A paid checkout marks its purchase paid and starts the design job.
 //
 // 400 without a valid signature, 413 for an oversized body, 500 when the
 // secret is missing or processing fails (Stripe then retries with backoff for

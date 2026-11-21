@@ -67,6 +67,7 @@ The numbers that decide the ads budget: cost per first search, cost per shared g
 ## Status (21 November)
 
 - Free product: live on majnu.app (finder, templates, sharing, tracking); guest accounts merged.
-- Personalised wrapper: the Daytona design pipeline works (one real run, stored and served). Not built yet: the one-time Stripe Checkout, the "Make it unique" button, running the job in production (a queue), and the terms change. Tracked in the issue for the personalised wrapper.
-- The Stripe subscription built earlier (Full moon, €4.99 a month) is switched off and will be replaced by the one-time payment.
+- Personalised wrapper (issue #39), built 22 November: "Make it unique, €2.99" on the finder's wrapped gift and on letter previews, a dialog with the design request and the consent to immediate delivery (stored with the purchase), Stripe Checkout in payment mode, a signed webhook, the design job in a Cloudflare Queue consumer, an automatic refund when a run fails, and a Purchases tab with receipts. The terms and the privacy page are reworded. Checked in Stripe test mode up to an automatic refund; a successful paid design run waits on the Anthropic key's usage limit. Going live needs the live product and price, the webhook events, and a deploy (which creates the queues). See [features/billing.md](features/billing.md).
+- The Stripe account has Managed Payments (Stripe as merchant of record, which would handle VAT) on by default; Checkout switches it off so Majnu stays the seller as planned here. Revisit before selling outside Germany.
+- The Full moon subscription is retired: its code, its gates and its wording are removed.
 - Affiliate links: future.

@@ -1,81 +1,104 @@
+// POST /api/checkout with the checkout service replaced by a fake: what the
+// route accepts, what it passes on, and how each refusal is answered.
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-let user: { id: string; email?: string } | null
+let user: { id: string; email?: string; is_anonymous?: boolean } | null
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }),
 }))
-vi.mock("@/lib/billing/service", () => ({ startCheckout: vi.fn() }))
+vi.mock("@/lib/billing/service", () => ({ startWrapperCheckout: vi.fn() }))
 
 import { POST } from "@/app/api/checkout/route"
-import { startCheckout } from "@/lib/billing/service"
+import { startWrapperCheckout } from "@/lib/billing/service"
 
-function form(headers: Record<string, string> = {}) {
-  return new Request("https://majnu.app/api/checkout", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://majnu.app", ...headers },
-    body: "",
-  })
+const LETTER = "0b6f2a4c-1d3e-4f5a-8b9c-0d1e2f3a4b5c"
+const BODY = { letterId: LETTER, request: "A 1950s cinema ticket by the sea", consent: true, returnTo: `/create/${LETTER}` }
+
+function post(body: unknown = BODY, headers: Record<string, string> = {}) {
+  return POST(
+    new Request("https://majnu.app/api/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://majnu.app", ...headers },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    }),
+  )
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
-  vi.stubEnv("MAJNU_BILLING", "on")
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://majnu.app")
-  user = { id: "user-1", email: "anna@example.com" }
-  vi.mocked(startCheckout).mockResolvedValue({ kind: "redirect", url: "https://checkout.stripe.com/c/pay/cs_test_1" })
+  user = { id: "user-1", email: "anna@example.com", is_anonymous: false }
+  vi.mocked(startWrapperCheckout).mockResolvedValue({ kind: "redirect", url: "https://checkout.stripe.com/c/pay/cs_test_1", purchaseId: "p1" })
 })
 
 describe("POST /api/checkout", () => {
-  it("answers a form post with 303 to Stripe Checkout", async () => {
-    const res = await POST(form())
-    expect(res.status).toBe(303)
-    expect(res.headers.get("location")).toBe("https://checkout.stripe.com/c/pay/cs_test_1")
-    expect(startCheckout).toHaveBeenCalledWith({ id: "user-1", email: "anna@example.com" }, "https://majnu.app")
+  it("answers with the Checkout URL and passes the user, the body and the site origin on", async () => {
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ url: "https://checkout.stripe.com/c/pay/cs_test_1" })
+    expect(startWrapperCheckout).toHaveBeenCalledWith(
+      { id: "user-1", email: "anna@example.com", isAnonymous: false },
+      { letterId: LETTER, request: BODY.request, consent: true, returnTo: BODY.returnTo },
+      "https://majnu.app",
+    )
+    expect(res.headers.get("cache-control")).toBe("no-store")
   })
 
-  it("sends a signed-out form to sign-in, coming back to the Plan tab", async () => {
-    user = null
-    const res = await POST(form())
-    expect(res.status).toBe(303)
-    expect(res.headers.get("location")).toBe("https://majnu.app/signin?next=%2Fdashboard%2Fplan")
-    expect(startCheckout).not.toHaveBeenCalled()
-  })
-
-  it("answers 401 to a signed-out request that is not a form", async () => {
-    user = null
-    const res = await POST(new Request("https://majnu.app/api/checkout", { method: "POST" }))
-    expect(res.status).toBe(401)
-  })
-
-  it("refuses a post from another site", async () => {
-    const res = await POST(form({ origin: "https://evil.example" }))
+  it("tells the service when the user is a guest", async () => {
+    user = { id: "guest-1", is_anonymous: true }
+    vi.mocked(startWrapperCheckout).mockResolvedValue({ kind: "refused", reason: "account_required", message: "Create a free account first." })
+    const res = await post()
     expect(res.status).toBe(403)
-    expect(startCheckout).not.toHaveBeenCalled()
+    expect(await res.json()).toMatchObject({ reason: "account_required" })
+    expect(vi.mocked(startWrapperCheckout).mock.calls[0][0]).toMatchObject({ isAnonymous: true })
   })
 
-  it("starts nothing while billing is off", async () => {
-    vi.stubEnv("MAJNU_BILLING", "")
-    const res = await POST(form())
-    expect(res.status).toBe(303)
-    expect(res.headers.get("location")).toBe("https://majnu.app/dashboard/plan")
-    expect(startCheckout).not.toHaveBeenCalled()
+  it.each([
+    ["consent_required", 400],
+    ["invalid_request", 400],
+    ["letter_not_found", 404],
+    ["in_progress", 409],
+    ["not_a_letter", 422],
+    ["not_built", 422],
+  ] as const)("answers a %s refusal with %i and the message", async (reason, status) => {
+    vi.mocked(startWrapperCheckout).mockResolvedValue({ kind: "refused", reason, message: "why" })
+    const res = await post()
+    expect(res.status).toBe(status)
+    expect(await res.json()).toEqual({ error: "why", reason })
   })
 
-  it("sends a Full moon user back to the Plan tab", async () => {
-    vi.mocked(startCheckout).mockResolvedValue({ kind: "already_subscribed" })
-    const res = await POST(form())
-    expect(res.headers.get("location")).toBe("https://majnu.app/dashboard/plan")
+  it("answers 401 without a session, before reading the body", async () => {
+    user = null
+    const res = await post()
+    expect(res.status).toBe(401)
+    expect(startWrapperCheckout).not.toHaveBeenCalled()
   })
 
-  it("shows an error on the Plan tab when Stripe fails", async () => {
-    vi.mocked(startCheckout).mockRejectedValue(new Error("Stripe is down"))
-    const error = vi.spyOn(console, "error").mockImplementation(() => {})
-    const res = await POST(form())
-    expect(res.status).toBe(303)
-    expect(res.headers.get("location")).toBe("https://majnu.app/dashboard/plan?billing=error")
-    error.mockRestore()
+  it("refuses a cross-site post", async () => {
+    const res = await post(BODY, { origin: "https://evil.example" })
+    expect(res.status).toBe(403)
+    expect(startWrapperCheckout).not.toHaveBeenCalled()
+  })
+
+  it("refuses anything but JSON, so a plain cross-site form cannot start a purchase", async () => {
+    const res = await post("letterId=x", { "content-type": "application/x-www-form-urlencoded" })
+    expect(res.status).toBe(415)
+    expect(startWrapperCheckout).not.toHaveBeenCalled()
+  })
+
+  it("answers 400 to a body that is not a JSON object", async () => {
+    expect((await post("not json")).status).toBe(400)
+    expect((await post("[1,2]")).status).toBe(400)
+    expect(startWrapperCheckout).not.toHaveBeenCalled()
+  })
+
+  it("answers 502 and charges nothing when Stripe fails", async () => {
+    vi.mocked(startWrapperCheckout).mockRejectedValue(new Error("Stripe is down"))
+    const res = await post()
+    expect(res.status).toBe(502)
+    expect((await res.json()).error).toMatch(/Nothing was charged/)
   })
 })

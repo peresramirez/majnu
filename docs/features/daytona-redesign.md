@@ -1,21 +1,27 @@
-# Daytona redesign: "designed for you"
+# Daytona redesign: the personalised wrapper's designer
 
 ## What it does
 
-A sender can ask for a one-off look for a letter ("a 1950s cinema ticket by the sea") instead of one of the seven templates. Claude Code, running in a Daytona sandbox, writes one self-contained HTML page from the letter's content. We check the page, store it with the letter and delete the sandbox, and from then on `/l/<slug>` shows the design. The result never depends on the sandbox still existing. Letters only: a calendar baked into one static page would carry its locked doors.
+This is the one paid thing in Majnu: the **personalised wrapper**, €2.99 once ([billing.md](billing.md)). A sender asks for a one-off look for a gift ("a 1950s cinema ticket by the sea") instead of one of our designs, pays, and Claude Code, running in a Daytona sandbox, writes one self-contained HTML page from the letter's content. We check the page, store it with the letter and delete the sandbox, and from then on `/l/<slug>` shows the design. The result never depends on the sandbox still existing. Letters only: a calendar baked into one static page would carry its locked doors.
 
-Today a developer runs it by hand. It is not yet offered in the chat.
+A paid purchase starts the job from a Cloudflare Queue consumer in the same Worker as the app; a failed run is refunded automatically. A developer can also run it by hand.
 
 ## How it works
 
 ```mermaid
 sequenceDiagram
-  participant Dev as Developer laptop
+  participant W as Webhook or return page
+  participant Q as Queue majnu-designs
+  participant C as Queue consumer (worker.ts)
   participant Job as redesignLetter
   participant DB as Supabase
-  participant D as Daytona sandbox
+  participant D as Daytona sandbox (REST)
   participant A as Anthropic API
-  Dev->>Job: node scripts/daytona/redesign.mts letterId "request"
+  W->>DB: purchase pending → paid
+  W->>Q: { purchaseId }
+  Q->>C: one message (max_retries 0, dead-letter queue)
+  C->>DB: purchase paid → designing (once)
+  C->>Job: letterId, request
   Job->>DB: load the letter (service role), letters only
   Job->>D: create an ephemeral sandbox from the snapshot, eu, TTL 20 min
   Job->>D: upload content.json, request.txt, prompt.md
@@ -25,6 +31,7 @@ sequenceDiagram
   Job->>D: delete the sandbox, also after a failure
   Job->>Job: checkDesignHtml
   Job->>DB: insert into letter_designs
+  C->>DB: purchase → done with design_id (or refund and → refunded)
 ```
 
 ```mermaid
@@ -47,6 +54,8 @@ Every sandbox starts from the snapshot `majnu-letters-v1`, built in the `eu` reg
 Snapshots are immutable by name. After changing the templates, the skill or the CLI version, refresh the rendered examples, build `majnu-letters-v2`, and set `DAYTONA_SNAPSHOT`. Sandboxes already running keep the old one, and a bad build never replaces a working one. The alternative, a plain sandbox with the templates pushed in at every start, would start slower and not pin the CLI, for the same upkeep.
 
 ### The job
+
+The job reaches Daytona with `fetch` ([`lib/daytona/rest.ts`](../../lib/daytona/rest.ts)), not `@daytona/sdk`: it runs in the Worker's queue consumer, and the SDK does not bundle for Workers (it pulls in `@aws-sdk/client-s3`, OpenTelemetry's Node SDK, `tar`, `ws` and `socket.io-client`, and uses axios's Node HTTP adapter). The six calls it needs were recorded from a traced SDK 0.233 run and are written out with the same paths and bodies: `POST /sandbox` (snapshot, labels, `target`, `autoDeleteInterval: 0` for ephemeral, `ttlMinutes`, `domainAllowList`), `GET /sandbox/{id}` while it starts, `GET /sandbox?labels=` and `DELETE /sandbox/{id}` on the API, and `files/bulk-upload`, `process/execute`, `files/info` and `files/download` on the toolbox proxy the create response names. Daytona's own error message is kept in the error, so the tier fallback below still recognises it. The SDK stays for building snapshots on a laptop.
 
 [`redesignLetter(letterId, request)`](../../lib/daytona/redesign.ts):
 
@@ -110,6 +119,9 @@ The `sandbox` directive gives the document an opaque origin: its scripts run but
 |---|---|
 | [`lib/daytona/config.ts`](../../lib/daytona/config.ts) | Names and limits shared by the job, the snapshot script and the checker. No imports, no secrets |
 | [`lib/daytona/redesign.ts`](../../lib/daytona/redesign.ts) | The job |
+| [`lib/daytona/rest.ts`](../../lib/daytona/rest.ts) | Daytona's REST API with `fetch`, behind the job's `Sandboxes` interface |
+| [`worker.ts`](../../worker.ts), [`lib/billing/consumer.ts`](../../lib/billing/consumer.ts), [`lib/billing/fulfil.ts`](../../lib/billing/fulfil.ts) | The Worker entry that adds the queue consumer to the OpenNext app, the consumer, and the job for one paid purchase (claim, run, done or refund) |
+| [`scripts/daytona/run-purchase.mts`](../../scripts/daytona/run-purchase.mts) | Runs the job for one paid purchase by hand, as the consumer would |
 | [`lib/daytona/validate.ts`](../../lib/daytona/validate.ts) | The page checker |
 | [`lib/daytona/designs.ts`](../../lib/daytona/designs.ts) | Reading stored designs and the headers they are served with; never imports the Daytona SDK |
 | [`app/(public)/l/[slug]/design/route.ts`](../../app/(public)/l/[slug]/design/route.ts) | Serves the newest design |
@@ -117,18 +129,18 @@ The `sandbox` directive gives the document an opaque origin: its scripts run but
 | [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts), [`scripts/daytona/export-references.mts`](../../scripts/daytona/export-references.mts) | Build the snapshot and refresh its rendered examples |
 | [`daytona/sandbox/`](../../daytona/sandbox/) | The project Claude Code works in |
 | `letter_designs` table | Stored pages |
-| `DAYTONA_API_KEY` | Daytona access. A Worker secret, though only the laptop script uses it today |
+| `DAYTONA_API_KEY` | Daytona access. A Worker secret, used by the queue consumer |
 | `DAYTONA_ANTHROPIC_API_KEY` | Optional key of its own for the sandbox, with a low spend limit; otherwise `ANTHROPIC_API_KEY` is used |
 | `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v1`, `eu`, `https://app.daytona.io/api` |
 
-The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`).
+The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`), used only by the snapshot script. Queues `majnu-designs` and `majnu-designs-dlq` are bound in [`wrangler.jsonc`](../../wrangler.jsonc) and created by `scripts/deploy.sh` if missing.
 
 ## Data and privacy
 
 - **What leaves our systems:** the letter's content and the sender's request go into a Daytona sandbox in the EU, and from there to Anthropic. The sandbox is deleted as soon as the page is downloaded, and in any case within 20 minutes.
 - **What we keep:** the page and the request, in `letter_designs`, for as long as the letter exists. Only the owner can read them through the API; the public route serves only the HTML, by exact slug.
 - **The request is untrusted.** A stranger wrote it and a model reads it, so it is a file the prompt calls a description of a look, never an instruction. Claude Code has no shell or web tools, the sandbox's network is limited, the key is cheap to lose when `DAYTONA_ANTHROPIC_API_KEY` is used, the checker rejects pages that leak keys, and the browser enforces the CSP whatever the page says.
-- The privacy page does not name Daytona yet. It must before the redesign is offered to senders.
+- The privacy page names Daytona, the sandbox in the EU, and that it is deleted within 20 minutes.
 
 ## Limits and costs
 
@@ -142,24 +154,27 @@ The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`).
 
 **The first end-to-end run** (21 November, a birthday letter, "a 1950s cinema ticket by the sea", recorded in [docs/plan.md](../plan.md#daytona-redesign-only-if-everything-else-is-done)) took 81 s in all: under 2 s to start the sandbox, 9 Claude Code turns costing $0.26, and a 15 KB page. Daytona's own charge for the sandbox time is not recorded.
 
-## Production plan
+## Running it in production
 
-81 seconds is too long to run inside a Worker request, so the redesign needs a job runner. The plan, not built yet:
+A run takes about 90 seconds, too long for a request, so a paid purchase runs it in a **Cloudflare Queue consumer** that lives in the same Worker as the app ([`worker.ts`](../../worker.ts) wraps OpenNext's fetch handler and adds `queue`), so `npm run deploy` still deploys one Worker. Why a queue and not a Workflow: a consumer has 15 minutes of wall time per message, which holds one run with room to spare; waiting on Daytona and Anthropic is I/O, not CPU time; and the job has no steps worth retrying separately, since a retry is another paid run. A Workflow would add a class export, a second binding and per-step state for no gain here.
 
-1. A `redesign_letter` tool in the chat checks ownership, the plan and a per-user daily limit, then puts `{ letterId, request }` on a **Cloudflare Queue**.
-2. A consumer Worker has 15 minutes of wall time per message, enough for one run, with `max_retries: 0` (a retry is another paid run) and a dead-letter queue.
-3. The consumer may need the job's few Daytona calls rewritten as `fetch` if the SDK does not bundle for Workers.
-4. A small jobs table would let the chat show progress.
+- **`majnu-designs`**: `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 3`, dead-letter queue `majnu-designs-dlq`. The webhook and the return page send `{ purchaseId }` after moving the purchase to `paid`. The consumer claims it (`paid → designing`, once), runs the job, and marks it `done` or refunds it ([billing.md](billing.md#the-design-job-and-refunds)); it acknowledges every message it could handle.
+- **`majnu-designs-dlq`**: a message lands here only if the consumer threw (it could not reach the database or Stripe) or died. Its consumer refunds the purchase if it is still `paid` or `designing`.
+- **Where there is no queue:** `next dev` runs the job in the background of the dev server; anywhere else the purchase stays `paid` and `node scripts/daytona/run-purchase.mts <purchaseId>` runs it by hand.
+- **Bundling:** wrangler bundles `worker.ts` with the job's modules. `server-only` is aliased to an empty module in `wrangler.jsonc`, because it throws outside a React Server Components build; `process.env` holds the Worker's secrets (`nodejs_compat` with a 2026 compatibility date).
+- **CPU:** the consumer's own work is small (a few database writes and the page checker on at most 500 KB). On Workers Paid the default 30 s of CPU per invocation is plenty; on Workers Free the 10 ms limit could be too tight for the checker on a large page.
 
 ## How it was checked
 
-- **Unit tests** in [`tests/unit/lib/daytona/`](../../tests/unit/lib/daytona/): `redesign.test.ts` runs the job against a fake sandbox (the happy path; never logging a key; deleting the sandbox after every kind of failure; the time limit; a page written before the budget ran out; oversized, rule-breaking, code-showing and key-leaking pages thrown away; the tier fallback; clean-up by label; bad input), `validate.test.ts`, `designs.test.ts` (the headers, exact-slug lookups) and `design-route.test.ts`.
-- **Live:** the first run above, by hand, on 21 November.
-- **Not verified:** the queue path (not built), and the network allow list, which our Daytona tier refuses.
+- **Unit tests** in [`tests/unit/lib/daytona/`](../../tests/unit/lib/daytona/): `redesign.test.ts` runs the job against a fake sandbox (the happy path; never logging a key; deleting the sandbox after every kind of failure; the time limit; a page written before the budget ran out; oversized, rule-breaking, code-showing and key-leaking pages thrown away; the tier fallback; clean-up by label; bad input), `rest.test.ts` (the REST client's paths, bodies and headers against a fake `fetch`, waiting for a start, Daytona's error text, deleting by label), `validate.test.ts`, `designs.test.ts` and `design-route.test.ts`. The purchase side is in [`tests/unit/lib/billing/`](../../tests/unit/lib/billing/) (`fulfil.test.ts`, `consumer.test.ts`, `queue.test.ts`).
+- **Live, the REST client (22 November):** a sandbox from `majnu-letters-v1` in `eu` started in 0.8 s; upload, a command with an environment variable, file info, download and delete all worked, with no model call.
+- **Live, a paid purchase that failed (22 November):** paid with a Stripe test card on a dev server, with `DAYTONA_SNAPSHOT` pointing at a snapshot that does not exist. The job tried the allow list, recognised the tier's refusal in the REST error, retried without it, got "Snapshot not found", and the payment was refunded automatically ([billing.md](billing.md#how-it-was-checked)).
+- **Live, earlier:** the first end-to-end design run, by hand with the SDK, on 21 November.
+- **Not verified:** a successful design run through the REST client and the queue (the Anthropic key is over its usage limit until it is raised, so every model call is refused); the queue consumer on Cloudflare, and wrangler bundling `worker.ts` (both happen only at deploy; the build here is `next build`); the network allow list, which our Daytona tier refuses.
 
 ## Open questions
 
-- Build the queue consumer and the chat tool, with a per-user daily limit and the plan check.
-- Name Daytona on the privacy page.
-- Decide whether `DAYTONA_ANTHROPIC_API_KEY` becomes required in production.
-- Issue [#28](https://github.com/peresramirez/majnu/issues/28) is closed for the extra as built; the production path needs an issue of its own.
+- Run one real design through the queue after deploying, once the Anthropic key's limit is raised, and record its time and cost here.
+- Decide whether `DAYTONA_ANTHROPIC_API_KEY` becomes required in production: the sandbox runs the model on text a stranger wrote and paid for.
+- A design that is made but looks wrong is refunded by hand on request (the terms promise it); there is no "make it again" yet.
+- Issue [#39](https://github.com/peresramirez/majnu/issues/39) covers the production path.
