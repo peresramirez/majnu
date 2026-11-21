@@ -76,7 +76,7 @@ start)
   herdr pane read "$pane" --source recent-unwrapped --lines 5 | grep -q SESSION_2_READY || die "npm ci failed in $path; see the $name workspace"
 
   herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- \
-    --name "$name" --permission-mode acceptEdits --no-chrome --mcp-config scripts/agents/browser-mcp.json >/dev/null
+    --name "$name" --dangerously-skip-permissions --no-chrome --mcp-config scripts/agents/browser-mcp.json >/dev/null
 
   prompt="$(sed -e "s/{{name}}/$name/g" -e "s/{{port}}/$port/g" "$here/brief-header.md")
 $(cat "$brief")"
