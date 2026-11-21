@@ -1,7 +1,7 @@
 export const site = {
   name: "Majnu",
-  tagline: "Letters you send as a link",
+  tagline: "Personalized digital gifting",
   description:
-    "Write a letter, invitation or advent calendar with a little help, and send it as a link or QR code. See when it is opened.",
+    "Majnu is a personalized digital gifting platform. Wrap a gift code, a letter, an invitation or an advent calendar in a page made for one person, and send it as a link or QR code.",
   url: process.env.NEXT_PUBLIC_SITE_URL || "https://majnu.app",
 }

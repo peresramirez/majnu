@@ -2,7 +2,7 @@
   "name": "majnu",
   "version": "0.1.0",
   "private": true,
-  "description": "Digital letters, invitations and advent calendars, made by chatting with an AI agent and shared as a link.",
+  "description": "Personalized digital gifting platform: gift codes, letters, invitations and advent calendars, made by chatting with an AI agent and shared as a link.",
   "repository": {
     "type": "git",
     "url": "https://github.com/peresramirez/majnu"

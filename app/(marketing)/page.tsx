@@ -4,8 +4,15 @@ import { site } from "@/lib/site"
 
 const formats = [
   {
+    name: "Gift",
+    note: "A gift card or code they unwrap with a tap.",
+    price: "Free",
+    icon: Gift,
+    panel: "bg-airmail-sun text-airmail-ink",
+  },
+  {
     name: "Letter",
-    note: "For a birthday, a thank-you, or no reason at all.",
+    note: "Your own words, to go with a gift or on their own.",
     price: "Free",
     icon: Mail,
     panel: "bg-airmail-blue text-white",
@@ -16,13 +23,6 @@ const formats = [
     price: "Free",
     icon: MapPin,
     panel: "bg-airmail-red text-white",
-  },
-  {
-    name: "Gift",
-    note: "Tuck in a gift code they reveal with a tap.",
-    price: "Free",
-    icon: Gift,
-    panel: "bg-airmail-sun text-airmail-ink",
   },
   {
     name: "Advent calendar",
@@ -36,11 +36,11 @@ const formats = [
 const steps = [
   {
     title: "Tell Majnu who it's for",
-    body: "Answer a few questions in a chat. It drafts the words with you, and you change whatever you like.",
+    body: "Answer a few questions in a chat. It helps you pick the gift and find the words, and you change whatever you like.",
   },
   {
     title: "Choose a design",
-    body: "Pick the look that fits: a classic letter, a party invitation, a gift to unwrap, a calendar of doors.",
+    body: "Pick the look that fits: a gift to unwrap, a classic letter, a party invitation, a calendar of doors.",
   },
   {
     title: "Share the link",
@@ -51,13 +51,13 @@ const steps = [
 const focusOnBlue =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
 
-function WriteButton({ className = "" }: { className?: string }) {
+function CreateButton({ className = "" }: { className?: string }) {
   return (
     <Link
       href="/signin"
       className={`inline-flex items-center justify-center gap-2 rounded-md bg-airmail-red px-7 py-3.5 text-base font-bold text-white shadow-[0_4px_0_0_#9E1F1B] transition-transform hover:translate-y-0.5 hover:shadow-[0_2px_0_0_#9E1F1B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-airmail-ink motion-reduce:transition-none ${className}`}
     >
-      Write a letter
+      Create a gift
       <ArrowRight className="h-4 w-4" aria-hidden="true" />
     </Link>
   )
@@ -112,16 +112,16 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <h1 className="mt-7 text-balance text-[2.6rem] font-extrabold leading-[1.02] tracking-tight sm:text-6xl lg:mt-10 lg:text-7xl">
-                  Write them a letter. Send it as a link.
+                <h1 className="mt-7 text-[2.25rem] font-extrabold leading-[1.04] tracking-tight sm:text-6xl lg:mt-10 lg:text-7xl">
+                  Give something personal. Send it as a link.
                 </h1>
                 <p className="mt-5 max-w-xl text-lg leading-relaxed text-airmail-ink/75">
-                  Tell Majnu who it&apos;s for and what you want to say. It helps you write it, wraps it in a design you
-                  choose, and gives you a link and a QR code to share.
+                  Majnu is a personalized digital gifting platform. Tell it who it&apos;s for, and it wraps a gift
+                  code, a letter, an invitation or an advent calendar in a page made just for them.
                 </p>
 
                 <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <WriteButton className="w-full sm:w-auto" />
+                  <CreateButton className="w-full sm:w-auto" />
                   <a
                     href="#send"
                     className="rounded text-center text-sm font-semibold text-airmail-ink underline decoration-airmail-ink/30 underline-offset-4 hover:decoration-airmail-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-airmail-ink"
@@ -172,13 +172,13 @@ export default function LandingPage() {
             ))}
           </ul>
           <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-white/85">
-            Postage: letters, invitations and gifts are free. An advent calendar costs €4.99 (EUR), paid once.
+            Postage: gifts, letters and invitations are free. An advent calendar costs €4.99 (EUR), paid once.
           </p>
         </section>
 
         <section className="bg-airmail-paper text-airmail-ink">
           <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">From first word to sent</h2>
+            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">From idea to unwrapped</h2>
             <ol className="mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
               {steps.map((step, index) => (
                 <li key={step.title}>
@@ -200,7 +200,7 @@ export default function LandingPage() {
           <h2 className="text-balance text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
             Who is yours for?
           </h2>
-          <WriteButton />
+          <CreateButton />
         </section>
       </main>
 

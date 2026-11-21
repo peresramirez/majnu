@@ -1,6 +1,8 @@
 # Majnu: build plan
 
-Majnu lets someone sign in, chat with an AI agent, and get a digital letter, invitation or advent calendar as a web page with a short link and QR code. We track when the recipient opens it.
+Majnu is a personalized digital gifting platform. Someone signs in, chats with an AI agent, and gets a gift, letter, invitation or advent calendar as a web page made for one person, with a short link and QR code. We track when the recipient opens it.
+
+The product's building block is still called a letter in the code and in this plan: a gift is a letter that carries a gift code, and an invitation is a letter with an event.
 
 It has to be live within about 8 hours of starting, so ads can run the same night. Two developers build it in parallel, each with their own coding agent, on `peresramirez/majnu`.
 
@@ -111,7 +113,7 @@ The look is an airmail envelope, because the product is mail. It is defined once
 - Colours in `tailwind.config.ts` under `airmail`: `blue` (page ground), `red` (the one call to action), `paper`, `ink`, `postmark`, `sun`.
 - Type in `app/fonts.ts`: Bricolage Grotesque for headings and body (`font-sans`), Courier Prime for labels and prices (`font-mono`), Caveat for handwriting (`font-hand`).
 - Two CSS helpers in `app/globals.css`: `.airmail-edge` (the red and blue border) and `.stamp-perf` (perforated stamp edge; width and height must be multiples of 12px).
-- The main action is always worded "Write a letter".
+- The main action is always worded "Create a gift".
 
 Letter and calendar templates may use their own palettes; the site chrome around them stays in this one.
 

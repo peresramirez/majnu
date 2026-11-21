@@ -1,6 +1,6 @@
 # Majnu: instructions for coding agents
 
-Majnu turns a chat with an AI agent into a digital letter, invitation or advent calendar that is shared as a link and tracked when opened. Two developers are building it in parallel against a deadline of a few hours, each with their own coding agent. These rules exist so the two streams of work fit together without anyone stopping to coordinate.
+Majnu is a personalized digital gifting platform: a chat with an AI agent becomes a gift, letter, invitation or advent calendar made for one person, shared as a link and tracked when opened. Two developers are building it in parallel against a deadline of a few hours, each with their own coding agent. These rules exist so the two streams of work fit together without anyone stopping to coordinate.
 
 Read [docs/plan.md](docs/plan.md) before you change anything. It is the source of truth for architecture, file ownership and schedule. [docs/setup.md](docs/setup.md) covers keys and services.
 
