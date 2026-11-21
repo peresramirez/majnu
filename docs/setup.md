@@ -29,6 +29,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
 | `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
+| `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images for the site during development. The running app does not use it, so it is not uploaded to Cloudflare or CI |
 
 Production values come from two places:
 
