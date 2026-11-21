@@ -2,13 +2,14 @@
 
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight } from "lucide-react"
+import { ArrowLeft, Maximize2 } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { TemplateCard } from "@/components/letters/template-card"
 import { SharePanel } from "@/components/share/share-panel"
 import type { WrapTemplateId } from "@/lib/finder/events"
 import { WRAP_TEMPLATES, type WrapDetails, type WrapState } from "./finder-state"
 import { ProductImage } from "./gift-option-card"
+import { PreviewDialog } from "./preview-dialog"
 import { focusRing, primaryButton, quietLink, textLink } from "./styles"
 import { shopName } from "./urls"
 
@@ -47,11 +48,11 @@ export function WrapFooter({ wrap }: { wrap: OpenWrap }) {
   const meta = [option.price, shopName(option)].filter(Boolean).join(" · ")
   const error = wrap.stage === "choose" ? wrap.error : undefined
   return (
-    <div className="shrink-0 border-t border-night-petal/10 bg-night-plum pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-      {/* Same width and padding as the content above, so the edges line up. */}
-      <div className="mx-auto max-w-[920px] px-4 sm:px-6">
+    <div className="shrink-0 border-t border-night-petal/10 bg-night-plum pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5">
+      {/* Same padding as the content above, so the edges line up. */}
+      <div className="px-4 sm:px-5">
         {error && (
-          <p role="alert" className="mb-3 text-[15px] leading-relaxed text-night-petal">
+          <p role="alert" className="mb-2.5 text-sm leading-relaxed text-night-petal">
             {error}{" "}
             {wrap.stage === "choose" && wrap.reason === "signin_required" && (
               <Link href="/signup" className={textLink}>
@@ -61,10 +62,10 @@ export function WrapFooter({ wrap }: { wrap: OpenWrap }) {
           </p>
         )}
         <div className="flex items-center gap-3">
-          <ProductImage src={option.imageUrl} className="aspect-square w-11 shrink-0 rounded-xl sm:w-12" />
+          <ProductImage src={option.imageUrl} className="aspect-square w-10 shrink-0 rounded-xl" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold leading-snug text-night-petal">{option.title}</p>
-            <p className="truncate text-[13px] leading-snug text-night-lilac" aria-live="polite">
+            <p className="truncate text-sm font-semibold leading-snug text-night-petal">{option.title}</p>
+            <p className="truncate text-xs leading-snug text-night-lilac" aria-live="polite">
               {busy ? "Majnu is writing the page…" : meta}
             </p>
           </div>
@@ -90,7 +91,7 @@ export function WrapFooter({ wrap }: { wrap: OpenWrap }) {
 function PreviewFrame({ src }: { src: string }) {
   const [loaded, setLoaded] = useState(false)
   return (
-    <div className="relative h-[min(560px,68svh)] overflow-hidden rounded-[28px] bg-night-deep ring-1 ring-inset ring-night-petal/15 md:h-auto md:min-h-0 md:flex-1">
+    <div className="relative h-[min(560px,68svh)] overflow-hidden rounded-[22px] bg-night-deep ring-1 ring-inset ring-night-petal/15 md:h-auto md:min-h-0 md:flex-1">
       {!loaded && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-night-lilac" aria-hidden="true">
           <MoonPhase lit={0.5} size={28} className="text-night-rose motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]" />
@@ -111,6 +112,8 @@ function PreviewFrame({ src }: { src: string }) {
 // the page as they will and send the link.
 export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUrl }: Props) {
   const [details, setDetails] = useState<WrapDetails>({ recipientName: "", senderName: "", note: "" })
+  // The finished page, larger, in a dialog over the finder.
+  const [enlarged, setEnlarged] = useState<string | null>(null)
   const busy = wrap.stage === "wrapping"
 
   function submit(e: FormEvent) {
@@ -125,11 +128,11 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
     return (
       <div className="md:flex md:min-h-0 md:flex-1 md:flex-col">
         <BackButton onBack={onBack} />
-        <h2 className="mt-3 font-display text-[28px] leading-tight text-night-petal outline-none" tabIndex={-1} data-autofocus>
+        <h2 className="mt-2 font-display text-2xl leading-tight text-night-petal outline-none" tabIndex={-1} data-autofocus>
           Ready to send
         </h2>
-        <p className="mt-1 text-[15px] leading-relaxed text-night-lilac">This is the page they will open. Send them the link, or show them the QR code.</p>
-        <div className="mt-5 grid gap-5 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)] md:gap-8 lg:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
+        <p className="mt-1 text-sm leading-relaxed text-night-lilac">This is the page they will open. Send them the link, or show them the QR code.</p>
+        <div className="mt-4 grid gap-5 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)] md:gap-8 lg:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
           {/* On phones the link comes first: sending it is the point. */}
           <div className="order-first space-y-4 md:order-none md:col-start-2 md:row-start-1 md:min-h-0 md:overflow-y-auto">
             <SharePanel url={shareUrl(wrap.slug)} />
@@ -146,13 +149,13 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
           </div>
           <div className="flex flex-col md:col-start-1 md:row-start-1 md:min-h-0">
             <PreviewFrame key={src} src={src} />
-            <a href={src} target="_blank" rel="noopener" className={`mt-2.5 inline-flex items-center gap-1 self-start text-sm ${quietLink}`}>
-              Open the preview full screen
-              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="sr-only">(opens in a new tab)</span>
-            </a>
+            <button type="button" onClick={() => setEnlarged(src)} className={`mt-2.5 inline-flex items-center gap-1.5 self-start text-sm ${quietLink}`}>
+              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+              See the page larger
+            </button>
           </div>
         </div>
+        <PreviewDialog src={enlarged} title="Your gift, as they will see it" onClose={() => setEnlarged(null)} />
       </div>
     )
   }
@@ -160,14 +163,14 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
   return (
     <form id={WRAP_FORM_ID} onSubmit={submit} aria-busy={busy}>
       <BackButton onBack={onBack} />
-      <h2 className="mt-3 font-display text-[28px] leading-tight text-night-petal outline-none" tabIndex={-1} data-autofocus>
+      <h2 className="mt-2 font-display text-2xl leading-tight text-night-petal outline-none" tabIndex={-1} data-autofocus>
         Wrap it in a page for them
       </h2>
-      <p className="mt-1 text-[15px] leading-relaxed text-night-lilac">Majnu writes the page around your gift. Choose how it looks.</p>
+      <p className="mt-1 text-sm leading-relaxed text-night-lilac">Majnu writes the page around your gift. Choose how it looks.</p>
 
-      <fieldset className="mt-5" disabled={busy}>
+      <fieldset className="mt-4" disabled={busy}>
         <legend className="sr-only">Design</legend>
-        <div className="grid gap-3 md:grid-cols-3 md:gap-4">
+        <div className="grid gap-3 md:grid-cols-3">
           {WRAP_TEMPLATES.map((id) => {
             const selected = wrap.templateId === id
             return (
@@ -191,7 +194,7 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
         </div>
       </fieldset>
 
-      <fieldset className="mt-6 grid gap-4 sm:grid-cols-2" disabled={busy}>
+      <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={busy}>
         <legend className="sr-only">Names and a note, all optional</legend>
         <label className="block text-sm font-medium text-night-petal">
           Their name <span className="font-normal text-night-lilac">(optional)</span>
