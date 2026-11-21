@@ -14,3 +14,4 @@ Every page follows the same outline:
 
 | Page | Feature |
 |---|---|
+| [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: Majnu's greeting and message box in the hero, the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, and wrapping the chosen gift into a page with its link (issue #32) |
