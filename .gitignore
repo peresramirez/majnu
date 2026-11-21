@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Worktrees for parallel agent sessions (scripts/agents/session.sh)
 .claude/worktrees/
+
+# Supabase CLI working files
+supabase/.temp/
