@@ -42,7 +42,7 @@ Every task session works through the same five steps:
 2. **Build.** Edit only the files the brief gives you. Contract files change only if the brief says so; otherwise report the change you need.
 3. **Verify** with the tools you have, as described in "Checking your work".
 4. **Commit and push** your task branch only.
-5. **Report and stop.** Give the branch, the last commit, what changed, what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). Then wait.
+5. **Report and stop.** Give the branch, the last commit, the GitHub issues your work finishes (and any it only partly covers), what changed, what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). Then wait.
 
 A brief from the lead always states the goal, the files the session owns, the files it must not touch, the contract it codes against, how to verify the work (including its own dev-server port), and that contract changes are reported, not made.
 
@@ -52,9 +52,20 @@ The lead:
 - applies database migrations itself, with a dry run first;
 - reviews each report and diff, merges one branch at a time into `main` (`git merge --no-ff task/<name>`), reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, then pushes `main`;
 - closes each session, with its worktree and branch, as soon as its branch is merged;
+- closes the GitHub issues the merged work finished (see "GitHub issues");
 - deploys only when the developer asks.
 
 How to start, watch and close sessions on this machine is in CLAUDE.md.
+
+## GitHub issues
+
+Work is tracked in the GitHub issues on `peresramirez/majnu`; every task names the issues it covers. An issue is finished when the work is merged into `main`, pushed and checked, not when a task branch is pushed. At that point the lead (or, without a lead, the agent that merged) closes it straight away with a comment saying which commit finished it and how it was checked:
+
+```bash
+gh issue close <number> --comment "Done in <commit>: <what now works>. Checked: <how>."
+```
+
+If the work covers only part of an issue, leave it open and comment what is done and what is left. Never close an issue for work that is unmerged or unchecked.
 
 ## Checking your work
 
