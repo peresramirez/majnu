@@ -25,3 +25,4 @@ Every page follows the same outline:
 | [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |
 | [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |
+| [gift-list.md](gift-list.md) | Gift lists on wedding and birthday invitations: Majnu researches and adds gifts, guests claim one each with `POST /api/claim` (no account, one claim per gift, a per-visitor limit), and the host sees who is bringing what on My gifts and can release a claim (issue #35) |
