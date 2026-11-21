@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest"
 
 function required(name: string): string {
   const value = process.env[name]
-  if (!value) throw new Error(`${name} is missing in .env.local`)
+  if (!value) {
+    throw new Error(`${name} is not set. Locally: add it to .env.local. In CI: run "npm run ci:secrets".`)
+  }
   return value
 }
 
