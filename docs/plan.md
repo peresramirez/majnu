@@ -33,7 +33,7 @@ The product now leads with one job: **help someone find the right gift for a per
 ### Accounts and limits
 
 - **Invisible anonymous accounts.** The first finder message signs the visitor in anonymously with Supabase (`signInAnonymously`), protected by an invisible Cloudflare Turnstile check that Supabase verifies. Everything that works for signed-in users (ownership, row-level security, limits, My gifts, sharing) works for them. Signing up later links an email or Google identity to the same account, so nothing is lost. Middleware treats anonymous users as signed out for `/signin` and `/signup`, so they can upgrade.
-- **Free use per visitor per day:** 3 searches, 2 of them personalised. A site-wide daily cap on searches (`MAJNU_DAILY_SEARCH_CAP`) protects the budget against ad traffic. Apify profile reads have their own small site-wide cap (`APIFY_DAILY_CAP`), because the Apify credit is $5.
+- **Finding is open; personalising needs a free account** (developer's call, 21 November). Guests (the invisible anonymous accounts) get 3 plain searches a day; asking to personalise shows Sign up / Log in and returns to the same finder session. Signed-in users get 3 searches a day, 2 of them personalised. A site-wide daily cap on searches (`MAJNU_DAILY_SEARCH_CAP`) protects the budget against ad traffic. Apify profile reads have their own small site-wide cap (`APIFY_DAILY_CAP`), because the Apify credit is $5.
 - **Privacy.** The country and region are stored with a finder session to explain its results; never an address or exact location. The privacy page must name Turnstile, Apify and anonymous accounts before this goes live.
 
 ### Contract and work split
