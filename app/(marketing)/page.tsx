@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ArrowRight, Check } from "lucide-react"
 import { GiftScene } from "@/components/landing/gift-scene"
 import { HeroFinder } from "@/components/landing/hero-finder"
+import { HowItWorks } from "@/components/landing/how-it-works"
 import { PreviewLinks } from "@/components/landing/preview-links"
 import { Reveal } from "@/components/landing/reveal"
 import { SiteFooter } from "@/components/landing/site-footer"
@@ -17,25 +18,6 @@ const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
 
 const primaryButton = `inline-flex items-center justify-center gap-2 rounded-full bg-night-rose px-6 py-3.5 text-[15px] font-semibold text-night-plum transition-colors duration-200 ease-calm hover:bg-[#F1C4A9] ${focusRing}`
-
-// The finder's three steps, told as the moon travels from Majnu to Layla.
-const steps = [
-  {
-    lit: 0.22,
-    title: "Tell Majnu who it is for",
-    body: "Your mother, your girlfriend, a friend who just moved away. Majnu knows which country you are shopping in and guesses the rest from who they are to you. Correct anything it gets wrong.",
-  },
-  {
-    lit: 0.55,
-    title: "Choose from three gifts",
-    body: "Majnu searches real shops and brings back three ideas with prices, and says which one it would pick. None of them right? Answer a few questions and it looks again.",
-  },
-  {
-    lit: 1,
-    title: "Wrap it and send the link",
-    body: "Majnu writes a page around the gift, in a design you choose. Send it by WhatsApp, email or QR code. They open it on their phone, with nothing to install.",
-  },
-]
 
 // The demo links always resolve to the fixtures (lib/letters/store.ts), so the
 // thumbnails and the pages they open show the same gift. They open in a dialog
@@ -116,24 +98,7 @@ export default function LandingPage() {
             <GiftScene variant="card" />
           </div>
 
-          <section id="how" aria-labelledby="how-title" className="relative z-10 mx-auto max-w-6xl scroll-mt-8 px-5 pb-28 pt-10 sm:px-8 md:pb-32 md:pt-0">
-            <h2 id="how-title" className="max-w-md font-display text-4xl leading-tight sm:text-5xl">How it works</h2>
-            <p className="mt-4 max-w-md leading-relaxed text-night-lilac">
-              In the old story, Majnu would have given Layla the moon. Finding something just as personal takes three steps.
-            </p>
-            <ol className="mt-12 space-y-5 md:mt-14 md:space-y-[22vh] md:pb-[18vh]">
-              {steps.map((step, i) => (
-                <li key={step.title} className="max-w-md rounded-3xl bg-night-velvet/80 p-7 ring-1 ring-inset ring-night-petal/10 backdrop-blur-sm">
-                  <div className="flex items-center gap-3 text-night-rose">
-                    <MoonPhase lit={step.lit} size={30} />
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-night-lilac">Step {i + 1}</span>
-                  </div>
-                  <h3 className="mt-4 font-display text-3xl leading-tight">{step.title}</h3>
-                  <p className="mt-3 leading-relaxed text-night-lilac">{step.body}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <HowItWorks />
           </div>
         </div>
 
