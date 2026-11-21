@@ -79,7 +79,7 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 | `components/app/guest-notice.tsx`, `account-menu.tsx`, `session.ts` | The guest line, the guest account menu, `SessionUser.isGuest` |
 | `app/(app)/dashboard/find/page.tsx`, `components/app/find-invite.tsx` | The Find a gift tab (an invitation until the finder is mounted) |
 | `lib/limits.ts`, `lib/agents/events.ts` | The calendar gate and the `"signin_required"` limit reason |
-| `app/(marketing)/privacy/page.tsx`, `terms/page.tsx` | Guest accounts, country and region, Turnstile, Apify, the finder's limits |
+| `app/(marketing)/privacy/page.tsx`, `terms/page.tsx` | Guest accounts, country and region, Turnstile, Apify, the finder's limits (read from `lib/finder/limits.ts`) |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public site key of the Turnstile widget "Majnu" (in `.env.production`); its secret lives only in Supabase |
 | Supabase settings | Anonymous sign-ins, manual linking, captcha protection with the Turnstile secret, the "Change email address" template |
 
@@ -111,4 +111,5 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 - **Clean-up of guest accounts**: Supabase does not delete anonymous users. A scheduled job could delete guest accounts older than 30 days that own no letters.
 - **The chat's limit notice** (`components/create/chat-messages.tsx`) shows "See your plan" for any limit it does not know; for `"signin_required"` it should link to `/signup` instead.
 - **After sign-in** people still land on `/dashboard` (Letters & invitations), set by `lib/billing/next-path.ts`. Once the finder is mounted in the Find a gift tab, `/dashboard/find` may be the better default.
-- The terms state the finder's limits (3 searches a day, 2 personalised) as numbers; once `lib/finder` exports them, the terms should read them from there.
+- The terms read the finder's limits from `FINDER_LIMITS` in `lib/finder/limits.ts`, which applies them to every user. `lib/plans.ts` now promises Full moon "unlimited gift searches", which the finder does not implement yet; the terms say nothing about Full moon searches until it does.
+- Two small Turnstile loaders exist: `components/auth/turnstile.ts` (sign-in forms) and `components/finder/anonymous-session.ts` (the finder's anonymous sign-in). Both reuse `window.turnstile` once loaded; they could share one helper.

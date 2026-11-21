@@ -14,4 +14,6 @@ Every page follows the same outline:
 
 | Page | Feature |
 |---|---|
+| [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: Majnu's greeting and message box in the hero, the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, and wrapping the chosen gift into a page with its link (issue #32) |
+| [gift-finder-api.md](gift-finder-api.md) | The gift finder's server side: the finder agent with its context, research in the visitor's language and country with product photos, personalising, the daily and site-wide search limits, and wrapping the chosen gift into a page (issue #31) |
 | [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |

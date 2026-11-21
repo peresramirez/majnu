@@ -40,6 +40,15 @@ The product now leads with one job: **help someone find the right gift for a per
 
 `lib/finder/events.ts` defines the request, the streamed events and the wrap call. Issues: #31 finder agent and API, #32 landing page finder, #33 anonymous visitors, app tabs and privacy, #34 social profile reading.
 
+## Gift list on invitations (decided 21 November)
+
+Wedding and birthday invitations (`wedding-invite`, `party-invite`) can carry a **gift list**. In the Letters & invitations chat, the host asks Majnu to research gifts they would like, picks some, and they are added to the invitation (an optional, additive `wishlist` on `LetterContent`, each item with a stable id). On the invitation page, guests see the list at the end and tap "I'll bring this" to claim an item, optionally leaving a first name for the host. A claimed item shows as taken for everyone else and cannot be claimed twice (a unique claim per letter and item). Claims need no account and store nothing on the guest's device; they go through a server route that limits claims per visitor hash. The host sees who claimed what in My gifts and can release a claim. Issue #35.
+
+## Voice (decided 21 November)
+
+- **Voice input** (#37): a microphone button in the finder and the letters chat records up to 60 seconds; `POST /api/transcribe` sends it to OpenAI's transcription endpoint and returns text for the user to check and send. This is the one exception to "Anthropic SDK only": OpenAI is used for speech to text and nothing else, called with `fetch` (no OpenAI SDK), key `OPENAI_API_KEY`. Recordings are not stored. A daily per-user cap keeps the cost bounded.
+- **Audio note in a gift** (#38): the sender records up to 2 minutes; it is stored in a private Supabase Storage bucket with the letter and served from our own domain at `/l/<slug>/audio`, so gift pages still load nothing from other sites. Every template shows a "Tap to hear" button when a note exists.
+
 ## Architecture
 
 ### Routes

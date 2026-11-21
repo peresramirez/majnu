@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { LegalPage, ShortVersion } from "@/components/legal/legal-page"
+import { FINDER_LIMITS as finder } from "@/lib/finder/limits"
 import { operator } from "@/lib/legal"
 import { plans } from "@/lib/plans"
 
@@ -8,10 +9,6 @@ export const metadata: Metadata = {
   title: "Terms",
   description: "The terms for using Majnu, including plans, cancelling and refunds.",
 }
-
-// The gift finder's free use per visitor and day (docs/plan.md, "Accounts and
-// limits"). Keep these in step with the finder's own limits in lib/finder.
-const finder = { searchesPerDay: 3, personalisedPerDay: 2 }
 
 export default function TermsPage() {
   const mail = <a href={`mailto:${operator.email}`}>{operator.email}</a>
@@ -62,8 +59,8 @@ export default function TermsPage() {
       <h2>The gift finder</h2>
       <ul>
         <li>
-          Each visitor can search for gift ideas {finder.searchesPerDay} times a day, and {finder.personalisedPerDay} of
-          those searches can be personalised with more about the person. When very many people use the finder on the
+          You can search for gift ideas {finder.searchesPerDay} times a day, with or without an account, and{" "}
+          {finder.personalisedPerDay} of those searches can be personalised with more about the person. When very many people use the finder on the
           same day, we may pause new searches for everyone until the next day.
         </li>
         <li>

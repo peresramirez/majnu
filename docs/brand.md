@@ -128,7 +128,7 @@ Write to one person, the way the sender would. Short sentences, plain words, sen
 
 | Say | Not |
 |---|---|
-| Create a gift | Get started, Submit |
+| Find a gift, Create a gift | Get started, Submit |
 | Who is it for? | Enter recipient details |
 | Send the link | Share now! |
 | Opened 2 hours ago | Engagement: 1 view |
@@ -136,7 +136,7 @@ Write to one person, the way the sender would. Short sentences, plain words, sen
 
 - No exclamation marks, no emoji in the interface, no "magic", "AI-powered" or "unlock".
 - Name things by what people do, not how we built them: "letter", "gift", "link", not "template instance" or "slug".
-- The main action is always **Create a gift**.
+- The main action is **Find a gift** wherever the gift finder is (the landing page, the Find a gift tab), and **Create a gift** for letters, invitations and calendars.
 
 ## Templates
 

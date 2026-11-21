@@ -31,6 +31,27 @@ function litPath(r: number, lit: number) {
   return `M0 ${-r}A${r} ${r} 0 0 1 0 ${r}A${Math.abs(e) * r} ${r} 0 0 ${e > 0 ? 0 : 1} 0 ${-r}Z`
 }
 
+// Where layout() will put the painting, in CSS, so the page renders it there
+// from the start and nothing moves (a layout shift) when the script takes over.
+// The card is always 4:5: as tall as the card, 2048/1152 × 5/4 of its width,
+// shifted by 90% of the overflow. The backdrop covers its box with container
+// units: right-aligned, and 55% of any vertical overflow above it.
+const CARD_WIDTH = (IW / IH) * (5 / 4)
+const CARD_FRAME = {
+  width: `${(CARD_WIDTH * 100).toFixed(3)}%`,
+  height: "100%",
+  left: `${((1 - CARD_WIDTH) * 0.9 * 100).toFixed(3)}%`,
+  top: 0,
+} as const
+const coverWidth = `max(100cqw, ${((IW / IH) * 100).toFixed(3)}cqh)`
+const coverHeight = `max(100cqh, ${((IH / IW) * 100).toFixed(3)}cqw)`
+const BACKDROP_FRAME = {
+  width: coverWidth,
+  height: coverHeight,
+  left: `calc(100cqw - ${coverWidth})`,
+  top: `calc((100cqh - ${coverHeight}) * 0.55)`,
+} as const
+
 // "backdrop": pinned behind a long section; "card": a framed card that animates as it
 // scrolls past; "panel": fills its parent, moon already given (sign-in pages).
 export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" }) {
@@ -118,6 +139,7 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
     <div
       ref={box}
       aria-hidden="true"
+      style={backdrop ? { containerType: "size" } : undefined}
       className={
         backdrop
           ? "pointer-events-none sticky top-0 h-[100svh] overflow-hidden"
@@ -126,7 +148,11 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
             : "relative aspect-[4/5] w-full overflow-hidden rounded-3xl ring-1 ring-inset ring-night-petal/10"
       }
     >
-      <div ref={frame} className="absolute left-0 top-0 h-full w-full">
+      <div
+        ref={frame}
+        className="absolute left-0 top-0 h-full w-full"
+        style={variant === "card" ? CARD_FRAME : variant === "backdrop" ? BACKDROP_FRAME : undefined}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/landing/majnu-layla-2048.webp"
