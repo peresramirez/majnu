@@ -28,6 +28,8 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `MAJNU_MODEL` | Optional | Defaults to `claude-opus-5-5` |
 | `TAVILY_API_KEY` | Optional, app.tavily.com → API keys | Web search for the gift research agent. Server only. When it is empty, research uses Anthropic's web search instead |
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
+| `STRIPE_PRICE_FULL_MOON` | Stripe Dashboard → Product catalog → Full moon → the €4.99 monthly price's id | The price Checkout charges. Test and live mode have different ids |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → the endpoint for `https://majnu.app/api/stripe/webhook` | Verifies that webhook calls come from Stripe |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
 | `MAJNU_BILLING` | Optional, `on` or unset | Unset (the default): everyone gets Full moon features and only the spending guard applies. `on` enforces the plans in `lib/plans.ts` |
 | `OPEN_HASH_SECRET` | Generate one: `openssl rand -hex 32` | Server only. Mixed into the visitor hash in `/api/open` so the stored visitor id cannot be traced back to an IP address. Without it, opens are not recorded. Changing it makes returning visitors count as new |
@@ -37,7 +39,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 Production values come from two places:
 
 - **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
-- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
+- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_FULL_MOON`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
 
 ## Services
 

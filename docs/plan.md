@@ -35,7 +35,7 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 | `/signin`, `/signup` | public | Night palette beside the Majnu and Layla scene, in their own `app/(auth)/` layout |
 | `POST /api/chat` | owner | Main agent, streamed |
 | `POST /api/open` | public | Records `open`, `door_open`, `gift_click` |
-| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook` | owner, owner, Stripe | Start the Full moon subscription, confirm it on return, and keep its status current |
+| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `POST /api/billing/portal` | owner, owner, Stripe, owner | Start the Full moon subscription, confirm it on return, keep its status current, and open the Stripe customer portal to manage or cancel |
 
 Short link: `majnu.app/l/<slug>`, where the slug is 10 random characters from `crypto.randomBytes`.
 
