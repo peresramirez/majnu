@@ -22,5 +22,6 @@ export default async function DevTemplatePage({ params, searchParams }: Props) {
   const q = await searchParams
   if (!isTemplateId(id)) notFound()
   const letter = fixtureLetter(id, { now: new Date(), live: q.live === "1", palette: q.palette, font: q.font })
+  if (!letter) notFound()
   return <LetterRenderer letter={letter} />
 }
