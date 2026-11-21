@@ -10,6 +10,7 @@ import { notFound } from "next/navigation"
 import { LetterRenderer } from "@/components/letters/registry"
 import { OpenBeacon } from "@/components/letters/open-beacon"
 import { letterMetadata, letterViewport } from "@/components/letters/page-meta"
+import { getLatestDesignInfo } from "@/lib/daytona/designs"
 import { getPublicLetter } from "@/lib/letters/store"
 
 export const dynamic = "force-dynamic"
@@ -32,10 +33,41 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
   return letterViewport(await load(slug))
 }
 
+// A design made in a Daytona sandbox, if the letter has one. Designs are an
+// extra: if the lookup fails, the page falls back to its template.
+async function designFor(slug: string) {
+  try {
+    return await getLatestDesignInfo(slug)
+  } catch {
+    return null
+  }
+}
+
 export default async function LetterPage({ params }: Props) {
   const { slug } = await params
   const letter = await load(slug)
   if (!letter) notFound()
+
+  // Calendars never get a design: a static page would carry their locked doors.
+  const design = letter.kind === "letter" ? await designFor(letter.slug) : null
+  if (design) {
+    // The design is HTML influenced by the sender, so it runs in a sandboxed
+    // frame from /l/<slug>/design (strict CSP there); the frame cannot reach
+    // this page, its cookies or storage. ?v= makes a new design load fresh.
+    return (
+      <>
+        <iframe
+          src={`/l/${letter.slug}/design?v=${design.id}`}
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
+          title={`A letter for ${letter.content.recipientName}`}
+          className="fixed inset-0 h-[100svh] w-full border-0"
+        />
+        <OpenBeacon slug={letter.slug} ownerPreview={letter.ownerPreview} />
+      </>
+    )
+  }
+
   return (
     <>
       <LetterRenderer letter={letter} />

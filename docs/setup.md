@@ -34,6 +34,8 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `MAJNU_BILLING` | Optional, `on` or unset | Unset (the default): everyone gets Full moon features and only the spending guard applies. `on` enforces the plans in `lib/plans.ts` |
 | `OPEN_HASH_SECRET` | Generate one: `openssl rand -hex 32` | Server only. Mixed into the visitor hash in `/api/open` so the stored visitor id cannot be traced back to an IP address. Without it, opens are not recorded. Changing it makes returning visitors count as new |
 | `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
+| `DAYTONA_ANTHROPIC_API_KEY` | Optional. Anthropic Console → API keys, a separate key with a low spend limit | Claude Code inside the Daytona sandbox; without it the app's `ANTHROPIC_API_KEY` is used |
+| `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Optional | Defaults: `majnu-letters-v1`, `eu`, `https://app.daytona.io/api` |
 | `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images and video (FLUX) for the site during development. Generation spends credits. The running app does not use it, so it is not uploaded to Cloudflare or CI |
 
 Production values come from two places:

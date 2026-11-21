@@ -124,5 +124,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 
 ## Documentation
 
+- **Every feature has an architecture page** in `docs/features/<feature>.md`, in the outline of `docs/features/README.md` (what it does, how it works with a mermaid diagram, pieces, data and privacy, limits and costs, how it was checked, open questions). The session that builds or changes a feature writes or updates its page in the same branch and adds it to the table in `docs/features/README.md`. `docs/architecture.md` is the overview that links them; the developers present Majnu from these pages, so keep them true to the code.
+
 - Planning lives in `docs/`. When a decision in `docs/plan.md` changes, update the plan in the same change.
 - Write for a teammate who was not in the room: complete sentences, the reason behind a rule, no shorthand.

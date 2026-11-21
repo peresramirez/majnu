@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": ["Read", "Write", "Edit", "Glob", "Grep", "Skill"],
+    "deny": [
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "NotebookEdit",
+      "Read(//proc/**)",
+      "Read(//sys/**)",
+      "Read(//etc/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.claude/**)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}
