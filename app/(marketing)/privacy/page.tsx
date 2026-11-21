@@ -110,6 +110,15 @@ export default function PrivacyPage() {
         object by emailing us.
       </p>
 
+      <h3>Gift lists on invitations</h3>
+      <p>
+        When a guest picks a gift from an invitation&apos;s gift list, we record which gift, the time and the same kind
+        of visitor number, so that nobody else can pick it and one visitor cannot pick the whole list. The guest may
+        leave a first name; it is optional, and only the host sees it, in My gifts. Nothing is saved on the
+        guest&apos;s device. The claim is kept until the host releases it or deletes the invitation (Art. 6 (1) (f)
+        GDPR).
+      </p>
+
       <h3>Payments</h3>
       <p>
         If you choose Full moon, Stripe handles your payment. We never see your full card number. We receive your
