@@ -19,7 +19,7 @@ Every page follows the same outline:
 | [social-profiles.md](social-profiles.md) | Reading a public Instagram or TikTok profile (Apify) or another public page (Tavily Extract) that the sender pastes into the finder: the `read_profile` tool, 3 to 6 filtered interests that change the next search, one read per session and the `APIFY_DAILY_CAP` (issue #34) |
 | [letters-chat.md](letters-chat.md) | The main agent, the builder and research sub-agents, `POST /api/chat` and its NDJSON events, stored history, model settings |
 | [templates-and-gift-pages.md](templates-and-gift-pages.md) | The letter contract, the ten templates (including the 3D gift box, party pop box and treasure map from the prototype archive, issue #40), the Templates tab with its preview modal, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
-| [sharing-and-tracking.md](sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, the statistics and My gifts |
+| [sharing-and-tracking.md](sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, place, language and device of each open (country and city from Cloudflare), crawlers ignored, the statistics, My gifts and the Tracker tab with a timeline of every open (issue #49) |
 | [billing.md](billing.md) | Crescent and Full moon, the Stripe subscription, return page, webhook and portal, the `MAJNU_BILLING` switch |
 | [daytona-redesign.md](daytona-redesign.md) | One-off designs made by Claude Code in a Daytona sandbox: snapshot, job, page checker, serving, costs |
 | [data-and-security.md](data-and-security.md) | Schema and migrations, row-level security, server-only writes, the spending guard, secrets, deploying |
