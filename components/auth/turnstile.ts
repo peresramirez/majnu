@@ -24,10 +24,11 @@ type TurnstileApi = {
   isExpired(widgetId: string): boolean
 }
 
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi
-  }
+// Read through this rather than a global `Window` declaration: the finder's
+// own loader (components/finder/anonymous-session.ts) declares one with a
+// narrower type, and two declarations of one property must agree.
+function turnstileApi(): TurnstileApi | undefined {
+  return (window as unknown as { turnstile?: TurnstileApi }).turnstile
 }
 
 // Must be loaded from Cloudflare directly, never proxied or bundled.
@@ -37,13 +38,18 @@ const TOKEN_WAIT_MS = 10_000
 let loading: Promise<TurnstileApi> | null = null
 
 function loadTurnstile(): Promise<TurnstileApi> {
-  if (window.turnstile) return Promise.resolve(window.turnstile)
+  const ready = turnstileApi()
+  if (ready) return Promise.resolve(ready)
   if (loading) return loading
   loading = new Promise<TurnstileApi>((resolve, reject) => {
     const script = document.createElement("script")
     script.src = SCRIPT_URL
     script.async = true
-    script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error("Turnstile did not start")))
+    script.onload = () => {
+      const api = turnstileApi()
+      if (api) resolve(api)
+      else reject(new Error("Turnstile did not start"))
+    }
     script.onerror = () => {
       loading = null
       script.remove()
@@ -121,7 +127,7 @@ export function useTurnstile(action: string) {
 
     return () => {
       cancelled = true
-      if (widgetId.current) window.turnstile?.remove(widgetId.current)
+      if (widgetId.current) turnstileApi()?.remove(widgetId.current)
       widgetId.current = null
       token.current = null
       settle(undefined)
@@ -131,7 +137,7 @@ export function useTurnstile(action: string) {
   const getToken = useCallback((): Promise<string | undefined> => {
     if (!siteKey || unavailable.current || failed.current) return Promise.resolve(undefined)
     const id = widgetId.current
-    if (token.current && id && !window.turnstile?.isExpired(id)) return Promise.resolve(token.current)
+    if (token.current && id && !turnstileApi()?.isExpired(id)) return Promise.resolve(token.current)
     return new Promise((resolve) => {
       const timer = setTimeout(() => resolve(undefined), TOKEN_WAIT_MS)
       waiting.current.push((value) => {
@@ -146,7 +152,7 @@ export function useTurnstile(action: string) {
   const reset = useCallback(() => {
     token.current = null
     const id = widgetId.current
-    if (id) window.turnstile?.reset(id)
+    if (id) turnstileApi()?.reset(id)
   }, [])
 
   return { containerRef, getToken, reset }
