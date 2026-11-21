@@ -275,8 +275,8 @@ describe("redesignLetter", () => {
     expect(calls.deletes).toHaveLength(1)
   })
 
-  it("checks a page written before Claude Code ran out of turns", async () => {
-    const { deps, inserts } = setup({ exitCode: 1, stdout: JSON.stringify({ subtype: "error_max_turns", is_error: true, num_turns: 40 }) })
+  it("checks a page written before Claude Code reached its budget", async () => {
+    const { deps, inserts } = setup({ exitCode: 1, stdout: JSON.stringify({ subtype: "error_max_budget_usd", is_error: true, num_turns: 31 }) })
     await expect(redesignLetter(LETTER_ID, REQUEST, deps)).resolves.toMatchObject({ designId: "design-1" })
     expect(inserts).toHaveLength(1)
   })
@@ -344,6 +344,36 @@ describe("redesignLetter", () => {
     expect(calls.deletes).toHaveLength(2)
   })
 
+  it("falls back to the tier's network policy when the account refuses an allow list", async () => {
+    const { db } = fakeDb(letterRow())
+    const { sandbox, calls } = fakeSandbox()
+    const created: Parameters<Sandboxes["create"]>[] = []
+    const sandboxes: Sandboxes = {
+      async create(...args) {
+        created.push(args)
+        if (args[0].domainAllowList) {
+          throw new Error("Network access is restricted and cannot be overridden at the sandbox level. Remove domainAllowList from the request.")
+        }
+        return sandbox
+      },
+      deleteByLabels: async () => 0,
+    }
+    const logs: string[] = []
+    await expect(redesignLetter(LETTER_ID, REQUEST, { db, sandboxes, log: (l) => logs.push(l) })).resolves.toMatchObject({ designId: "design-1" })
+    expect(created).toHaveLength(2)
+    expect(created[1][0].domainAllowList).toBeUndefined()
+    expect(created[1][0]).toMatchObject({ snapshot: "majnu-letters-v1", ephemeral: true, ttlMinutes: 20 })
+    expect(logs.join("\n")).toMatch(/tier's own network policy/)
+    expect(calls.deletes).toHaveLength(1)
+  })
+
+  it("does not retry other start failures without the allow list", async () => {
+    const { db } = fakeDb(letterRow())
+    const { sandboxes, created } = fakeSandboxes(new Error("No available runners"))
+    await expect(redesignLetter(LETTER_ID, REQUEST, { db, sandboxes, log: () => {} })).rejects.toThrow(/No available runners/)
+    expect(created).toHaveLength(1)
+  })
+
   it("cleans up by label when the sandbox fails to start", async () => {
     const { db } = fakeDb(letterRow())
     const { sandboxes, cleanups, created } = fakeSandboxes(new Error("timed out waiting for the sandbox to start"))
@@ -392,10 +422,17 @@ describe("buildClaudeCommand", () => {
     const command = buildClaudeCommand()
     expect(command).toMatch(/^bash -c '[^']+'$/)
     expect(command).toContain(`timeout --kill-after=15 ${RUN_TIME_LIMIT_SECONDS}`)
-    expect(command).toContain("--max-turns 40")
+    expect(command).toContain('claude --print "$(cat input/prompt.md)"')
     expect(command).toContain('--model "$MAJNU_MODEL"')
-    expect(command).toContain("< input/prompt.md")
+    expect(command).toContain("--max-budget-usd 3")
+    expect(command).toContain("--effort medium")
+    // Only file tools, confined to the project folder, with our settings.
+    expect(command).toContain('--tools "Read,Write,Edit,Glob,Grep"')
+    expect(command).toContain("--restricted")
+    expect(command).toContain("--settings .claude/settings.json")
     expect(command).toMatch(/--disallowedTools "[^"]*Bash[^"]*WebFetch[^"]*"/)
+    expect(command).toContain("--no-session-persistence")
+    expect(command).not.toContain("--max-turns")
     expect(command).not.toContain("ANTHROPIC_API_KEY")
     expect(command).not.toContain("dangerously")
   })

@@ -5,12 +5,12 @@
 //      baked into one static page would carry its locked doors.
 //   2. Start an ephemeral sandbox from the snapshot (scripts/daytona/
 //      build-snapshot.mts), which already holds Claude Code, the majnu-letter
-//      skill and our templates as reference. Its network reaches only the
-//      Anthropic API, and it destroys itself after SANDBOX_TTL_MINUTES whatever
-//      happens here.
+//      skill and our templates as reference. Its network is limited (see
+//      createSandbox), and it destroys itself after SANDBOX_TTL_MINUTES
+//      whatever happens here.
 //   3. Upload the content, the request and the prompt as files, so no user
 //      text is ever part of a shell command.
-//   4. Run Claude Code headless with limits on turns and time. The Anthropic
+//   4. Run Claude Code headless with limits on spend and time. The Anthropic
 //      key goes into that one command's environment: never into a file, a
 //      label or the sandbox's own environment, and never into a log.
 //   5. Download out/index.html and delete the sandbox, also when anything
@@ -29,10 +29,11 @@ import {
   DEFAULT_API_URL,
   DEFAULT_SNAPSHOT,
   DEFAULT_TARGET,
+  CLAUDE_EFFORT,
   INPUT_DIR,
+  MAX_BUDGET_USD,
   MAX_DESIGN_BYTES,
   MAX_REQUEST_CHARS,
-  MAX_TURNS,
   OUTPUT_FILE,
   PROJECT_DIR,
   RUN_TIME_LIMIT_SECONDS,
@@ -174,20 +175,30 @@ export function buildPrompt(templateId: TemplateId | null): string {
 }
 
 // The command the sandbox runs. Fixed text: the model name and the key come
-// from the command's environment, the prompt from a file. Flags checked
-// against `claude --help` of CLAUDE_CODE_VERSION in the snapshot.
+// from the command's environment, the prompt from a file we wrote. Flags as
+// listed by `claude --help` of CLAUDE_CODE_VERSION in the snapshot:
+// - --tools: the only built-in tools that exist in the session (no shell, no
+//   web). --restricted also confines them to this folder, so nothing outside it
+//   (such as /proc) can be read, and it skips project settings files, which is
+//   why --settings passes ours explicitly.
+// - --max-budget-usd and `timeout` bound the run: this version has no turn limit.
+// - --no-session-persistence: nothing about the run is kept on disk.
 export function buildClaudeCommand(): string {
   const script = [
     "rm -f out/index.html &&",
     `timeout --kill-after=15 ${RUN_TIME_LIMIT_SECONDS}`,
-    "claude --print",
+    'claude --print "$(cat input/prompt.md)"',
     '--model "$MAJNU_MODEL"',
-    `--max-turns ${MAX_TURNS}`,
+    `--effort ${CLAUDE_EFFORT}`,
+    `--max-budget-usd ${MAX_BUDGET_USD}`,
     "--output-format json",
+    "--restricted",
+    '--tools "Read,Write,Edit,Glob,Grep"',
+    '--disallowedTools "Bash,WebFetch,WebSearch"',
+    "--settings .claude/settings.json",
     "--permission-mode acceptEdits",
-    '--allowedTools "Read,Write,Edit,Glob,Grep,Skill"',
-    '--disallowedTools "Bash,WebFetch,WebSearch,Task,NotebookEdit"',
-    "< input/prompt.md 2> /tmp/claude.stderr",
+    "--no-session-persistence",
+    "2> /tmp/claude.stderr",
   ].join(" ")
   return `bash -c '${script}'`
 }
@@ -271,7 +282,8 @@ export async function redesignLetter(letterId: string, request: string, deps: Pa
   log(`starting a sandbox from ${settings.snapshot} in ${settings.target}`)
   let sandbox: SandboxHandle
   try {
-    sandbox = await sandboxes.create(
+    sandbox = await createSandbox(
+      sandboxes,
       {
         snapshot: settings.snapshot,
         labels,
@@ -279,7 +291,7 @@ export async function redesignLetter(letterId: string, request: string, deps: Pa
         ttlMinutes: SANDBOX_TTL_MINUTES,
         domainAllowList: SANDBOX_DOMAIN_ALLOW_LIST,
       },
-      { timeout: 180 },
+      log,
     )
   } catch (error) {
     const removed = await sandboxes.deleteByLabels({ job }).catch(() => 0)
@@ -338,7 +350,7 @@ async function makePage(
     60,
   )
 
-  log(`running Claude Code (${settings.model}, at most ${MAX_TURNS} turns and ${RUN_TIME_LIMIT_SECONDS} s)`)
+  log(`running Claude Code (${settings.model}, at most $${MAX_BUDGET_USD} and ${RUN_TIME_LIMIT_SECONDS} s)`)
   const result = await sandbox.process.executeCommand(
     buildClaudeCommand(),
     PROJECT_DIR,
@@ -352,9 +364,10 @@ async function makePage(
 
   const file = await sandbox.fs.getFileDetails(OUTPUT_FILE).catch(() => null)
   if (result.exitCode !== 0) {
-    // Running out of turns after the page is written still leaves a page
-    // worth checking; anything else (the time limit is exit 124) does not.
-    if (!(file && run?.subtype === "error_max_turns")) {
+    // Reaching the budget (error_max_budget_usd, or a turn cap in another
+    // version) after the page is written still leaves a page worth checking;
+    // anything else (the time limit is exit 124) does not.
+    if (!(file && run?.subtype?.startsWith("error_max"))) {
       const stderr = await sandbox.fs
         .downloadFile("/tmp/claude.stderr", 30)
         .then((b) => b.toString("utf8").slice(-600))
@@ -362,13 +375,36 @@ async function makePage(
       const why = result.exitCode === 124 ? "it ran out of time" : run?.reply || stderr || result.result.slice(-600) || "no output"
       throw new RedesignError(`Claude Code failed (exit ${result.exitCode}): ${redact(why, secrets)}`)
     }
-    log("Claude Code ran out of turns after writing the page; checking it anyway")
+    log(`Claude Code stopped at a limit (${run?.subtype}) after writing the page; checking it anyway`)
   }
   if (!file) throw new RedesignError("Claude Code finished without writing out/index.html")
   if (file.size > MAX_DESIGN_BYTES) throw new RedesignError(`The page is ${Math.round(file.size / 1024)} KB, over the limit`)
 
   const html = (await sandbox.fs.downloadFile(OUTPUT_FILE, 60)).toString("utf8")
   return { html, run }
+}
+
+// Daytona's Tier 1 and 2 accounts refuse a per-sandbox allow list: their own
+// policy applies instead, which reaches only Daytona's "essential services"
+// (package registries, git hosts and model providers, Anthropic among them).
+// Tier 3 and 4 accounts take the list and then allow nothing else. Either way
+// Claude Code has no shell or web tools in the sandbox, so the network limit is
+// a second layer, not the only one.
+const TIER_NETWORK_POLICY = /network access is restricted and cannot be overridden/i
+
+async function createSandbox(
+  sandboxes: Sandboxes,
+  params: CreateSandboxFromSnapshotParams,
+  log: (line: string) => void,
+): Promise<SandboxHandle> {
+  try {
+    return await sandboxes.create(params, { timeout: 180 })
+  } catch (error) {
+    if (!params.domainAllowList || !TIER_NETWORK_POLICY.test(errorText(error))) throw error
+    log("this Daytona tier does not take a per-sandbox allow list; the tier's own network policy applies")
+    const { domainAllowList: _ignored, ...rest } = params
+    return await sandboxes.create(rest, { timeout: 180 })
+  }
 }
 
 // Always called, also after a failure. Waits until the sandbox is destroyed,

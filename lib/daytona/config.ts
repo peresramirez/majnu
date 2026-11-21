@@ -30,13 +30,19 @@ export const INPUT_DIR = `${PROJECT_DIR}/input`
 export const OUTPUT_FILE = `${PROJECT_DIR}/out/index.html`
 
 // The only host the sandbox may reach: Claude Code talks to the Anthropic API
-// and nothing else. Everything else is blocked by the runner's firewall.
+// and nothing else. Daytona enforces it on Tier 3 and 4 accounts; lower tiers
+// refuse it and apply their own policy (lib/daytona/redesign.ts, createSandbox).
 export const SANDBOX_DOMAIN_ALLOW_LIST = "api.anthropic.com"
 
-// Limits on one Claude Code run. The time limit is enforced twice: by
-// `timeout` inside the sandbox and by the SDK call that waits for it.
-export const MAX_TURNS = 40
+// Limits on one Claude Code run. Claude Code 2.1.323 has no turn limit flag,
+// so a run is bounded by what it may spend (--max-budget-usd) and by time. The
+// time limit is enforced twice: by `timeout` inside the sandbox and by the SDK
+// call that waits for it.
+export const MAX_BUDGET_USD = 3
 export const RUN_TIME_LIMIT_SECONDS = 360
+// A design benefits from some thought; the chat agents run at low effort
+// because they must answer fast, which this job does not.
+export const CLAUDE_EFFORT = "medium"
 // The sandbox destroys itself this long after it was created, whatever state
 // it is in: the backstop if the job dies before its own delete runs.
 export const SANDBOX_TTL_MINUTES = 20
