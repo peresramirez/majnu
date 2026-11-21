@@ -3,6 +3,10 @@
 // Records one message with MediaRecorder and turns it into text through
 // POST /api/transcribe. The states and their rules are in recorder-state.ts.
 //
+// Given `onRecording` instead of `onText`, it hands the recording back without
+// transcribing it: the voice notes in gifts use this, with a longer
+// `maxSeconds` and their own `recordingTypes` (lib/audio/rules.ts).
+//
 // The microphone is released (every track stopped) as soon as a recording
 // ends, is cancelled, or the component goes away. The audio lives only in
 // memory until it is sent, and nothing is kept afterwards.
@@ -46,6 +50,20 @@ export type VoiceRecorderOptions = {
   transcribe?: Transcribe
 }
 
+export type Recording = { blob: Blob; seconds: number; mimeType: string }
+
+type LengthAndFormat = {
+  // The longest recording in seconds; it stops by itself there. Default 60.
+  maxSeconds?: number
+  // What MediaRecorder is asked for, in order. Default: the message box's.
+  recordingTypes?: readonly string[]
+}
+
+// Hands back the recording instead of transcribing it.
+export type NoteRecorderOptions = LengthAndFormat & { onRecording: (recording: Recording) => void }
+
+export type RecorderOptions = (VoiceRecorderOptions & LengthAndFormat) | NoteRecorderOptions
+
 const TICK_MS = 250
 
 function canRecord(): boolean {
@@ -57,15 +75,25 @@ function canRecord(): boolean {
   )
 }
 
-export function useVoiceRecorder({ onText, ensureSession, transcribe = postTranscription }: VoiceRecorderOptions) {
+export function useVoiceRecorder(options: RecorderOptions) {
+  const onRecording = "onRecording" in options ? options.onRecording : undefined
+  const onText = "onText" in options ? options.onText : undefined
+  const ensureSession = "ensureSession" in options ? options.ensureSession : undefined
+  const transcribe = ("transcribe" in options ? options.transcribe : undefined) ?? postTranscription
+  const limit = options.maxSeconds && options.maxSeconds > 0 ? options.maxSeconds : MAX_RECORDING_SECONDS
+  const custom = limit !== MAX_RECORDING_SECONDS
+  const types = options.recordingTypes
+
   const [state, dispatch] = useReducer(recorderReducer, initialRecorderState)
   // Known only after mount, so the server and the first render agree.
   const [supported, setSupported] = useState(false)
 
   // The latest callbacks, so a transcription that finishes after a re-render
   // appends to the current text, not to what the box held when it started.
-  const callbacks = useRef({ onText, ensureSession, transcribe })
-  callbacks.current = { onText, ensureSession, transcribe }
+  const callbacks = useRef({ onText, onRecording, ensureSession, transcribe })
+  callbacks.current = { onText, onRecording, ensureSession, transcribe }
+  const settings = useRef({ limit, custom, types })
+  settings.current = { limit, custom, types }
 
   const stream = useRef<MediaStream | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -114,7 +142,7 @@ export function useVoiceRecorder({ onText, ensureSession, transcribe = postTrans
         if (attempt.current !== mine) return
         if (outcome.ok) {
           const text = outcome.text.trim()
-          if (text) callbacks.current.onText(text)
+          if (text) callbacks.current.onText?.(text)
           dispatch({ type: "transcribed", text })
         } else {
           dispatch({ type: "failed", code: outcome.code, message: outcome.message })
@@ -161,7 +189,7 @@ export function useVoiceRecorder({ onText, ensureSession, transcribe = postTrans
 
     let next: MediaRecorder
     try {
-      const mimeType = pickRecordingType((type) => MediaRecorder.isTypeSupported(type))
+      const mimeType = pickRecordingType((type) => MediaRecorder.isTypeSupported(type), settings.current.types)
       next = new MediaRecorder(media, mimeType ? { mimeType, audioBitsPerSecond: RECORDING_BITRATE } : { audioBitsPerSecond: RECORDING_BITRATE })
     } catch {
       releaseMicrophone()
@@ -178,12 +206,18 @@ export function useVoiceRecorder({ onText, ensureSession, transcribe = postTrans
       releaseMicrophone()
       recorder.current = null
       if (attempt.current !== mine) return // cancelled
-      const seconds = Math.min((endedAt - startedAt.current) / 1000, MAX_RECORDING_SECONDS)
+      const seconds = Math.min((endedAt - startedAt.current) / 1000, settings.current.limit)
       dispatch({ type: "stop", at: endedAt })
       if (isTooShort((endedAt - startedAt.current) / 1000)) return
       const type = next.mimeType || chunks.current[0]?.type || "audio/webm"
       const blob = new Blob(chunks.current, { type })
       chunks.current = []
+      const handBack = callbacks.current.onRecording
+      if (handBack) {
+        dispatch({ type: "recorded" })
+        handBack({ blob, seconds, mimeType: type })
+        return
+      }
       void send(blob, seconds, mine)
     }
     next.onerror = () => {
@@ -203,12 +237,12 @@ export function useVoiceRecorder({ onText, ensureSession, transcribe = postTrans
       return
     }
     startedAt.current = performance.now()
-    dispatch({ type: "started", at: startedAt.current })
+    dispatch(settings.current.custom ? { type: "started", at: startedAt.current, limit: settings.current.limit } : { type: "started", at: startedAt.current })
     timer.current = window.setInterval(() => {
       const now = performance.now()
       dispatch({ type: "tick", at: now })
-      // The one-minute limit: stop and use what was said.
-      if ((now - startedAt.current) / 1000 >= MAX_RECORDING_SECONDS) stop()
+      // The limit (one minute for the message box): stop and use what was said.
+      if ((now - startedAt.current) / 1000 >= settings.current.limit) stop()
     }, TICK_MS)
   }, [releaseMicrophone, send, stop])
 
