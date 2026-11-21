@@ -5,7 +5,17 @@
 // zod is imported from "zod/v4" because the Anthropic SDK's zod helpers need it.
 import * as z from "zod/v4"
 
-export const LETTER_TEMPLATE_IDS = ["classic-envelope", "wedding-invite", "party-invite", "gift-reveal", "postcard"] as const
+// Added after setup (issue #40, additive): gift-box-3d, party-box, treasure-map.
+export const LETTER_TEMPLATE_IDS = [
+  "classic-envelope",
+  "wedding-invite",
+  "party-invite",
+  "gift-reveal",
+  "postcard",
+  "gift-box-3d",
+  "party-box",
+  "treasure-map",
+] as const
 export const CALENDAR_TEMPLATE_IDS = ["advent-classic", "countdown"] as const
 export const TEMPLATE_IDS = [...LETTER_TEMPLATE_IDS, ...CALENDAR_TEMPLATE_IDS] as const
 

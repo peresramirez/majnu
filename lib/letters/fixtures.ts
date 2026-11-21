@@ -77,6 +77,63 @@ export const letterFixtures: Record<LetterTemplateId, LetterContent> = {
     theme: { palette: "sage", font: "script" },
     gifts: [],
   },
+  "gift-box-3d": {
+    recipientName: "Ayesha",
+    senderName: "Umair",
+    occasion: "Anniversary",
+    headline: "Five years of us",
+    body: [
+      "Thank you for every beautiful moment, even the ones where I got us lost. This one is for the two of us: a quiet evening, no phones, the whole city below.",
+    ],
+    signOff: "With love",
+    theme: { palette: "night", font: "serif" },
+    gifts: [
+      {
+        title: "Dinner for two above the city",
+        description: "A five-course tasting menu at the top of the Berlin TV Tower, window table, Saturday at eight.",
+        url: "https://example.com/redeem",
+        code: "SPH-5YRS-2027",
+        price: "€190",
+      },
+    ],
+  },
+  "party-box": {
+    recipientName: "Sara",
+    senderName: "Noor",
+    occasion: "Birthday",
+    headline: "Happy 25th, Sara",
+    body: ["Twenty-five looks loud on you, in the best way. Your present is in the box, and the party is on us: rooftop, neon, the whole crew."],
+    signOff: "See you there",
+    theme: { palette: "petal", font: "sans" },
+    gifts: [
+      {
+        title: "Concert tickets for two",
+        description: "Standing tickets for Saturday's show at Columbiahalle. Doors open at seven.",
+        url: "https://example.com/tickets",
+        code: "CLH-25-SARA",
+        price: "€138",
+      },
+    ],
+    event: {
+      title: "Sara's 25th",
+      startsAt: "2027-03-05T20:00:00+01:00",
+      locationName: "Klunkerkranich rooftop",
+      address: "Karl-Marx-Straße 66, 12043 Berlin, Germany",
+    },
+  },
+  "treasure-map": {
+    recipientName: "Kai",
+    senderName: "Mila",
+    occasion: "Anniversary",
+    headline: "X marks Friday",
+    body: [
+      "Three years ago you drew me a map to your favourite bakery on a napkin. I kept it. Now it's my turn.",
+      "Pack walking shoes and a warm jumper. The train leaves on Friday at nine, and where it goes stays a secret until we're on it.",
+    ],
+    signOff: "Follow the path",
+    theme: { palette: "sage", font: "serif" },
+    gifts: [],
+  },
 }
 
 const adventNotes = [
