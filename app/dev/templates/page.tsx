@@ -46,6 +46,21 @@ const STATES: { title: string; links: [string, string][] }[] = [
       ["Party, night", "/dev/templates/party-invite?palette=night&font=serif"],
     ],
   },
+  {
+    // The 3D boxes need WebGL and motion; with reduced motion or no WebGL they
+    // show a still drawing instead (check with the browser's rendering
+    // settings, or block WebGL).
+    title: "3D boxes and the map",
+    links: [
+      ["3D box, petal", "/dev/templates/gift-box-3d?palette=petal&font=sans"],
+      ["3D box, script", "/dev/templates/gift-box-3d?palette=sage&font=script"],
+      ["3D box, ink", "/dev/templates/gift-box-3d?palette=ink"],
+      ["Party box, no event", "/dev/templates/party-box?event=0"],
+      ["Party box, night", "/dev/templates/party-box?palette=night&font=serif"],
+      ["Map, night", "/dev/templates/treasure-map?palette=night"],
+      ["Map, script", "/dev/templates/treasure-map?palette=rose&font=script"],
+    ],
+  },
 ]
 
 function themeOf(id: string) {

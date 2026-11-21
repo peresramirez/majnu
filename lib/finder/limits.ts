@@ -14,11 +14,19 @@
 // The user has been identified with getUser() before any of this runs; the
 // rows are read and written with the service-role client, because the browser
 // must never be able to change what the limits count.
+//
+// Public profile reads (issue #34) have their own limits: one per finder
+// session, and APIFY_DAILY_CAP Instagram and TikTok reads a UTC day for the
+// whole site (default 20), because the Apify credit is $5. They are recorded
+// in the session's context (lib/finder/sessions.ts) and claimed the same way
+// as searches: record first, count second, take back when over the cap.
 import "server-only"
 import { countChatTurns, startOfUtcDay } from "@/lib/limits"
+import { usesApify, type ProfileSource } from "@/lib/social/links"
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { FinderLimitReason } from "./events"
+import type { FinderContext, FinderLimitReason } from "./events"
 import { textsFor } from "./messages"
+import { clearProfileRead, countProfileReadsSince, markProfileRead, type FinderSession, type ProfileRead } from "./sessions"
 
 export const FINDER_LIMITS = {
   searchesPerDay: 3,
@@ -157,4 +165,50 @@ export async function releaseSearch(claimId: number): Promise<void> {
   } catch (error) {
     console.error("[finder] could not release a search", { message: error instanceof Error ? error.message : String(error) })
   }
+}
+
+// ---------- Public profile reads ----------
+
+export const DEFAULT_APIFY_DAILY_CAP = 20
+const APIFY_SOURCES: readonly ProfileSource[] = ["instagram", "tiktok"]
+
+// Instagram and TikTok reads the whole site may run per UTC day. 0 switches them off.
+export function apifyDailyCap(): number {
+  const raw = process.env.APIFY_DAILY_CAP?.trim()
+  if (!raw) return DEFAULT_APIFY_DAILY_CAP
+  const cap = Number(raw)
+  return Number.isInteger(cap) && cap >= 0 ? cap : DEFAULT_APIFY_DAILY_CAP
+}
+
+export type ProfileClaim = { ok: true; profile: ProfileRead } | { ok: false; reason: "session" | "daily_cap" }
+
+// Claims this session's one profile read. A read that then fails still counts,
+// because Apify may already have charged for it.
+export async function claimProfileRead(input: {
+  session: Pick<FinderSession, "id" | "ownerId">
+  context: FinderContext
+  source: ProfileSource
+  now: Date
+}): Promise<ProfileClaim> {
+  const apify = usesApify(input.source)
+  const cap = apifyDailyCap()
+  if (apify && cap === 0) return { ok: false, reason: "daily_cap" }
+
+  const profile: ProfileRead = { source: input.source, readAt: input.now.toISOString(), interests: [] }
+  if (!(await markProfileRead(input.session, input.context, profile))) return { ok: false, reason: "session" }
+  if (!apify) return { ok: true, profile }
+
+  let count: number
+  try {
+    count = await countProfileReadsSince(startOfUtcDay(input.now), APIFY_SOURCES)
+  } catch (error) {
+    await clearProfileRead(input.session, input.context)
+    throw error
+  }
+  // The count includes this claim; the cap is about the reads before it.
+  if (count - 1 >= cap) {
+    await clearProfileRead(input.session, input.context)
+    return { ok: false, reason: "daily_cap" }
+  }
+  return { ok: true, profile }
 }

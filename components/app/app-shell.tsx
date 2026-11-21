@@ -3,7 +3,7 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Gift, PenLine, Receipt, Search, type LucideIcon } from "lucide-react"
+import { Gift, LayoutTemplate, PenLine, Receipt, Search, type LucideIcon } from "lucide-react"
 import { Wordmark } from "@/components/brand/wordmark"
 import { AccountMenu } from "./account-menu"
 import { GuestNotice } from "./guest-notice"
@@ -11,7 +11,7 @@ import type { SessionUser } from "./session"
 import { focusRing } from "./styles"
 import { activeTab, appTabs, type TabId } from "./tabs"
 
-const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, gifts: Gift, purchases: Receipt }
+const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, templates: LayoutTemplate, gifts: Gift, purchases: Receipt }
 
 // Header with the wordmark, top tabs from md up, and a bottom tab bar on phones.
 // The shell is exactly one screen tall and <main> scrolls, so the create chat
@@ -70,7 +70,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         aria-label="Main"
         className="flex-none border-t border-night-petal/10 bg-night-plum pb-[env(safe-area-inset-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
       >
-        <ul className="grid grid-cols-4">
+        <ul className="grid grid-cols-5">
           {appTabs.map((tab) => {
             const active = tab.id === current
             const Icon = icons[tab.id]
