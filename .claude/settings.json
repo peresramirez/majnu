@@ -4,5 +4,36 @@
     "pr": "",
     "sessionUrl": false
   },
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "allow": [
+      "Bash(npm ci*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run build)",
+      "Bash(npm test*)",
+      "Bash(npm run test*)",
+      "Bash(npm run dev*)",
+      "Bash(npx next dev*)",
+      "Bash(npx vitest*)",
+      "Bash(npx tsc*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git merge main*)",
+      "Bash(git merge --ff-only main*)",
+      "Bash(git push -u origin task/*)",
+      "Bash(git push origin task/*)",
+      "Bash(curl -s http://localhost:*)",
+      "mcp__browser"
+    ],
+    "deny": [
+      "Bash(wrangler deploy*)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(opennextjs-cloudflare deploy*)",
+      "Bash(npx opennextjs-cloudflare deploy*)"
+    ]
+  }
 }

@@ -25,6 +25,30 @@ Site chrome (landing, sign-in, dashboard, create page) follows the Night Post br
 
 **MCP servers** are defined in `.mcp.json`: `supabase` (apply migrations, run SQL, read logs) and `stripe`. Run `/mcp` to sign in. If a server shows as disabled, it is switched off in your personal `.claude/settings.local.json`.
 
-**Settings** in `.claude/settings.json` turn off commit and pull-request attribution for everyone on the project. Keep it that way.
+**Settings** in `.claude/settings.json` turn off commit and pull-request attribution for everyone on the project; keep it that way. They also allow the routine commands task sessions run without asking (checks, `git add`/`commit`, pushes to `task/*`, the local dev server, the `browser` MCP server) and deny direct `wrangler` and `opennextjs-cloudflare` deploys.
 
 The Vercel plugin, if you have it installed, recommends the Vercel AI SDK and AI Gateway by default. This project deliberately uses the official Anthropic SDK with its own API key; follow `docs/plan.md` where the two disagree.
+
+## Parallel sessions with Herdr
+
+On this machine Claude Code runs inside Herdr, a terminal workspace manager for coding agents (`HERDR_ENV=1` in its panes). The lead session starts and closes task sessions with `scripts/agents/session.sh`, following "Working in parallel" in AGENTS.md:
+
+```bash
+# Write the brief to a file first: goal, files owned, files not to touch, contract, how to verify.
+scripts/agents/session.sh start <name> --port 3101 --brief <file>
+herdr agent wait <name> --timeout 1800000    # returns when the session is idle, done or blocked
+scripts/agents/session.sh status <name>      # its state and latest output
+herdr agent prompt <name> "<follow-up>"      # answer its question or ask for a fix
+# ...review, merge into main, rerun the checks, push main...
+scripts/agents/session.sh close <name>       # ends the session, removes worktree and branch
+```
+
+What `start` does: creates branch `task/<name>` from `main` and a worktree in `.claude/worktrees/<name>`; opens it as its own Herdr workspace, so it shows in the sidebar and you can watch it or type into it; copies the gitignored `.env.local` and `.claude/settings.local.json` into it; runs `npm ci`; starts Claude Code there; and sends `scripts/agents/brief-header.md` (the five steps, the branch and the port) followed by the brief. `close` refuses to remove a branch that is not merged into `main` unless given `--force`.
+
+Each task session gets the same access as the lead: the user-level MCP servers and skills on this machine, the project's `.mcp.json` servers and skills in `.claude/skills/`, the same keys, and the project permissions above. It starts in `acceptEdits` mode, without Claude in Chrome (`--no-chrome`), and with one extra MCP server, `browser`: Chrome DevTools in an isolated, throwaway profile (`scripts/agents/browser-mcp.json`), so parallel sessions never share a browser.
+
+Browser tools, in short: the lead uses Claude in Chrome (`mcp__claude-in-chrome__*`) when it is connected and `chrome-devtools` otherwise; task sessions use `browser`.
+
+A `blocked` session is waiting on a permission prompt or a question. Read it with `status`. Answer what the brief and the plan already settle; anything that needs your developer's approval goes to your developer, who can answer in that session's workspace. Never approve on their behalf what they have not authorised.
+
+Keep in-process subagents (the Agent tool) for read-only research and reviews. Build in Herdr sessions, so your developer can see and steer every one.

@@ -6,7 +6,7 @@ Read [docs/plan.md](docs/plan.md) before you change anything. It is the source o
 
 ## Who you are working for
 
-The work is split between **Dev A** (agent, data, payments) and **Dev B** (templates, public pages, brand). The ownership table is in `docs/plan.md`. If you do not know which developer you are working for, ask before editing.
+The work is split between **Dev A** (agent, data, payments) and **Dev B** (templates, public pages, brand). The ownership table is in `docs/plan.md`. If you do not know which developer you are working for, ask before editing. A task session started by a lead session (see "Working in parallel") works for that lead's developer, and its brief is its instructions.
 
 - Edit only files your developer owns. If a change is needed on the other side, describe it to your developer so they can pass it on.
 - The contract files (`lib/letters/schema.ts`, `templates.ts`, `fixtures.ts`, and the exported signatures of `store.ts`) are shared. After setup, only add to them, and only when both developers agree. Renaming or removing a field breaks the other developer's work without warning.
@@ -26,11 +26,47 @@ npm run build
 
 ## Git
 
-- Work on your developer's branch (`dev-a` or `dev-b`). Rebase on `main` before merging, and merge at each checkpoint in the plan.
-- Commit only when your developer asks. Keep commits small with a plain, imperative subject and a short body saying why.
+- The lead session (see below) works on `main`. Every parallel task gets its own branch, `task/<name>`, in its own worktree. Without a lead, each developer's agent works on `dev-a` or `dev-b`, rebases on `main` before merging, and merges at each checkpoint in the plan.
+- Commit when your developer or your task brief asks; a brief that tells you to commit and push your task branch is that request. Keep commits small with a plain, imperative subject and a short body saying why.
 - **No AI attribution anywhere.** Do not add `Co-Authored-By` lines for an AI tool, "Generated with" footers, or similar text to commits, pull requests, code comments or docs.
-- Do not push, deploy, or change settings on Cloudflare, Supabase or Stripe unless your developer asks.
+- Push only the branch you were given. Only the lead merges into `main` and pushes it. Do not deploy, or change settings on Cloudflare, Supabase or Stripe, unless your developer asks.
 - Deploy only with `npm run deploy`. Never run `opennextjs-cloudflare deploy` or `wrangler deploy` yourself: the adapter copies every `.env` file into the Worker, so a build in a working directory would upload the secrets in `.env.local`. The script builds a clean copy of the committed code instead.
+
+## Working in parallel
+
+The session your developer talks to is the **lead**. It splits work into tasks that touch separate files, starts one **task session** per task, and merges their branches. One task is one branch (`task/<name>`, from `main`), one git worktree (`.claude/worktrees/<name>`) and one agent session in its own terminal workspace, so the developer can watch every session and step in.
+
+Every task session works through the same five steps:
+
+1. **Plan.** Read this file, CLAUDE.md, `docs/plan.md` and the files the task names. Write a short plan (what changes, which files, how it will be checked) before editing.
+2. **Build.** Edit only the files the brief gives you. Contract files change only if the brief says so; otherwise report the change you need.
+3. **Verify** with the tools you have, as described in "Checking your work".
+4. **Commit and push** your task branch only.
+5. **Report and stop.** Give the branch, the last commit, what changed, what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). Then wait.
+
+A brief from the lead always states the goal, the files the session owns, the files it must not touch, the contract it codes against, how to verify the work (including its own dev-server port), and that contract changes are reported, not made.
+
+The lead:
+
+- never gives two sessions the same files, and gives each session its own dev-server port (3101, 3102 and so on);
+- applies database migrations itself, with a dry run first;
+- reviews each report and diff, merges one branch at a time into `main` (`git merge --no-ff task/<name>`), reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, then pushes `main`;
+- closes each session, with its worktree and branch, as soon as its branch is merged;
+- deploys only when the developer asks.
+
+How to start, watch and close sessions on this machine is in CLAUDE.md.
+
+## Checking your work
+
+Nothing is done until it has been checked, and every report says how it was checked. If something could not be checked, say so and why; never report it as working.
+
+- **Code:** `npm run typecheck` and `npm test` every time; `npm run build` when you changed code that ships.
+- **Anything visible:** open it in a browser at 375px and 1440px wide, read the browser console, tab through it with the keyboard, and check reduced motion wherever something moves.
+  - The lead uses **Claude in Chrome** when it is available. It drives your developer's own Chrome, which has their sign-ins, so it can check signed-in pages. Otherwise the lead uses the **Chrome DevTools** MCP server.
+  - Task sessions use **their own isolated Chrome** through the Chrome DevTools MCP server named `browser`, never Claude in Chrome: several sessions sharing one browser would take over each other's tabs. Task sessions cannot sign in with Google, so they check signed-in screens on a temporary page with mock data, delete that page before committing, and leave the signed-in check to the lead.
+- **API routes:** call them with `curl` against your dev server and check the status code and the body, including the error cases.
+- **The model API:** a few short live calls are fine to confirm a request shape. Keep them few: every call costs money.
+- **Database:** write migrations as files in `supabase/migrations/`. The lead applies them (`supabase db push --remote=<project-ref> --dry-run` first, then without `--dry-run`) and checks the security rules with only the anon key.
 
 ## Secrets
 
