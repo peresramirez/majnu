@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { demoSlugs } from "@/lib/letters/fixtures"
 import { toPublicView } from "@/lib/letters/public-view"
 import { TemplateId, type LetterKind } from "@/lib/letters/schema"
+import { isCrawler, NO_DETAILS, type OpenDetails } from "./details"
 import { trackedDay, type OpenEventType } from "./rules"
 import { visitorId } from "./visitor"
 
@@ -16,13 +17,18 @@ export type OpenEvent = {
   day?: number
   ip: string
   userAgent: string
+  // Place, language and device (lib/open/details.ts). Never the IP address.
+  details?: OpenDetails
   now?: Date
 }
 
 // Returns quietly in every case the caller should not learn about: unknown
-// slugs, demo slugs, letters without content, and doors that are still locked.
+// slugs, demo slugs, letters without content, doors that are still locked,
+// and crawlers.
 export async function recordOpenEvent(event: OpenEvent): Promise<void> {
   if (!SLUG.test(event.slug) || event.slug in demoSlugs) return
+  // A link-preview service or bot that ran the beacon is not a visitor.
+  if (isCrawler(event.userAgent)) return
 
   const secret = process.env.OPEN_HASH_SECRET
   if (!secret) {
@@ -61,6 +67,7 @@ export async function recordOpenEvent(event: OpenEvent): Promise<void> {
   if (day === null) return
 
   const userAgent = event.userAgent.slice(0, MAX_USER_AGENT)
+  const { country, city, language, device } = event.details ?? NO_DETAILS
   const { error: insertError } = await admin.from("letter_events").upsert(
     {
       letter_id: row.id,
@@ -68,6 +75,10 @@ export async function recordOpenEvent(event: OpenEvent): Promise<void> {
       day,
       visitor_id: await visitorId({ letterId: row.id, ip: event.ip, userAgent, secret }),
       user_agent: userAgent || null,
+      country,
+      city,
+      language,
+      device,
     },
     // ON CONFLICT DO NOTHING: a repeat visit does not add a row.
     { onConflict: "letter_id,type,day,visitor_id", ignoreDuplicates: true },
