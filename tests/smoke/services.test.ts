@@ -58,6 +58,15 @@ describe.skipIf(!stripeConfigured)("Stripe (skipped until a key is set)", () => 
   })
 })
 
+describe.skipIf(!process.env.BFL_API_KEY)("Black Forest Labs (optional, development only)", () => {
+  it("API key is accepted", async () => {
+    const res = await fetch("https://api.bfl.ai/v1/credits", {
+      headers: { "x-key": process.env.BFL_API_KEY as string },
+    })
+    expect(res.status).toBe(200)
+  })
+})
+
 describe.skipIf(!process.env.DAYTONA_API_KEY)("Daytona (optional extra)", () => {
   it("API key is accepted", async () => {
     const res = await fetch("https://app.daytona.io/api/api-keys/current", {

@@ -18,6 +18,7 @@
 | `workers-profiling` | Measuring CPU time against the plan limits |
 | `cloudflare-email-service` | Email routing and sending on majnu.app |
 | `nextjs-on-cloudflare`, `agents-sdk` | Reference only. This app is deployed with the OpenNext adapter and its agents use the Anthropic SDK; do not migrate to vinext or the Cloudflare Agents SDK without a decision in `docs/plan.md` |
+| `bfl-api`, `flux-image-best-practices`, `flux-3-*` | Generating images or video for the site with `BFL_API_KEY`. Each generation spends credits, so ask your developer before running more than a few |
 | `claude-api` (built in) | Every call to the Anthropic API |
 
 Site chrome (landing, sign-in, dashboard, create page) keeps the airmail brand recorded in `docs/plan.md`, whatever a design skill suggests. Letter and calendar templates are free to have their own look.

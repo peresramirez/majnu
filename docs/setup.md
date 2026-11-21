@@ -29,7 +29,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
 | `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
-| `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images for the site during development. The running app does not use it, so it is not uploaded to Cloudflare or CI |
+| `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images and video (FLUX) for the site during development. Generation spends credits. The running app does not use it, so it is not uploaded to Cloudflare or CI |
 
 Production values come from two places:
 
@@ -72,6 +72,7 @@ Both developers get the same setup by cloning.
   - Stripe: `stripe-best-practices`, `stripe-docs`, `stripe-implementation-planner`
   - Cloudflare: `cloudflare`, `wrangler`, `workers-best-practices`, `workers-profiling`, `nextjs-on-cloudflare`, `cloudflare-email-service`, `agents-sdk`
   - Design: `design-taste-frontend` (Taste Skill, about 42 MB of reference images and scripts that drive a local Chrome) and `frontend-design`
+  - Black Forest Labs: `bfl-api`, `flux-image-best-practices`, and eight `flux-3-*` skills for video (prompting, generation, audio, product ads)
 - **MCP servers** in `.mcp.json`: `supabase` and `stripe`. In Claude Code, run `/mcp` once and sign in to each with your own account.
 - **Settings** in `.claude/settings.json`: no AI attribution on commits or pull requests, and the two MCP servers are approved for the project. Personal overrides go in `.claude/settings.local.json`, which is not committed.
 
