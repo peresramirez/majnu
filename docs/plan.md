@@ -12,7 +12,9 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 
 - **Letters are data, not generated code.** Templates are React pages in our app. The builder agent fills a JSON content object stored in Supabase, so a letter is live in seconds and its link never expires.
 - **AI runs on the official Anthropic TypeScript SDK** with our own API key. The model id comes from `MAJNU_MODEL` (default `claude-opus-5-5`, low effort). Switch to `claude-sonnet-5-5` if replies feel slow or costs run high.
-- **Pricing is two plans**, defined once in `lib/plans.ts` and shown on the landing page: **Crescent**, free, 3 gifts a month (letters, invitations, gift pages); **Full moon**, €4.99 a month, unlimited gifts plus advent calendars and gift research. Billing is a Stripe subscription. If Stripe cannot take live payments by checkpoint 2, show the tip link (`NEXT_PUBLIC_TIP_URL`) and leave Full moon features on for everyone.
+- **No Python agent framework or proxy** (decided 21 November). Pydantic AI and LiteLLM were considered for their ready-made chat UI and multi-provider fallback. Both are Python servers that cannot run on Workers, so they would add a second service with its own login check and deploy, and a fallback to another provider cannot continue a conversation stored in Anthropic's format. Resilience instead: retry on overload, Anthropic's server-side model fallback, and one place that creates the client (`lib/agents/client.ts`), so an AI gateway can be put in front later through `ANTHROPIC_BASE_URL`.
+- **The signed-in app has three tabs**: Create, My gifts and Plan, as a bottom bar on phones and top tabs on desktop. Create opens on a chat. The message box has a **Template** button that opens the template cards; choosing one attaches it, and the message is sent as ordinary text (`Use the "Classic envelope" template.`), so the main agent always sees the choice in the conversation.
+- **Pricing is two plans**, defined once in `lib/plans.ts` and shown on the landing page: **Crescent**, free, 3 gifts a month (letters, invitations, gift pages); **Full moon**, €4.99 a month, unlimited gifts plus advent calendars and gift research. Billing is a Stripe subscription. Until Stripe takes live payments, `MAJNU_BILLING` stays unset: Full moon features are on for everyone, the Plan tab says so, and only the spending guard applies. Set `MAJNU_BILLING=on` to enforce plans.
 - **Daytona is an optional extra**, built only if everything else is done. Its sandboxes stop 15 minutes after the last SDK call, so anything built there is copied to our storage and served from our domain.
 
 ## Architecture
@@ -22,9 +24,11 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 | Route | Access | Purpose |
 |---|---|---|
 | `/` | public | Landing page with live template examples and Google sign-in |
-| `/dashboard` | signed in | My letters with open stats and "New letter". First-time users go straight to a new letter |
-| `/create/[id]` | owner | Chat, live preview, share panel (link, copy, QR, WhatsApp). Tabs on mobile |
-| `/create/[id]/preview` | owner | The letter as the recipient will see it, all calendar doors open, no tracking |
+| `/dashboard` | signed in | **Create** tab, the first screen: an empty chat. The first message creates the letter and the URL moves to `/create/<id>` without interrupting the reply |
+| `/create/[id]` | owner | The same chat for an existing gift, with the live preview and share panel (link, copy, QR, WhatsApp): beside the chat on desktop, behind a Preview button on phones |
+| `/dashboard/gifts` | signed in | **My gifts** tab: every gift with first and last opened, total opens and unique visitors |
+| `/dashboard/plan` | signed in | **Plan** tab: Crescent or Full moon, upgrade and cancel |
+| `/create/[id]/preview` | owner | The letter as the recipient will see it, all calendar doors open, no tracking. In the `(owner)` route group so it renders full-bleed without the app shell |
 | `/l/[slug]` | public | The letter or calendar, full-bleed, no site chrome |
 | `/dev/templates` | public | Every template rendered from fixture data. Dev B's workbench and the source for ad screenshots |
 | `/impressum`, `/privacy`, `/terms` | public | Required before ads run in Germany. Built in `app/(marketing)/`; the operator's name and address come from `lib/legal.ts` |
@@ -70,7 +74,8 @@ These files are written together during setup. After that, changes are additive 
   - `PublicLetter`: what a template receives. Doors are either `{ day, locked: true }` or `{ day, locked: false, ... }`.
 - `lib/letters/templates.ts`: template metadata only (`id`, `kind`, `name`, `description`, `bestFor`). It imports no components, so a broken template cannot take down the chat route.
 - `lib/letters/fixtures.ts`: one realistic example per template.
-- `lib/letters/store.ts`: `getPublicLetter(slug)` and `toPublicView(letter, now, { ownerPreview })`. During setup `getPublicLetter` returns fixtures for `demo-letter` and `demo-calendar`, so Dev B is never blocked on the database or the agent.
+- `lib/letters/store.ts`: `getPublicLetter(slug)` and `toPublicView(letter, now, { ownerPreview })`. `getPublicLetter` always resolves the demo slugs `demo-letter`, `demo-gift` and `demo-calendar` to fixtures, so templates can be built and shown without the database.
+- `lib/agents/events.ts`: the newline-delimited JSON events `POST /api/chat` streams to the chat UI, and the request body.
 
 Template ids, fixed now: letters `classic-envelope`, `wedding-invite`, `party-invite`, `gift-reveal`, `postcard`; calendars `advent-classic` (24 doors) and `countdown` (any number of days, any occasion).
 
