@@ -142,6 +142,13 @@ function WishlistRow({
 }) {
   const { item, state, url } = row
   const elegant = mood === "elegant"
+  // When the name form closes without a claim, focus goes back to its button.
+  const claimButtonRef = useRef<HTMLButtonElement>(null)
+  const wasOpen = useRef(open)
+  useEffect(() => {
+    if (wasOpen.current && !open) claimButtonRef.current?.focus()
+    wasOpen.current = open
+  }, [open])
   const unavailable = state === "taken" || state === "gone"
   const card: CSSProperties = { ...paperStyle, boxShadow: elegant ? "0 18px 40px -30px rgba(0,0,0,0.6)" : "0 22px 44px -28px rgba(0,0,0,0.55)" }
 
@@ -164,9 +171,11 @@ function WishlistRow({
         {item.price ? <p className="shrink-0 pt-0.5 text-[15px] font-semibold tabular-nums">{item.price}</p> : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+      {/* While the name form is open it replaces this row. */}
+      <div className={open ? "hidden" : "mt-4 flex flex-wrap items-center gap-x-4 gap-y-3"}>
         {state === "open" && !open ? (
           <button
+            ref={claimButtonRef}
             type="button"
             onClick={onOpen}
             disabled={!row.canClaim}
