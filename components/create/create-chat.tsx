@@ -70,6 +70,23 @@ export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // "Use this template" on the Templates tab opens /dashboard?template=<id>.
+  // Attach that template to the message box, as choosing it with the Template
+  // button does, and drop the parameter so a reload does not attach it again.
+  useEffect(() => {
+    if (gift) return
+    const params = new URLSearchParams(window.location.search)
+    const chosen = getTemplate(params.get("template") ?? "")
+    if (!chosen) return
+    setTemplate(chosen)
+    params.delete("template")
+    const rest = params.toString()
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`)
+    if (window.matchMedia("(pointer: fine)").matches) composerRef.current?.focus()
+    // Only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // The events carry only the letter id; fetch the link and name once the gift
   // exists, and again after each rebuild in case the recipient changed.
   useEffect(() => {
