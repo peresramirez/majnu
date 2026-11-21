@@ -48,7 +48,21 @@ export async function canSendChatTurn(letterId: string): Promise<LimitResult> {
 // or publish one more gift this month on the free plan?
 // Call "new_gift" before the first build of a letter, not on edits: it counts
 // this month's letters that already have content.
+//
+// Calendars also need a real account, whatever the plan and even while billing
+// is off: a guest (anonymous account) is asked to sign up first, because a
+// calendar is opened over days and a guest account lives in one browser.
 export async function canUseFeature(feature: "calendar" | "research" | "new_gift"): Promise<LimitResult> {
+  if (feature === "calendar") {
+    const supabase = await createClient()
+    // getUser() asks Supabase Auth, so a guest who just signed up counts as a
+    // real user even before their token is refreshed.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user || user.is_anonymous === true) return signInRequiredResult()
+  }
+
   if (!billingEnabled()) return { ok: true }
 
   const supabase = await createClient()
@@ -129,5 +143,14 @@ export function fullMoonOnlyResult(feature: "calendar" | "research"): LimitResul
       feature === "calendar"
         ? `Calendars, with one door a day, come with ${name}. Choose ${name} to make one.`
         : `Gift research comes with ${name}: Majnu searches the web for ideas and current deals. Choose ${name} to use it.`,
+  }
+}
+
+export function signInRequiredResult(): LimitResult {
+  return {
+    ok: false,
+    reason: "signin_required",
+    message:
+      "Calendars need an account, so you can come back to them day after day. Creating one takes a minute, and everything you made as a guest comes with you.",
   }
 }

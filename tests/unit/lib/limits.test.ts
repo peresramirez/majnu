@@ -7,6 +7,7 @@ import {
   dailyLettersResult,
   fullMoonOnlyResult,
   monthlyGiftsResult,
+  signInRequiredResult,
   startOfUtcDay,
   startOfUtcMonth,
 } from "@/lib/limits"
@@ -85,12 +86,74 @@ describe("UTC boundaries", () => {
   })
 })
 
+// A client whose auth answers with `user` and whose database must not be
+// read unless `plan` is given.
+function fakeClient(user: { id: string; is_anonymous?: boolean } | null, plan?: string) {
+  const from = vi.fn(() => {
+    if (plan === undefined) throw new Error("the database must not be touched")
+    return { select: () => ({ maybeSingle: async () => ({ data: { plan }, error: null }) }) }
+  })
+  return { auth: { getUser: async () => ({ data: { user } }) }, from }
+}
+
 describe("canUseFeature", () => {
-  it("lets everyone use every feature while billing is off, without a database call", async () => {
+  afterEach(() => {
+    createClient.mockReset()
+    createClient.mockImplementation(() => {
+      throw new Error("the database must not be touched")
+    })
+  })
+
+  it("lets everyone use research and new gifts while billing is off, without a database call", async () => {
     vi.stubEnv("MAJNU_BILLING", "")
-    for (const feature of ["calendar", "research", "new_gift"] as const) {
+    for (const feature of ["research", "new_gift"] as const) {
       expect(await canUseFeature(feature)).toEqual({ ok: true })
     }
     expect(createClient).not.toHaveBeenCalled()
+  })
+
+  it("lets a real user make a calendar while billing is off, reading no table", async () => {
+    vi.stubEnv("MAJNU_BILLING", "")
+    const client = fakeClient({ id: "user-1", is_anonymous: false })
+    createClient.mockImplementation((() => client) as never)
+    expect(await canUseFeature("calendar")).toEqual({ ok: true })
+    expect(client.from).not.toHaveBeenCalled()
+  })
+
+  it("asks a guest to sign up before a calendar, even while billing is off", async () => {
+    vi.stubEnv("MAJNU_BILLING", "")
+    createClient.mockImplementation((() => fakeClient({ id: "guest-1", is_anonymous: true })) as never)
+    expect(await canUseFeature("calendar")).toEqual(signInRequiredResult())
+  })
+
+  it("checks for a guest before the plan when billing is on", async () => {
+    vi.stubEnv("MAJNU_BILLING", "on")
+    // The plan does not matter for a guest: the profile is never read.
+    const client = fakeClient({ id: "guest-1", is_anonymous: true })
+    createClient.mockImplementation((() => client) as never)
+    expect(await canUseFeature("calendar")).toMatchObject({ ok: false, reason: "signin_required" })
+    expect(client.from).not.toHaveBeenCalled()
+  })
+
+  it("still gates calendars on the plan for real users when billing is on", async () => {
+    vi.stubEnv("MAJNU_BILLING", "on")
+    createClient.mockImplementation((() => fakeClient({ id: "user-1" }, "free")) as never)
+    expect(await canUseFeature("calendar")).toEqual(fullMoonOnlyResult("calendar"))
+    createClient.mockImplementation((() => fakeClient({ id: "user-1" }, "full-moon")) as never)
+    expect(await canUseFeature("calendar")).toEqual({ ok: true })
+  })
+
+  it("treats a missing session as needing an account", async () => {
+    vi.stubEnv("MAJNU_BILLING", "")
+    createClient.mockImplementation((() => fakeClient(null)) as never)
+    expect(await canUseFeature("calendar")).toMatchObject({ ok: false, reason: "signin_required" })
+  })
+})
+
+describe("signInRequiredResult", () => {
+  it("is a kind sign-up prompt that promises guests keep what they made", () => {
+    const result = signInRequiredResult()
+    expect(result).toMatchObject({ ok: false, reason: "signin_required" })
+    if (!result.ok) expect(result.message).toMatch(/comes with you/)
   })
 })

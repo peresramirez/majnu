@@ -19,7 +19,9 @@ export type GiftIdea = {
   url?: string
 }
 
-export type LimitReason = "daily_letters" | "chat_turns" | "monthly_gifts" | "full_moon_only"
+// "signin_required": a guest (anonymous account) asked for something that needs
+// a real account, such as a calendar. The chat should offer sign-up, not a plan.
+export type LimitReason = "daily_letters" | "chat_turns" | "monthly_gifts" | "full_moon_only" | "signin_required"
 
 export type ChatEvent =
   | { type: "letter"; letterId: string }
