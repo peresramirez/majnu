@@ -39,9 +39,10 @@ scripts/agents/session.sh start <name> --port 3101 --brief <file>
 herdr agent wait <name> --timeout 1800000    # returns when the session is idle, done or blocked
 scripts/agents/session.sh status <name>      # its state and latest output
 herdr agent prompt <name> "<follow-up>"      # answer its question or ask for a fix
-gh run list --branch task/<name> --limit 1        # CI for the branch's last commit: must be green to merge
-gh workflow run CI --ref task/<name> && gh run watch   # when a branch has no run yet
-# ...review, merge into main, rerun the checks, push main, wait for main's CI...
+gh pr list --state open                          # sessions open a pull request when they are done
+gh pr view <n> --json mergeStateStatus,statusCheckRollup   # must be CLEAN with green checks to merge
+herdr agent prompt <name> "Merge origin/main, resolve conflicts, re-verify, push"   # when it is BEHIND or DIRTY
+gh pr merge <n> --merge                          # the orchestrator merges; then pull main, rerun the checks, wait for main's CI, deploy
 gh issue close <number> --comment "Done in <commit>: ... Checked: ..."   # each issue the merge finished
 scripts/agents/session.sh close <name>       # ends the session, removes worktree and branch
 ```

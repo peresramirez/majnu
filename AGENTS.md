@@ -42,7 +42,7 @@ Every task session works through the same five steps:
 2. **Build.** Edit only the files the brief gives you. Contract files change only if the brief says so; otherwise report the change you need.
 3. **Verify** with the tools you have, as described in "Checking your work".
 4. **Bring in `main`, then commit and push.** Before your final push, fetch and merge the latest `main` into your branch (`git fetch origin && git merge origin/main`), resolve every conflict yourself (keep both sides' intent; for tables such as `docs/features/README.md`, keep every row), and rerun `npm run typecheck`, `npm test` and `npm run build` on the result. Push your task branch only, then wait for its CI run (`gh run watch`) and fix it until it is green. The lead's merge into `main` should then have nothing to resolve.
-5. **Report and stop.** Give the branch, the last commit, the GitHub issues your work finishes (and any it only partly covers), what changed, what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). Then wait.
+5. **Open a pull request, report and stop.** Open a pull request from your branch into `main` (`gh pr create --base main --head task/<name>`). Its title is a plain summary; its description is your report: what changed, the issues it covers as `Refs #<n>` (not `Closes`, because the lead closes issues after checking), what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). No AI attribution. Reply to the lead with the pull request's link and the same report, then wait. If `main` moves before your pull request is merged, the lead asks you to merge it again: repeat step 4 and push.
 
 A brief from the lead always states the goal, the files the session owns, the files it must not touch, the contract it codes against, how to verify the work (including its own dev-server port), and that contract changes are reported, not made.
 
@@ -50,8 +50,8 @@ The lead:
 
 - never gives two sessions the same files, and gives each session its own dev-server port (3101, 3102 and so on);
 - applies database migrations itself, with a dry run first;
-- merges a branch only when the job is done (the report covers every item of the brief and the diff matches it), the branch already contains the latest `main` (if `main` moved since, the lead asks the session to merge it again and re-verify), and the CI run for the branch's last commit is green;
-- merges one branch at a time into `main` (`git merge --no-ff task/<name>`), reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, pushes `main`, and waits for `main`'s CI to be green before deploying;
+- merges work only through the session's pull request, and only when the job is done (the description covers every item of the brief and the diff matches it), GitHub shows the pull request as up to date with `main` and free of conflicts (`gh pr view <n> --json mergeStateStatus` is `CLEAN`; if it is `BEHIND` or `DIRTY`, the lead sends the session back to merge `main` and re-verify), and its checks are green;
+- merges one pull request at a time (`gh pr merge <n> --merge`, which keeps a merge commit like `--no-ff`), pulls `main`, reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, and waits for `main`'s CI to be green before deploying;
 - closes each session, with its worktree and branch, as soon as its branch is merged;
 - closes the GitHub issues the merged work finished (see "GitHub issues");
 - deploys only when the developer asks.
