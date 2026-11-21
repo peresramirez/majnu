@@ -6,7 +6,7 @@
 // to it (sign-in, emails, "New gift" buttons) still opens the same screen; the
 // finder lives at /dashboard/find. /create/<id> belongs to Letters & invitations.
 
-export type TabId = "find" | "letters" | "gifts" | "plan"
+export type TabId = "find" | "letters" | "gifts" | "purchases"
 
 export type AppTab = {
   id: TabId
@@ -20,7 +20,7 @@ export const appTabs: readonly AppTab[] = [
   { id: "find", href: "/dashboard/find", label: "Find a gift", shortLabel: "Find a gift" },
   { id: "letters", href: "/dashboard", label: "Letters & invitations", shortLabel: "Letters" },
   { id: "gifts", href: "/dashboard/gifts", label: "My gifts", shortLabel: "My gifts" },
-  { id: "plan", href: "/dashboard/plan", label: "Plan", shortLabel: "Plan" },
+  { id: "purchases", href: "/dashboard/purchases", label: "Purchases", shortLabel: "Purchases" },
 ]
 
 function under(pathname: string, prefix: string) {
@@ -31,7 +31,9 @@ function under(pathname: string, prefix: string) {
 export function activeTab(pathname: string): TabId | null {
   if (under(pathname, "/dashboard/find")) return "find"
   if (under(pathname, "/dashboard/gifts")) return "gifts"
-  if (under(pathname, "/dashboard/plan")) return "plan"
+  if (under(pathname, "/dashboard/purchases")) return "purchases"
+  // The old Plan tab redirects to Purchases.
+  if (under(pathname, "/dashboard/plan")) return "purchases"
   if (pathname === "/dashboard" || under(pathname, "/create")) return "letters"
   return null
 }

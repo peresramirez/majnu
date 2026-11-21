@@ -2,13 +2,13 @@
 
 import { ErrorState } from "@/components/app/error-state"
 
-export default function PlanError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function PurchasesError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <ErrorState
       error={error}
       reset={reset}
-      title="Your plan didn't load"
-      body="We couldn't check your plan just now. Try again in a moment."
+      title="Your purchases didn't load"
+      body="We couldn't load your purchases just now. Try again in a moment."
     />
   )
 }

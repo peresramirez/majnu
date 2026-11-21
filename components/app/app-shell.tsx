@@ -3,7 +3,7 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Gift, Moon, PenLine, Search, type LucideIcon } from "lucide-react"
+import { Gift, PenLine, Receipt, Search, type LucideIcon } from "lucide-react"
 import { Wordmark } from "@/components/brand/wordmark"
 import { AccountMenu } from "./account-menu"
 import { GuestNotice } from "./guest-notice"
@@ -11,7 +11,7 @@ import type { SessionUser } from "./session"
 import { focusRing } from "./styles"
 import { activeTab, appTabs, type TabId } from "./tabs"
 
-const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, gifts: Gift, plan: Moon }
+const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, gifts: Gift, purchases: Receipt }
 
 // Header with the wordmark, top tabs from md up, and a bottom tab bar on phones.
 // The shell is exactly one screen tall and <main> scrolls, so the create chat

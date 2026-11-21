@@ -7,10 +7,12 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { WaxingMoon } from "@/components/app/waxing-moon"
 import { eyebrow, focusRing } from "@/components/app/styles"
 import { SharePanel } from "@/components/share/share-panel"
+import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import { site } from "@/lib/site"
 
 // The gift as the recipient will see it, at phone width, with the share panel
-// under it. Beside the chat from lg up; on phones it replaces the chat while
+// under it and "Make it unique" (the personalised wrapper, €2.99 once) under
+// that. Beside the chat from lg up; on phones it replaces the chat while
 // "Preview" is on.
 export function PreviewPane({
   letterId,
@@ -19,8 +21,6 @@ export function PreviewPane({
   hasContent,
   version,
   recipientName,
-  locked,
-  onUnlock,
   onBack,
   className = "",
 }: {
@@ -31,8 +31,6 @@ export function PreviewPane({
   hasContent: boolean
   version: number
   recipientName: string | null
-  locked: boolean
-  onUnlock: () => void
   onBack: () => void
   className?: string
 }) {
@@ -70,7 +68,7 @@ export function PreviewPane({
             <PreviewFrame key={version} src={version ? `${src}?v=${version}` : src} title={recipientName ? `Preview of the gift for ${recipientName}` : "Preview of your gift"} />
             <div className="mx-auto mt-5 w-full max-w-[400px]">
               {slug ? (
-                <SharePanel url={`${site.url}/l/${slug}`} locked={locked} onUnlock={onUnlock} />
+                <SharePanel url={`${site.url}/l/${slug}`} />
               ) : linkFailed ? (
                 <p className="text-sm leading-relaxed text-night-lilac">
                   We couldn&apos;t get the link just now. You&apos;ll find it in{" "}
@@ -84,6 +82,8 @@ export function PreviewPane({
                   <WaxingMoon size={16} className="text-night-rose" /> Getting your link…
                 </p>
               )}
+              {/* Asks the server whether this gift can have one (letters only) and how far a paid one is. */}
+              {letterId && <MakeItUnique letterId={letterId} returnTo={`/create/${letterId}`} refreshKey={version} className="mt-4" />}
             </div>
           </>
         ) : (
