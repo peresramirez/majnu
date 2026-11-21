@@ -19,7 +19,7 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 
 ## Gift finder: the main flow (decided 21 November)
 
-The product now leads with one job: **help someone find the right gift for a person they love.** Letters, invitations and calendars stay, but behind it: letters and invitations get their own app tab (free), and advent calendars need an account and Full moon.
+The product now leads with one job: **help someone find the right gift for a person they love.** Letters, invitations and calendars stay, but behind it, as optional extras. After joining or signing in, the app opens on the finder (issue #47). Letters and invitations are free; advent calendars are free with an account, and the sender fills one by picking a gift for each door from a pool of ideas Majnu finds for that person (issue #48).
 
 ### The flow
 
@@ -28,7 +28,7 @@ The product now leads with one job: **help someone find the right gift for a per
 3. **Research.** The research sub-agent searches with Tavily in the visitor's language and country, and returns **three options**: image, title, short description, price in the local currency, shop and link, with **one recommended** and why.
 4. **Personalise the gift.** If none fits, Majnu asks a few questions (name, exact age, what they love, their job, a public social profile if the visitor wants to share one) and searches again. A public Instagram or TikTok profile is read with Apify, only when the sender pastes it, and only a short summary of interests is kept (never posts or images); other public pages are read with Tavily.
 5. **Wrap it.** Choosing an option shows the templates that fit a gift (gift reveal, classic envelope, postcard). Majnu writes the page around the chosen gift, shows it, and gives the link and QR code. "Make it unique" (the Daytona redesign) is offered on the preview.
-6. **Advent calendars** ask the visitor to sign up (and, with billing on, choose Full moon).
+6. **Advent calendars** ask the visitor to create a free account. Majnu then finds a pool of small gift ideas for the person (one research run), and the sender fills the 24 doors by picking a gift for each one, adding their own, or leaving a note; sharing opens once every door has something (issue #48).
 
 ### Accounts and limits
 
