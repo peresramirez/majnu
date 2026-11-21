@@ -10,7 +10,7 @@ The landing page at `majnu.app` tells a visitor from an ad what Majnu does in on
 flowchart TD
   ad(["Visitor from an ad"]) --> landing["Landing page /<br/>app/(marketing)/page.tsx"]
   landing --> hero["Hero: Give something personal"]
-  landing --> how["How it works: three steps,<br/>moon travels with the scroll"]
+  landing --> how["How it works: three compact steps with pictures,<br/>moon travels with the scroll"]
   landing --> send["What you can send:<br/>TemplateCard thumbnails"]
   landing --> pricing["Pricing from lib/plans.ts"]
   landing --> faq["Questions"]
@@ -24,13 +24,34 @@ The page, top to bottom ([`app/(marketing)/page.tsx`](../../app/(marketing)/page
 
 1. **Header** with the wordmark, links to "How it works" and "Pricing", and "Sign in".
 2. **Hero:** "Personalized digital gifting", the headline "Give something personal.", a primary **Create a gift** button to `/signin` and "See how it works". Under it: "Free to start. Nothing to install for the person you send it to."
-3. **How it works:** three steps (Tell Majnu who it is for; Make it yours; Send the link), each with a moon phase one step fuller than the last. On desktop the painting is pinned behind the hero and the steps, and the moon travels as they scroll past; on phones it is a framed card between them.
+3. **How it works** ([`how-it-works.tsx`](../../components/landing/how-it-works.tsx)): one line ("Majnu would have given Layla the moon. Yours takes three steps.") and three compact steps: Say who it is for; Choose from three gifts; Wrap it, send the link. Each has a moon phase one step fuller than the last, a short title, one line, and a small picture of what happens (see [How it works](#how-it-works-1) below). On desktop the painting is pinned behind the hero and the steps, and the moon travels as they scroll past; on phones it is a framed card between them.
 4. **What you can send:** gift, letter, invitation and advent calendar, with their plan, and three examples drawn with `<TemplateCard>` that open the demo pages. The demo slugs always resolve to the same fixtures as the thumbnails ([templates-and-gift-pages.md](templates-and-gift-pages.md#demo-slugs)).
 5. **Pricing:** two cards read from [`lib/plans.ts`](../../lib/plans.ts): Free (€0, everything that makes Majnu useful) and the personalised wrapper (€2.99 once, for one gift, bought with "Make it unique" on a wrapped gift; [billing.md](billing.md)). Prices include VAT; nothing renews.
 6. **Questions:** whether you need an account, where the ideas come from, location, whether the recipient needs an account, who can see a gift, what Majnu costs and what happens when you buy a personalised wrapper.
 7. A closing call to action and the site footer ([`site-footer.tsx`](../../components/landing/site-footer.tsx)) with Privacy, Terms and Impressum.
 
 Sections below the fold play in as they scroll into view ([`reveal.tsx`](../../components/landing/reveal.tsx)). Content is hidden only after hydration and only while still below the fold, so with reduced motion, or without JavaScript, everything stays visible.
+
+### How it works
+
+The section was three tall cards of three sentences each, spaced most of a screen apart on desktop to give the moon room to travel. The developer asked for it to be simpler and easier to take in at a glance (22 November), so each step now shows what happens instead of describing it.
+
+- **The words** live in [`how-it-works-steps.ts`](../../components/landing/how-it-works-steps.ts), a plain TypeScript file so the unit test can read it. The test keeps three steps, titles of two to five words, lines of at most twelve, and moon phases that grow to full on the last step.
+- **The pictures** are drawn with our own markup, Tailwind and lucide icons, in the finder's own styles, so they look like what the visitor will see next:
+  1. A message, "A gift for my mother", and the chips Majnu assumed from it ("About 45–70", "Germany"), as in the finder dialog ([`context-chips.ts`](../../components/finder/context-chips.ts)).
+  2. Three gifts with prices; the middle one is lifted, with the orchid "Recommended" badge of [`gift-option-card.tsx`](../../components/finder/gift-option-card.tsx). It is the only orchid on the screen.
+  3. The wrapped gift, an arrow, and Link, WhatsApp and QR code. WhatsApp is drawn with lucide's speech bubble, as lucide has no brand icons.
+- **Accessibility.** The pictures are `aria-hidden`; a screen reader reads the heading, the line, and an ordered list of three level-3 headings, each with its line. The section has nothing to focus.
+- **Layout.**
+
+  | Width | Steps |
+  |---|---|
+  | Under 640 px | A tight stack: moon and title, the line, then the picture under them |
+  | 640 to 767 px | One row per step, picture on the right (the painting is a card above the section) |
+  | 768 to 1279 px | A 448 px column on the left of the pinned painting, picture under the text, so Majnu stays in view |
+  | 1280 px and up | A 576 px column, one row per step |
+
+- **Motion.** Each card plays in with `<Reveal>`. Inside it the picture's pieces arrive one after another: the message, then the chips; the three gifts, then the badge; the gift, the arrow, then the three ways to send it. Each takes 700 ms with the brand's easing, set with `group-data-[reveal=hidden]` classes and two CSS variables for the delay (`--i` for the step, `--d` for the piece). With reduced motion `<Reveal>` never hides anything, so the pictures are simply there.
 
 ### The scroll scene
 
@@ -39,6 +60,7 @@ Sections below the fold play in as they scroll into view ([`reveal.tsx`](../../c
 - The painting was generated with FLUX and is served as WebP at 1280 and 2048 pixels wide from [`public/landing/`](../../public/landing/).
 - The moon follows a quadratic curve from the light above Majnu's cupped hands, over an arc, to Layla's open palm. Its radius grows from 9 to 46 and shrinks to 15 as it lands, and it fills from a crescent to full on the way.
 - Scroll progress is read on `scroll` (a passive listener) and eased towards with `requestAnimationFrame`, which stops when the moon has arrived.
+- On desktop the progress is how far the page has scrolled through the track (`data-gift-track`: the hero and How it works), divided by the track's height less one screen. The moon therefore lands on Layla's palm exactly when the end of How it works reaches the bottom of the screen, however long that section is. Since the steps became compact, the journey takes one section's height of scrolling (696 px at 1440 × 900, 923 px at 1024 × 768, where the steps stack) instead of about 1,570 px, and each step comes fully into view as the moon passes: the first at the top of the arc, all three just before it lands.
 - **Variants:** `backdrop` pinned behind a long section (desktop landing), `card` animated as it scrolls past (phone landing), and `panel`, which fills its parent with the moon already given (sign-in and sign-up, [`app/(auth)/layout.tsx`](../../app/(auth)/layout.tsx), beside the line "Majnu would have given Layla the moon.").
 - With `prefers-reduced-motion`, nothing moves: the scene shows its final state, the full moon in Layla's hand.
 
@@ -100,7 +122,7 @@ flowchart LR
 | Piece | Job |
 |---|---|
 | [`app/(marketing)/page.tsx`](../../app/(marketing)/page.tsx) | The landing page |
-| [`components/landing/`](../../components/landing/) | The scroll scene, the reveal effect and the site footer |
+| [`components/landing/`](../../components/landing/) | The scroll scene, How it works with its steps, the reveal effect and the site footer |
 | [`components/brand/`](../../components/brand/) | The wordmark and the moon-phase drawing used across the site and the templates |
 | [`app/(auth)/layout.tsx`](../../app/(auth)/layout.tsx), [`app/(auth)/signin/page.tsx`](../../app/(auth)/signin/page.tsx), [`app/(auth)/signup/page.tsx`](../../app/(auth)/signup/page.tsx) | Sign-in and sign-up beside the scene, by email and password or Google |
 | [`app/(marketing)/impressum/page.tsx`](../../app/(marketing)/impressum/page.tsx), [`app/(marketing)/privacy/page.tsx`](../../app/(marketing)/privacy/page.tsx), [`app/(marketing)/terms/page.tsx`](../../app/(marketing)/terms/page.tsx), [`lib/legal.ts`](../../lib/legal.ts) | The legal pages and the operator's details |
@@ -124,7 +146,8 @@ flowchart LR
 
 ## How it was checked
 
-- No unit tests cover the landing page itself. The `TemplateCard` data has a test, and the demo slugs are tested to point at templates of the right kind ([`fixtures.test.ts`](../../tests/unit/lib/letters/fixtures.test.ts)).
+- How it works (22 November): [`how-it-works.test.ts`](../../tests/unit/components/landing/how-it-works.test.ts) holds the steps to the brief (three steps, short titles and lines, the moon filling to full). In a browser at 320, 375, 700, 1024, 1280 and 1440 px wide: no horizontal scroll, and no piece of any picture outside its box (measured per element). The section went from 1,572 to 696 px tall at 1440 × 900 (it fits on one screen) and from 1,336 to 910 px at 375 px. With a script reading the moon's position while scrolling, it reached Layla's palm (1489, 489 in the painting's coordinates) at the end of the track at 1024, 1280 and 1440 px. Reduced motion: nothing hidden, no transitions, the moon still in Layla's hand. The accessibility tree reads the heading, the line and three level-3 headings with their lines; the console showed no errors or warnings.
+- Apart from that, no unit tests cover the landing page itself. The `TemplateCard` data has a test, and the demo slugs are tested to point at templates of the right kind ([`fixtures.test.ts`](../../tests/unit/lib/letters/fixtures.test.ts)).
 - Browser checks of the page, the scene and the legal pages (375 px and 1440 px, keyboard, reduced motion) are part of every task's verification, but their results are not recorded in the repository. The screenshots in `media/` come from the starter template and do not show Majnu.
 - Self-hosted fonts (21 November): every font file was compared glyph by glyph with the file Google Fonts serves for the same request. Outlines and advance widths match within 1.3 font units (about 0.02 px at 16 px), the OpenType features are the same, and no character in Google's advertised ranges is missing. In a browser, the landing page, `/signin`, `/l/demo-letter` (opened) and `/dev/templates` laid out identically to majnu.app at 375 px and 1440 px (the same text widths and heights per font; one Cormorant line on the landing page 1 px narrower), and the network panel showed fonts only from our own domain. `npm run build` passed with `fonts.googleapis.com` and `fonts.gstatic.com` unreachable.
 
