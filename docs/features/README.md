@@ -15,3 +15,4 @@ Every page follows the same outline:
 | Page | Feature |
 |---|---|
 | [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: Majnu's greeting and message box in the hero, the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, and wrapping the chosen gift into a page with its link (issue #32) |
+| [voice-input.md](voice-input.md) | Voice input: the microphone button in the finder and the Letters & invitations chat, `POST /api/transcribe` with OpenAI's `gpt-transcribe`, and the daily limits in `voice_transcriptions` (issue #37) |
