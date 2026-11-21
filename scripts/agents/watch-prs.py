@@ -17,6 +17,7 @@ import sys
 import time
 
 FIELDS = "number,title,headRefName,headRefOid,mergeStateStatus,statusCheckRollup"
+REPO = None
 FAILED = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"}
 
 
@@ -32,6 +33,22 @@ def open_pull_requests():
     return json.loads(out.stdout or "[]")
 
 
+def behind_main(branch):
+    """How many commits main has that the branch lacks. GitHub reports a pull
+    request as CLEAN even when it is behind main unless branch protection asks
+    for up-to-date branches, so the lead needs this number separately."""
+    global REPO
+    try:
+        if REPO is None:
+            REPO = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+                                  capture_output=True, text=True, timeout=30).stdout.strip()
+        out = subprocess.run(["gh", "api", f"repos/{REPO}/compare/main...{branch}", "--jq", ".behind_by"],
+                             capture_output=True, text=True, timeout=30)
+        return int(out.stdout.strip())
+    except Exception:
+        return -1
+
+
 def describe(pr):
     checks = pr.get("statusCheckRollup") or []
     failed = sorted({c.get("name") or "?" for c in checks if c.get("conclusion") in FAILED})
@@ -39,6 +56,9 @@ def describe(pr):
     state = pr.get("mergeStateStatus") or "UNKNOWN"
     if running:
         state += " (checks running)"
+    behind = behind_main(pr["headRefName"])
+    if behind > 0:
+        state += f", behind main by {behind}"
     return (pr["headRefOid"], state, tuple(failed))
 
 
