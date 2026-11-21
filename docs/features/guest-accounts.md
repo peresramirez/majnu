@@ -48,7 +48,7 @@ flowchart LR
 
 `is_anonymous` comes from `getUser()`, which asks Supabase Auth, so it is current even when the token in the cookie is older than an upgrade.
 
-**The app shell** (`components/app/app-shell.tsx`) shows the four tabs from `components/app/tabs.ts`: top tabs from `md` up, a bottom bar on phones (where "Letters & invitations" shows as "Letters", with the rest read to screen readers). `/dashboard` is still the letters chat, so every existing link to it (the default after sign-in, emails, "New gift" buttons) opens the same screen; Find a gift is the new `/dashboard/find`, which for now invites the visitor to the finder on the landing page and is kept thin so the finder can be mounted there. For guests, `getSignedInUser()` returns `isGuest: true`, the shell adds the line "You're using Majnu as a guest. Create an account to keep your gifts." under the header, and the account menu offers Create an account and Sign in.
+**The app shell** (`components/app/app-shell.tsx`) shows the five tabs from `components/app/tabs.ts` (Find a gift, Letters & invitations, Templates, My gifts, Purchases): top tabs from `md` up, a bottom bar on phones (where "Letters & invitations" shows as "Letters", with the rest read to screen readers). `/dashboard` is still the letters chat, so every existing link to it (the default after sign-in, emails, "New gift" buttons) opens the same screen; Find a gift is the new `/dashboard/find`, which for now invites the visitor to the finder on the landing page and is kept thin so the finder can be mounted there. For guests, `getSignedInUser()` returns `isGuest: true`, the shell adds the line "You're using Majnu as a guest. Create an account to keep your gifts." under the header, and the account menu offers Create an account and Sign in.
 
 **Upgrading with email** (`components/auth/email-auth.ts`, run in the browser). `signUpWithEmail` asks Supabase who the user is. For a guest it calls `updateUser({ email, password }, { emailRedirectTo })`: the password is set at once, and the email waits for confirmation. Supabase emails a link that lands on `/auth/callback?next=...`, which exchanges the code for a session in this browser; the account is now a real one with the same user id. For everyone else it calls `signUp` with the Turnstile token, as before.
 
@@ -75,7 +75,7 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 | `components/auth/callback-url.ts` | `authCallbackUrl`, `signInErrorPath`, `safeAuthErrorCode` (all same-site, all checked) |
 | `app/auth/actions.ts` | `signInWithGoogle(next, { switchAccount })`: `linkIdentity` for guests, `signInWithOAuth` otherwise; `signOut` |
 | `app/auth/callback/route.ts` | Exchanges the code, or sends refused links and failed exchanges to `/signin?auth_error=...` |
-| `components/app/tabs.ts`, `app-shell.tsx` | The four tabs and which one is active |
+| `components/app/tabs.ts`, `app-shell.tsx` | The five tabs and which one is active |
 | `components/app/guest-notice.tsx`, `account-menu.tsx`, `session.ts` | The guest line, the guest account menu, `SessionUser.isGuest` |
 | `app/(app)/dashboard/find/page.tsx`, `components/app/find-invite.tsx` | The Find a gift tab (an invitation until the finder is mounted) |
 | `lib/limits.ts`, `lib/agents/events.ts` | The calendar gate and the `"signin_required"` limit reason |
