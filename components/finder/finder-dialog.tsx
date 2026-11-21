@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Keyb
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { ArrowUp, X } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation } from "./conversation"
 import { statusLit, type FinderItem } from "./finder-state"
@@ -233,6 +234,19 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     maxLength={1000}
                     placeholder="Tell Majnu more about them"
                     className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
+                  />
+                  <VoiceButton
+                    ensureSession={() => transport.ensureSession(() => checkHostRef.current)}
+                    onText={(text) => {
+                      // Added to the draft for the visitor to check and send.
+                      setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text).slice(0, 1000))
+                      requestAnimationFrame(() => {
+                        const el = composer.current
+                        if (!el) return
+                        el.focus()
+                        el.setSelectionRange(el.value.length, el.value.length)
+                      })
+                    }}
                   />
                   <button
                     type="submit"
