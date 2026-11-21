@@ -1,13 +1,13 @@
-
 import { z } from "zod"
 
+const email = z.string().trim().email("Enter an email address, like you@example.com.")
+
 export const signInSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email,
+  password: z.string().min(1, "Enter your password."),
 })
 
-
 export const signUpSchema = z.object({
-    email: z.string().email("Invalid email address"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+  email,
+  password: z.string().min(6, "Use at least 6 characters."),
 })

@@ -27,7 +27,8 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 | `/create/[id]/preview` | owner | The letter as the recipient will see it, all calendar doors open, no tracking |
 | `/l/[slug]` | public | The letter or calendar, full-bleed, no site chrome |
 | `/dev/templates` | public | Every template rendered from fixture data. Dev B's workbench and the source for ad screenshots |
-| `/impressum`, `/privacy` | public | Required before ads run in Germany |
+| `/impressum`, `/privacy`, `/terms` | public | Required before ads run in Germany. Built in `app/(marketing)/`; the operator's name and address come from `lib/legal.ts` |
+| `/signin`, `/signup` | public | Night palette beside the Majnu and Layla scene, in their own `app/(auth)/` layout |
 | `POST /api/chat` | owner | Main agent, streamed |
 | `POST /api/open` | public | Records `open`, `door_open`, `gift_click` |
 | `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook` | owner, owner, Stripe | Start the Full moon subscription, confirm it on return, and keep its status current |
@@ -54,6 +55,8 @@ Security rules:
 Calendar unlocks: door N opens on `startDate + (N-1)` days. Compare calendar dates in the calendar's timezone (`Intl.DateTimeFormat("en-CA", { timeZone })`), not timestamps. The server removes the content of locked doors before rendering. In the owner's preview every door is open; otherwise a calendar starting 1 December shows nothing but locked doors while it is being made.
 
 Open tracking: a small client beacon fires on page load, so link-preview crawlers (WhatsApp, iMessage) do not count. The server resolves the slug and ignores events for locked doors. The dashboard shows first opened, last opened, total opens and unique visitors.
+
+`visitor_id` is computed on the server in `/api/open`: a SHA-256 hash of the letter id, the visitor's IP address and user agent, and a server secret (`OPEN_HASH_SECRET`). Nothing is stored on the recipient's device and the IP address itself is never saved. This is what lets the site run without a cookie banner (§ 25 TDDDG), and it is what `/privacy` promises; if open tracking changes, change the privacy page in the same commit.
 
 Spending guard, because visitors from ads spend our API key: at most 5 letters per user per day and 40 chat turns per letter, plus a monthly spend limit set in the Anthropic Console.
 
@@ -127,7 +130,7 @@ After the shared setup, neither developer edits the other's files.
 ## Shared setup (first 30 minutes, together)
 
 1. Dev A: write and apply the migration; add `lib/supabase/admin.ts` with `import "server-only"`; rewrite `lib/supabase/middleware.ts` to the official `@supabase/ssr` cookie pattern (the template's version drops refreshed sessions, which would log senders out mid-chat), remove its `console.log`, protect `/create`, and exclude `l/` and `api/open` from the matcher.
-2. Dev B: add the `(public)` route group for `/l/[slug]` and the legal pages. Already done: the root layout is reduced to providers and metadata, the landing page lives in `app/(marketing)/`, and the signed-in pages live in `app/(app)/` with their own container and footer.
+2. Dev B: add the `(public)` route group for `/l/[slug]`. Already done: the legal pages and the `(auth)` group for sign-in; the root layout is reduced to providers and metadata, the landing page lives in `app/(marketing)/`, and the signed-in pages live in `app/(app)/` with their own container and footer.
 3. Together: write `schema.ts`, `templates.ts`, `fixtures.ts` and the stubbed `getPublicLetter()`. Commit to `main`.
 4. Then work on branches `dev-a` and `dev-b`, merging to `main` at every checkpoint and whenever a handover interface lands. Deploy with `npm run deploy`, which publishes the last commit on the current branch.
 

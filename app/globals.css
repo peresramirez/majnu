@@ -11,6 +11,50 @@
 html {
   scroll-behavior: smooth;
 }
+
+@keyframes moon-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+/* Scroll-in for landing sections; see components/landing/reveal.tsx. */
+[data-reveal] .reveal-item {
+  transition:
+    opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 800ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+[data-reveal="hidden"] .reveal-item {
+  opacity: 0;
+  transform: translateY(28px);
+}
+/* Each "What you can send" icon does one small thing as its card arrives. */
+[data-reveal="shown"] .reveal-icon {
+  animation-duration: 1000ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: backwards;
+  animation-delay: calc(var(--i, 0) * 90ms + 420ms);
+}
+[data-reveal="shown"] .motion-gift { animation-name: gift-lift; transform-origin: 50% 85%; }
+[data-reveal="shown"] .motion-letter { animation-name: letter-tilt; transform-origin: 50% 85%; }
+[data-reveal="shown"] .motion-pin { animation-name: pin-drop; }
+[data-reveal="shown"] .motion-calendar { animation-name: door-swing; transform-origin: 0% 50%; }
+@keyframes gift-lift {
+  35% { transform: translateY(-7px) rotate(-12deg); }
+  65% { transform: translateY(1px) rotate(5deg); }
+}
+@keyframes letter-tilt {
+  35% { transform: translateX(-2px) rotate(-14deg); }
+  70% { transform: rotate(6deg); }
+}
+@keyframes pin-drop {
+  0% { transform: translateY(-16px); opacity: 0; }
+  55% { transform: translateY(2px); opacity: 1; }
+  78% { transform: translateY(-3px); }
+}
+@keyframes door-swing {
+  40% { transform: perspective(60px) rotateY(-55deg); }
+}
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

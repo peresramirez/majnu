@@ -31,7 +31,9 @@ function litPath(r: number, lit: number) {
   return `M0 ${-r}A${r} ${r} 0 0 1 0 ${r}A${Math.abs(e) * r} ${r} 0 0 ${e > 0 ? 0 : 1} 0 ${-r}Z`
 }
 
-export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
+// "backdrop": pinned behind a long section; "card": a framed card that animates as it
+// scrolls past; "panel": fills its parent, moon already given (sign-in pages).
+export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" }) {
   const box = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLDivElement>(null)
   const moon = useRef<SVGGElement>(null)
@@ -43,13 +45,14 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
     const el = box.current, fr = frame.current
     if (!el || !fr) return
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    // Where the painting sits when it is cropped to fill the box: keep the couple in view.
-    const focus = variant === "backdrop" ? { x: 1, y: 0.55 } : { x: 0.9, y: 0.5 }
-
     const layout = () => {
       const W = el.clientWidth, H = el.clientHeight
       if (!W || !H) return
-      const s = Math.max(W / IW, H / IH)
+      // Short, wide boxes (the panel as a phone banner) zoom in on the couple.
+      const zoom = variant === "panel" && H < 420 ? 1.9 : 1
+      // Where the painting sits when it is cropped to fill the box: keep the couple in view.
+      const focus = variant === "backdrop" ? { x: 1, y: 0.55 } : { x: 0.9, y: zoom > 1 ? 0.24 : 0.5 }
+      const s = Math.max(W / IW, H / IH) * zoom
       fr.style.width = `${IW * s}px`
       fr.style.height = `${IH * s}px`
       fr.style.left = `${(W - IW * s) * focus.x}px`
@@ -82,7 +85,7 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
     }
 
     layout()
-    if (reduceMotion) {
+    if (reduceMotion || variant === "panel") {
       draw(1)
       const onResize = () => layout()
       window.addEventListener("resize", onResize)
@@ -110,6 +113,7 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
   }, [variant])
 
   const backdrop = variant === "backdrop"
+  const panel = variant === "panel"
   return (
     <div
       ref={box}
@@ -117,7 +121,9 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
       className={
         backdrop
           ? "pointer-events-none sticky top-0 h-[100svh] overflow-hidden"
-          : "relative aspect-[4/5] w-full overflow-hidden rounded-3xl ring-1 ring-inset ring-night-petal/10"
+          : panel
+            ? "pointer-events-none absolute inset-0 overflow-hidden"
+            : "relative aspect-[4/5] w-full overflow-hidden rounded-3xl ring-1 ring-inset ring-night-petal/10"
       }
     >
       <div ref={frame} className="absolute left-0 top-0 h-full w-full">
@@ -125,12 +131,12 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
         <img
           src="/landing/majnu-layla-2048.webp"
           srcSet="/landing/majnu-layla-1280.webp 1280w, /landing/majnu-layla-2048.webp 2048w"
-          sizes={backdrop ? "(min-aspect-ratio: 16/9) 100vw, 178vh" : "222vw"}
+          sizes={backdrop ? "(min-aspect-ratio: 16/9) 100vw, 178vh" : panel ? "(min-width: 768px) 178vh, 380vw" : "222vw"}
           alt=""
           width={IW}
           height={IH}
-          fetchPriority={backdrop ? "high" : "auto"}
-          loading={backdrop ? "eager" : "lazy"}
+          fetchPriority={backdrop || panel ? "high" : "auto"}
+          loading={backdrop || panel ? "eager" : "lazy"}
           decoding="async"
           className="absolute inset-0 h-full w-full"
         />
@@ -148,7 +154,13 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
             </radialGradient>
           </defs>
           <g ref={moon} transform={`translate(${FROM.x} ${FROM.y})`}>
-            <circle ref={glow} r="29" fill={`url(#glow-${variant})`} opacity="0.45" />
+            <circle
+              ref={glow}
+              r="29"
+              fill={`url(#glow-${variant})`}
+              opacity="0.45"
+              className={panel ? "motion-safe:animate-[moon-breathe_6s_ease-in-out_infinite]" : undefined}
+            />
             <circle ref={disc} r="9" fill="#F5EAF1" opacity="0.14" />
             <path ref={lit} d={litPath(9, 0.18)} fill={`url(#face-${variant})`} />
           </g>
@@ -160,6 +172,10 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" }) {
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-night-plum to-transparent" />
           <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-night-plum/70 to-transparent" />
         </>
+      ) : panel ? (
+        // The fades into the page sit in the parent, outside this clipped box, so they
+        // can overlap its edge and hide the anti-aliased seam.
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-night-plum/60 to-transparent" />
       ) : (
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-night-plum/80 to-transparent" />
       )}

@@ -1,6 +1,9 @@
+import type { CSSProperties } from "react"
 import Link from "next/link"
 import { ArrowRight, CalendarDays, Check, Gift, Mail, MapPin } from "lucide-react"
 import { GiftScene } from "@/components/landing/gift-scene"
+import { Reveal } from "@/components/landing/reveal"
+import { SiteFooter } from "@/components/landing/site-footer"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { Wordmark } from "@/components/brand/wordmark"
 import { plans } from "@/lib/plans"
@@ -29,11 +32,12 @@ const steps = [
   },
 ]
 
+// `motion` plays once as the card scrolls in; `hover` is the smaller echo on hover.
 const kinds = [
-  { icon: Gift, name: "Gift", body: "A gift card or code, wrapped in a page they unwrap with a tap.", plan: "Free" },
-  { icon: Mail, name: "Letter", body: "Your own words, for a birthday, a thank-you or no reason at all.", plan: "Free" },
-  { icon: MapPin, name: "Invitation", body: "Date, place and a map your guests can open.", plan: "Free" },
-  { icon: CalendarDays, name: "Advent calendar", body: "One door a day, each with a note or a small gift.", plan: "Full moon" },
+  { icon: Gift, name: "Gift", body: "A gift card or code, wrapped in a page they unwrap with a tap.", plan: "Free", motion: "motion-gift", hover: "motion-safe:group-hover:-translate-y-1 motion-safe:group-hover:-rotate-6" },
+  { icon: Mail, name: "Letter", body: "Your own words, for a birthday, a thank-you or no reason at all.", plan: "Free", motion: "motion-letter", hover: "motion-safe:group-hover:-rotate-[10deg]" },
+  { icon: MapPin, name: "Invitation", body: "Date, place and a map your guests can open.", plan: "Free", motion: "motion-pin", hover: "motion-safe:group-hover:-translate-y-1" },
+  { icon: CalendarDays, name: "Advent calendar", body: "One door a day, each with a note or a small gift.", plan: "Full moon", motion: "motion-calendar", hover: "motion-safe:group-hover:rotate-6" },
 ]
 
 const questions = [
@@ -121,16 +125,28 @@ export default function LandingPage() {
 
         <section aria-labelledby="send-title" className="bg-night-plum px-5 py-24 sm:px-8">
           <div className="mx-auto max-w-6xl">
-            <h2 id="send-title" className="font-display text-4xl leading-tight sm:text-5xl">What you can send</h2>
+            <Reveal>
+              <h2 id="send-title" className="reveal-item font-display text-4xl leading-tight sm:text-5xl">What you can send</h2>
+            </Reveal>
             <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {kinds.map(({ icon: Icon, name, body, plan }) => (
-                <li key={name} className="flex flex-col rounded-3xl bg-night-velvet p-6 ring-1 ring-inset ring-night-petal/10">
-                  <div className="flex items-start justify-between">
-                    <Icon className="h-6 w-6 text-night-rose" aria-hidden="true" />
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${plan === "Free" ? "bg-night-petal/10 text-night-lilac" : "bg-night-rose/15 text-night-rose"}`}>{plan}</span>
-                  </div>
-                  <h3 className="mt-8 font-display text-2xl">{name}</h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-night-lilac">{body}</p>
+              {kinds.map(({ icon: Icon, name, body, plan, motion, hover }, i) => (
+                <li key={name} style={{ "--i": i } as CSSProperties}>
+                  <Reveal className="h-full">
+                    <div className="reveal-item group relative flex h-full flex-col overflow-hidden rounded-3xl bg-night-velvet p-6 ring-1 ring-inset ring-night-petal/10 transition-shadow duration-500 ease-calm hover:ring-night-rose/30">
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-night-rose opacity-0 blur-3xl transition-opacity duration-700 ease-calm group-hover:opacity-[0.14]"
+                      />
+                      <div className="relative flex items-start justify-between">
+                        <span className={`reveal-icon inline-block ${motion}`}>
+                          <Icon className={`h-6 w-6 text-night-rose transition-transform duration-500 ease-calm ${hover}`} aria-hidden="true" />
+                        </span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${plan === "Free" ? "bg-night-petal/10 text-night-lilac" : "bg-night-rose/15 text-night-rose"}`}>{plan}</span>
+                      </div>
+                      <h3 className="relative mt-8 font-display text-2xl">{name}</h3>
+                      <p className="relative mt-2 text-[15px] leading-relaxed text-night-lilac">{body}</p>
+                    </div>
+                  </Reveal>
                 </li>
               ))}
             </ul>
@@ -208,15 +224,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-night-petal/10 bg-night-deep px-5 py-10 sm:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 text-sm text-night-lilac sm:flex-row sm:items-center sm:justify-between">
-          <Wordmark width={104} />
-          <p>
-            Questions? <a href="mailto:hello@majnu.app" className={`rounded text-night-petal underline underline-offset-4 ${focusRing}`}>hello@majnu.app</a>
-          </p>
-          <p>© {new Date().getFullYear()} Majnu</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

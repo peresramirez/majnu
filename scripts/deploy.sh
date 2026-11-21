@@ -23,6 +23,12 @@ trap 'rm -rf "$work"' EXIT
 git -C "$root" archive "$ref" | tar -x -C "$work"
 cd "$work"
 
+# The Impressum and privacy policy must not go live with placeholder details.
+if grep -nE '"\[[^]]+\]"' lib/legal.ts >&2; then
+  echo "lib/legal.ts still has placeholders (above). Fill them in before deploying." >&2
+  exit 1
+fi
+
 echo "Deploying $(git -C "$root" rev-parse --short "$ref") from a clean copy"
 npm ci --no-audit --no-fund
 npx opennextjs-cloudflare build
