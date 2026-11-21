@@ -66,7 +66,11 @@ Production values come from two places:
 Both developers get the same setup by cloning.
 
 - **Instructions:** `AGENTS.md` (read by most coding agents) and `CLAUDE.md` (Claude Code, which imports `AGENTS.md`).
-- **Skills** in `.claude/skills/`, pinned by `skills-lock.json`: `supabase`, `supabase-postgres-best-practices`, `stripe-best-practices`, `stripe-docs`, `stripe-implementation-planner`, `frontend-design`. Restore or update them with `npx skills experimental_install` and `npx skills update -p`.
+- **Skills** in `.claude/skills/`, pinned by `skills-lock.json`. Restore or update them with `npx skills experimental_install` and `npx skills update -p`.
+  - Supabase: `supabase`, `supabase-postgres-best-practices`
+  - Stripe: `stripe-best-practices`, `stripe-docs`, `stripe-implementation-planner`
+  - Cloudflare: `cloudflare`, `wrangler`, `workers-best-practices`, `workers-profiling`, `nextjs-on-cloudflare`, `cloudflare-email-service`, `agents-sdk`
+  - Design: `design-taste-frontend` (Taste Skill, about 42 MB of reference images and scripts that drive a local Chrome) and `frontend-design`
 - **MCP servers** in `.mcp.json`: `supabase` and `stripe`. In Claude Code, run `/mcp` once and sign in to each with your own account.
 - **Settings** in `.claude/settings.json`: no AI attribution on commits or pull requests, and the two MCP servers are approved for the project. Personal overrides go in `.claude/settings.local.json`, which is not committed.
 

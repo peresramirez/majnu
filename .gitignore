@@ -43,3 +43,6 @@ next-env.d.ts
 
 # media files
 *.mp4
+
+# taste skill working files
+/.taste-skill/
