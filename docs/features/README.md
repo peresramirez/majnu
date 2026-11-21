@@ -14,3 +14,11 @@ Every page follows the same outline:
 
 | Page | Feature |
 |---|---|
+| [letters-chat.md](letters-chat.md) | The main agent, the builder and research sub-agents, `POST /api/chat` and its NDJSON events, stored history, model settings |
+| [templates-and-gift-pages.md](templates-and-gift-pages.md) | The letter contract, the seven templates, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
+| [sharing-and-tracking.md](sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, the statistics and My gifts |
+| [billing.md](billing.md) | Crescent and Full moon, the Stripe subscription, return page, webhook and portal, the `MAJNU_BILLING` switch |
+| [daytona-redesign.md](daytona-redesign.md) | One-off designs made by Claude Code in a Daytona sandbox: snapshot, job, page checker, serving, costs |
+| [data-and-security.md](data-and-security.md) | Schema and migrations, row-level security, server-only writes, the spending guard, secrets, deploying |
+| [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
+| [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |
