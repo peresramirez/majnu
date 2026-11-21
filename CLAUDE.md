@@ -39,14 +39,16 @@ scripts/agents/session.sh start <name> --port 3101 --brief <file>
 herdr agent wait <name> --timeout 1800000    # returns when the session is idle, done or blocked
 scripts/agents/session.sh status <name>      # its state and latest output
 herdr agent prompt <name> "<follow-up>"      # answer its question or ask for a fix
-gh run list --branch task/<name> --limit 1        # CI for the branch's last commit: must be green to merge
-gh workflow run CI --ref task/<name> && gh run watch   # when a branch has no run yet
-# ...review, merge into main, rerun the checks, push main, wait for main's CI...
+gh pr list --state open                          # sessions open a pull request when they are done
+python3 -I scripts/agents/watch-prs.py           # run with the Monitor tool (30 min, re-arm): one line per new pull request, merge-state change or failed check
+gh pr view <n> --json mergeStateStatus,statusCheckRollup   # must be CLEAN with green checks to merge
+herdr agent prompt <name> "Merge origin/main, resolve conflicts, re-verify, push"   # when it is BEHIND or DIRTY
+gh pr merge <n> --merge                          # the orchestrator merges; then pull main, rerun the checks, wait for main's CI, deploy
 gh issue close <number> --comment "Done in <commit>: ... Checked: ..."   # each issue the merge finished
 scripts/agents/session.sh close <name>       # ends the session, removes worktree and branch
 ```
 
-What `start` does: creates branch `task/<name>` from `main` and a worktree in `.claude/worktrees/<name>`; opens it as its own Herdr workspace, so it shows in the sidebar and you can watch it or type into it; copies the gitignored `.env.local` and `.claude/settings.local.json` into it; runs `npm ci`; starts Claude Code there; and sends `scripts/agents/brief-header.md` (the five steps, the branch and the port) followed by the brief. `close` refuses to remove a branch that is not merged into `main` unless given `--force`. On this machine `start` takes about five minutes (mostly `npm ci`) and `close` a few minutes (deleting the worktree's `node_modules`), so run them in the background. This machine has 16 GB of memory: run at most two task sessions at a time, and `start` refuses to launch one when less than 30% of memory is free (`MAJNU_MIN_FREE_PCT` changes the threshold).
+What `start` does: creates branch `task/<name>` from `main` and a worktree in `.claude/worktrees/<name>`; opens it as its own Herdr workspace, so it shows in the sidebar and you can watch it or type into it; copies the gitignored `.env.local` and `.claude/settings.local.json` into it; runs `npm ci`; starts Claude Code there; and sends `scripts/agents/brief-header.md` (the five steps, the branch and the port) followed by the brief. `close` refuses to remove a branch that is not merged into `main` unless given `--force`. On this machine `start` takes about five minutes (mostly `npm ci`) and `close` a few minutes (deleting the worktree's `node_modules`), so run them in the background. The developer wants at least three task sessions working at all times whenever there is parallel work. This machine has 16 GB of memory, so keep it to three, and `start` refuses to launch one when less than 30% of memory is free (`MAJNU_MIN_FREE_PCT` changes the threshold).
 
 Each task session gets the same access as the lead: the user-level MCP servers and skills on this machine, the project's `.mcp.json` servers and skills in `.claude/skills/`, the same keys, and the project permissions above. It starts with `--dangerously-skip-permissions`, at the developer's request, so it works through its task without stopping for approvals; its limits are the brief (never push or merge `main`, never deploy) and the deny rules in `.claude/settings.json`. It also starts without Claude in Chrome (`--no-chrome`) and with one extra MCP server, `browser`: Chrome DevTools in an isolated, throwaway profile (`scripts/agents/browser-mcp.json`), so parallel sessions never share a browser.
 

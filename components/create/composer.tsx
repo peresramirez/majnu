@@ -3,6 +3,7 @@
 import { forwardRef, useLayoutEffect, useRef, useImperativeHandle, type KeyboardEvent } from "react"
 import { ArrowUp, LayoutTemplate, X } from "lucide-react"
 import { focusRing } from "@/components/app/styles"
+import { VoiceButton } from "@/components/voice/voice-button"
 import type { TemplateMeta } from "@/lib/letters/templates"
 import { TemplateIcon } from "./template-bits"
 
@@ -98,16 +99,30 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           <LayoutTemplate className="h-[18px] w-[18px]" aria-hidden="true" />
           Template
         </button>
-        <button
-          type="submit"
-          disabled={!canSend}
-          aria-label={busy ? "Majnu is still replying" : "Send"}
-          // Keep the keyboard open on phones: the field keeps focus when Send is tapped.
-          onMouseDown={(e) => e.preventDefault()}
-          className={`grid h-10 w-10 place-items-center rounded-full bg-night-rose text-night-plum transition-colors duration-200 ease-calm hover:bg-[#F1C4A9] disabled:cursor-not-allowed disabled:bg-night-petal/10 disabled:text-night-lilac/60 ${focusRing}`}
-        >
-          <ArrowUp className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1">
+          <VoiceButton
+            onText={(text) => {
+              // Added to what is already there, for the sender to check and send.
+              onChange(value.trim() ? `${value.trimEnd()} ${text}` : text)
+              requestAnimationFrame(() => {
+                const el = field.current
+                if (!el) return
+                el.focus()
+                el.setSelectionRange(el.value.length, el.value.length)
+              })
+            }}
+          />
+          <button
+            type="submit"
+            disabled={!canSend}
+            aria-label={busy ? "Majnu is still replying" : "Send"}
+            // Keep the keyboard open on phones: the field keeps focus when Send is tapped.
+            onMouseDown={(e) => e.preventDefault()}
+            className={`grid h-10 w-10 place-items-center rounded-full bg-night-rose text-night-plum transition-colors duration-200 ease-calm hover:bg-[#F1C4A9] disabled:cursor-not-allowed disabled:bg-night-petal/10 disabled:text-night-lilac/60 ${focusRing}`}
+          >
+            <ArrowUp className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </form>
   )
