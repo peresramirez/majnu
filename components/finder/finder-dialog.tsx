@@ -4,11 +4,13 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Keyb
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { ArrowUp, X } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation } from "./conversation"
 import { statusLit, type FinderItem } from "./finder-state"
 import { focusRing } from "./styles"
 import type { Finder } from "./use-finder"
+import { useVisualViewportVars } from "./visual-viewport"
 import { WrapFooter, WrapView } from "./wrap-view"
 
 type Props = {
@@ -17,7 +19,8 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-const MAX_COMPOSER_HEIGHT = 140
+// Four lines, then the box scrolls: 4 × 24px + 16px padding.
+const MAX_COMPOSER_HEIGHT = 112
 
 // What a screen reader hears when a reply finishes.
 function announcement(items: FinderItem[]): string {
@@ -30,9 +33,11 @@ function announcement(items: FinderItem[]): string {
   return ""
 }
 
-// The gift finder: a full-height sheet on phones and a large panel from md up.
-// Escape, the close button and a click outside close it (Radix Dialog), and
-// focus goes back to whatever opened it.
+// The gift finder: a bottom sheet as tall as the visible screen on phones (it
+// follows the keyboard, so the message box stays in view), and from md up a
+// panel of reading width near the top of the screen that is only as tall as
+// what it holds. Escape, the close button and a click outside close it (Radix
+// Dialog), and focus goes back to whatever opened it.
 export function FinderDialog({ finder, open, onOpenChange }: Props) {
   const { state, wrap, send, choose, chooseTemplate, wrapGift, backToIdeas, checkHostRef, transport } = finder
   const [draft, setDraft] = useState("")
@@ -49,8 +54,10 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
       opener.current = document.activeElement
     }
   }, [open])
+  useVisualViewportVars(open)
   const chips = contextChips(state.context)
   const wrapping = wrap.stage !== "closed"
+  const ready = wrap.stage === "ready"
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -127,7 +134,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 grid grid-cols-[minmax(0,1fr)] bg-night-deep/80 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 md:place-items-center md:p-6">
+        <DialogPrimitive.Overlay className="fixed inset-x-0 top-[var(--vv-top,0px)] z-50 flex h-[var(--vv-height,100dvh)] flex-col bg-night-deep/75 pt-2 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 md:inset-0 md:h-auto md:items-center md:px-6 md:pb-6 md:pt-[max(24px,8vh)]">
           <DialogPrimitive.Content
             ref={content}
             // Focus the panel itself on open: no phone keyboard pops up, and
@@ -141,11 +148,14 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
               const target = opener.current?.isConnected ? opener.current : document.getElementById("finder-hero-message")
               target?.focus()
             }}
-            className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-clip bg-night-plum text-night-petal outline-none motion-safe:duration-300 motion-safe:ease-calm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=open]:slide-in-from-bottom-6 md:h-[min(880px,calc(100dvh-48px))] md:max-w-[1000px] md:rounded-[28px] md:shadow-2xl md:shadow-black/40 md:ring-1 md:ring-inset md:ring-night-petal/10"
+            className={`relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-clip rounded-t-[22px] bg-night-plum text-night-petal shadow-2xl shadow-black/40 outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:ease-calm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=open]:slide-in-from-bottom-6 md:flex-none md:rounded-[24px] md:motion-safe:data-[state=open]:slide-in-from-bottom-2 ${
+              ready
+                ? "md:h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[960px]"
+                : "md:max-h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[720px]"
+            }`}
           >
-            <header className="shrink-0 border-b border-night-petal/10">
-              <div className="mx-auto flex max-w-[920px] items-center gap-3 py-3 pl-4 pr-2 sm:pl-6 sm:pr-4">
-              <MoonPhase lit={lit} size={30} className="shrink-0 text-night-rose" />
+            <header className="flex shrink-0 items-center gap-3 border-b border-night-petal/10 py-1.5 pl-4 pr-1.5 sm:pl-5">
+              <MoonPhase lit={lit} size={24} className="shrink-0 text-night-rose" />
               <div className="min-w-0 flex-1">
                 <DialogPrimitive.Title className="text-[15px] font-semibold leading-tight">Majnu</DialogPrimitive.Title>
                 <p className="truncate text-[13px] leading-snug text-night-lilac" role="status" aria-live="polite">
@@ -153,34 +163,30 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                 </p>
               </div>
               <DialogPrimitive.Close
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-night-lilac transition-colors hover:bg-night-petal/10 hover:text-night-petal ${focusRing}`}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-night-lilac transition-colors duration-200 hover:bg-night-petal/10 hover:text-night-petal ${focusRing}`}
                 aria-label="Close"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </DialogPrimitive.Close>
-              </div>
             </header>
             <DialogPrimitive.Description className="sr-only">
               Majnu suggests three gifts for the person you describe, and wraps the one you choose in a page you can send.
             </DialogPrimitive.Description>
 
-            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <div
-                className={`mx-auto w-full max-w-[920px] px-4 pt-4 sm:px-6 sm:pt-5 ${
-                  wrap.stage === "ready" ? "pb-8 md:flex md:h-full md:flex-col md:pb-6" : wrapping ? "pb-4" : "pb-8"
-                }`}
-              >
+            {/* From md up the panel is as tall as this, up to its maximum; then this scrolls. */}
+            <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${ready ? "" : "md:flex-initial"}`}>
+              <div className={`px-4 pt-4 sm:px-5 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-4" : "pb-6"}`}>
                 {chips.length > 0 && !wrapping && (
-                  <div className="mb-5">
-                    <p className="text-xs font-medium text-night-lilac">Majnu assumed this. Tap one to change it.</p>
-                    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="What Majnu assumed">
+                  <div className="mb-4">
+                    <p className="text-xs text-night-lilac">Majnu assumed this. Tap one to change it.</p>
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="What Majnu assumed">
                       {chips.map((c) => (
                         <li key={c.key}>
                           <button
                             type="button"
                             onClick={() => prefill(c.prefill)}
                             aria-label={c.description}
-                            className={`rounded-full bg-night-velvet px-3 py-1.5 text-[13px] font-medium text-night-petal ring-1 ring-inset ring-night-petal/10 transition-colors duration-200 hover:ring-night-petal/35 ${focusRing}`}
+                            className={`relative inline-flex h-7 items-center rounded-full bg-night-velvet px-2.5 text-xs font-medium text-night-petal ring-1 ring-inset ring-night-petal/10 transition-colors duration-200 before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:ring-night-petal/35 ${focusRing}`}
                           >
                             {c.label}
                           </button>
@@ -212,10 +218,8 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
             {(wrap.stage === "choose" || wrap.stage === "wrapping") && <WrapFooter wrap={wrap} />}
 
             {!wrapping && (
-              <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-                {/* Same width and padding as the conversation, so the edges line up. */}
-                <div className="mx-auto max-w-[920px] px-4 sm:px-6">
-                <div className="flex items-end gap-2 rounded-[24px] bg-night-velvet py-1.5 pl-4 pr-1.5 ring-1 ring-inset ring-night-petal/15 focus-within:ring-night-rose/60">
+              <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:px-5">
+                <div className="flex items-end gap-2 rounded-[22px] bg-night-velvet py-1 pl-4 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
                   <label htmlFor="finder-message" className="sr-only">
                     Message to Majnu
                   </label>
@@ -229,17 +233,29 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     enterKeyHint="send"
                     maxLength={1000}
                     placeholder="Tell Majnu more about them"
-                    className="max-h-[140px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
+                    className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
+                  />
+                  <VoiceButton
+                    ensureSession={() => transport.ensureSession(() => checkHostRef.current)}
+                    onText={(text) => {
+                      // Added to the draft for the visitor to check and send.
+                      setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text).slice(0, 1000))
+                      requestAnimationFrame(() => {
+                        const el = composer.current
+                        if (!el) return
+                        el.focus()
+                        el.setSelectionRange(el.value.length, el.value.length)
+                      })
+                    }}
                   />
                   <button
                     type="submit"
                     aria-label="Send"
                     aria-disabled={state.streaming || !draft.trim()}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-opacity duration-200 hover:bg-[#F1C4A9] aria-disabled:opacity-50 ${focusRing}`}
+                    className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-[background-color,opacity,transform] duration-200 before:absolute before:-inset-0.5 before:content-[''] hover:bg-[#F1C4A9] active:scale-95 aria-disabled:opacity-50 ${focusRing}`}
                   >
                     <ArrowUp className="h-5 w-5" aria-hidden="true" />
                   </button>
-                </div>
                 </div>
               </form>
             )}

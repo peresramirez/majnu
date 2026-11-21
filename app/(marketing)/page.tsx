@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ArrowRight, Check } from "lucide-react"
 import { GiftScene } from "@/components/landing/gift-scene"
 import { HeroFinder } from "@/components/landing/hero-finder"
+import { PreviewLinks } from "@/components/landing/preview-links"
 import { Reveal } from "@/components/landing/reveal"
 import { SiteFooter } from "@/components/landing/site-footer"
 import { MoonPhase } from "@/components/brand/moon-phase"
@@ -10,13 +11,11 @@ import { Wordmark } from "@/components/brand/wordmark"
 import { firstName } from "@/components/letters/names"
 import { TemplateCard } from "@/components/letters/template-card"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
-import { plans } from "@/lib/plans"
 
 const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
 
 const primaryButton = `inline-flex items-center justify-center gap-2 rounded-full bg-night-rose px-6 py-3.5 text-[15px] font-semibold text-night-plum transition-colors duration-200 ease-calm hover:bg-[#F1C4A9] ${focusRing}`
-const secondaryButton = `inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-semibold text-night-petal ring-1 ring-inset ring-night-petal/25 transition-colors duration-200 ease-calm hover:ring-night-petal/50 ${focusRing}`
 
 // The finder's three steps, told as the moon travels from Majnu to Layla.
 const steps = [
@@ -38,17 +37,35 @@ const steps = [
 ]
 
 // The demo links always resolve to the fixtures (lib/letters/store.ts), so the
-// thumbnails and the pages they open show the same gift.
+// thumbnails and the pages they open show the same gift. They open in a dialog
+// over this page (PreviewLinks), so a visitor never leaves the landing page.
 const examples = [
-  { slug: "demo-letter", templateId: "classic-envelope", cta: `Open ${firstName(letterFixtures["classic-envelope"].recipientName)}'s letter` },
-  { slug: "demo-gift", templateId: "gift-reveal", cta: `Open ${firstName(letterFixtures["gift-reveal"].recipientName)}'s gift` },
-  { slug: "demo-calendar", templateId: "advent-classic", cta: `Open ${firstName(calendarFixtures["advent-classic"].recipientName)}'s calendar` },
+  { slug: "demo-letter", templateId: "classic-envelope", name: `${firstName(letterFixtures["classic-envelope"].recipientName)}'s letter` },
+  { slug: "demo-gift", templateId: "gift-reveal", name: `${firstName(letterFixtures["gift-reveal"].recipientName)}'s gift` },
+  { slug: "demo-calendar", templateId: "advent-classic", name: `${firstName(calendarFixtures["advent-classic"].recipientName)}'s calendar` },
 ] as const
+
+// Everything is free but one thing: a design Majnu makes for one gift. The
+// copy lives here until lib/plans.ts describes the new model (docs/plan.md).
+const freeFeatures = [
+  "Find a gift: three ideas from shops in your country",
+  "Personalise the search with a few questions",
+  "Wrap it in one of our designs",
+  "Share it by link, WhatsApp or QR code",
+  "See when it is opened",
+  "Advent calendars, with a free account",
+]
+
+const wrapperFeatures = [
+  "A design Majnu makes for this one gift",
+  "Made around the person and what you want to say",
+  "Paid once, for one gift. No subscription",
+]
 
 const questions = [
   {
     q: "Do I need an account to find a gift?",
-    a: "No. Majnu finds gifts and wraps one for you without signing in. Sign up when you want to keep your gifts on any device. Advent calendars need an account.",
+    a: "No. Majnu finds gifts and wraps one for you without signing in. Sign up when you want to keep your gifts on any device. Advent calendars are free too, but need an account.",
   },
   {
     q: "Where do the gift ideas come from?",
@@ -67,8 +84,8 @@ const questions = [
     a: "Only people who have the link. Gift pages are hidden from search engines, and link previews never show your message or gift codes.",
   },
   {
-    q: "Can I cancel Full moon?",
-    a: "Yes, at any time from your account. It stays active until the end of the month you paid for, and you keep everything you made.",
+    q: "What does Majnu cost?",
+    a: "Finding a gift, personalising the search, wrapping it in one of our designs, sending the link and seeing when it is opened are all free. A personalised wrapper, a design Majnu makes for one gift, costs €2.99 once.",
   },
 ]
 
@@ -98,8 +115,8 @@ export default function LandingPage() {
           {/* Pulled up over the pinned scene, so the scene scrolls away when this content ends. */}
           <div className="relative z-10 md:-mt-[100svh]">
           <section
-            aria-label="Find a gift"
-            className="relative z-10 mx-auto flex max-w-6xl items-center px-5 pb-10 pt-24 sm:px-8 sm:pt-28 md:min-h-[100svh] md:pb-20 md:pt-32"
+            aria-labelledby="hero-title"
+            className="relative z-10 mx-auto flex max-w-6xl items-center px-5 pb-14 pt-24 sm:px-8 sm:pt-28 md:min-h-[100svh] md:pb-16 md:pt-28"
           >
             <HeroFinder />
           </section>
@@ -140,19 +157,20 @@ export default function LandingPage() {
                 </p>
               </div>
             </Reveal>
+            <PreviewLinks>
             <ul className="mt-10 grid gap-4 md:grid-cols-3 md:gap-5">
               {examples.map((example, i) => (
                 <li key={example.slug} style={{ "--i": i } as CSSProperties}>
                   <Reveal className="h-full">
-                    {/* A plain link: Next's <Link> would prefetch three dynamic pages for every visitor. */}
-                    <a href={`/l/${example.slug}`} className={`reveal-item group block h-full rounded-3xl ${focusRing}`}>
+                    {/* A plain link (Next's <Link> would prefetch three dynamic pages), opened in a dialog. */}
+                    <a href={`/l/${example.slug}`} data-preview={example.name} className={`reveal-item group block h-full rounded-3xl ${focusRing}`}>
                       <TemplateCard
                         id={example.templateId}
                         orientation="responsive"
                         className="h-full transition-shadow duration-500 ease-calm group-hover:ring-night-rose/40"
                       >
                         <span className="mt-3 inline-flex items-center gap-2 text-[15px] font-semibold text-night-rose">
-                          {example.cta}
+                          Open {example.name}
                           <ArrowRight
                             className="h-4 w-4 transition-transform duration-300 ease-calm motion-safe:group-hover:translate-x-1"
                             aria-hidden="true"
@@ -164,49 +182,60 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
+            </PreviewLinks>
           </div>
         </section>
 
         <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-8 bg-night-deep px-5 py-24 sm:px-8">
           <div className="mx-auto max-w-4xl">
-            <h2 id="pricing-title" className="text-center font-display text-4xl leading-tight sm:text-5xl">Simple pricing</h2>
-            <p className="mx-auto mt-4 max-w-md text-center text-night-lilac">Finding a gift is free. Full moon is for people who give often, and for advent calendars.</p>
+            <h2 id="pricing-title" className="text-center font-display text-4xl leading-tight sm:text-5xl">Free to find and send</h2>
+            <p className="mx-auto mt-4 max-w-md text-center text-night-lilac">
+              Finding, wrapping and sending a gift cost nothing. Pay only for a design made for one gift.
+            </p>
             <div className="mt-12 grid gap-5 md:grid-cols-2">
-              {[plans.free, plans.fullMoon].map((plan) => {
-                const highlighted = plan.id === "full-moon"
-                return (
-                  <div
-                    key={plan.id}
-                    className={`flex flex-col rounded-3xl p-8 ${highlighted ? "bg-night-velvet ring-2 ring-inset ring-night-rose" : "bg-night-plum ring-1 ring-inset ring-night-petal/15"}`}
-                  >
-                    <div className="flex items-center gap-3 text-night-rose">
-                      <MoonPhase lit={highlighted ? 1 : 0.22} size={28} />
-                      <h3 className="font-display text-2xl text-night-petal">{plan.name}</h3>
-                    </div>
-                    <p className="mt-6">
-                      <span className="font-display text-5xl">{plan.price}</span>
-                      {plan.period && <span className="ml-2 text-night-lilac">{plan.period}</span>}
-                    </p>
-                    <p className="mt-2 text-night-lilac">{plan.summary}</p>
-                    <ul className="mt-8 flex-1 space-y-3 text-[15px]">
-                      {plan.features.map((f) => (
-                        <li key={f} className="flex gap-3">
-                          <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <Link
-                      href={highlighted ? "/signin?plan=full-moon" : "/signin"}
-                      className={`mt-10 ${highlighted ? primaryButton : secondaryButton}`}
-                    >
-                      {plan.cta}
-                    </Link>
-                  </div>
-                )
-              })}
+              <div className="flex flex-col rounded-3xl bg-night-plum p-8 ring-1 ring-inset ring-night-petal/15">
+                <div className="flex items-center gap-3 text-night-rose">
+                  <MoonPhase lit={0.22} size={28} />
+                  <h3 className="font-display text-2xl text-night-petal">Free</h3>
+                </div>
+                <p className="mt-6">
+                  <span className="font-display text-5xl">€0</span>
+                </p>
+                <p className="mt-2 text-night-lilac">Find a gift, wrap it in one of our designs, share it and see when it is opened.</p>
+                <ul className="mt-8 flex-1 space-y-3 text-[15px]">
+                  {freeFeatures.map((f) => (
+                    <li key={f} className="flex gap-3">
+                      <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a href="#find" className={`mt-10 ${primaryButton}`}>
+                  Find a gift <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              </div>
+              <div className="flex flex-col rounded-3xl bg-night-velvet p-8 ring-1 ring-inset ring-night-petal/15">
+                <div className="flex items-center gap-3 text-night-rose">
+                  <MoonPhase lit={1} size={28} />
+                  <h3 className="font-display text-2xl text-night-petal">Personalised wrapper</h3>
+                </div>
+                <p className="mt-6">
+                  <span className="font-display text-5xl">€2.99</span>
+                  <span className="ml-2 text-night-lilac">once, for one gift</span>
+                </p>
+                <p className="mt-2 text-night-lilac">Instead of one of our designs, Majnu makes a page for this gift alone.</p>
+                <ul className="mt-8 flex-1 space-y-3 text-[15px]">
+                  {wrapperFeatures.map((f) => (
+                    <li key={f} className="flex gap-3">
+                      <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-10 text-sm leading-relaxed text-night-lilac">You only pay if you want one, for the gift you choose.</p>
+              </div>
             </div>
-            <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros. Paid securely by card through Stripe. Cancel anytime.</p>
+            <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros, paid once by card through Stripe. There is no subscription.</p>
           </div>
         </section>
 
