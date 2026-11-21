@@ -7,9 +7,12 @@
 import { cache } from "react"
 import type { Metadata, Viewport } from "next"
 import { notFound } from "next/navigation"
+import { AudioNoteOverlay, type LetterAudio } from "@/components/letters/audio-note"
 import { LetterRenderer } from "@/components/letters/registry"
 import { OpenBeacon } from "@/components/letters/open-beacon"
 import { letterMetadata, letterViewport } from "@/components/letters/page-meta"
+import { publicAudioSrc } from "@/lib/audio/rules"
+import { getPublicAudioNote } from "@/lib/audio/store"
 import { getLatestDesignInfo } from "@/lib/daytona/designs"
 import { getPublicLetter } from "@/lib/letters/store"
 
@@ -43,13 +46,27 @@ async function designFor(slug: string) {
   }
 }
 
+// The sender's voice note, if the letter has one. Notes are an extra: if the
+// lookup fails, the page shows without one. Only the URL, the length and the
+// caption reach the page; the file streams from /l/<slug>/audio.
+async function audioFor(slug: string): Promise<LetterAudio | null> {
+  try {
+    const note = await getPublicAudioNote(slug)
+    return note ? { src: publicAudioSrc(slug, note.storagePath), seconds: note.seconds, caption: note.caption } : null
+  } catch (error) {
+    console.error("[audio] could not look up a note", error instanceof Error ? error.message : "unknown error")
+    return null
+  }
+}
+
 export default async function LetterPage({ params }: Props) {
   const { slug } = await params
   const letter = await load(slug)
   if (!letter) notFound()
 
-  // Calendars never get a design: a static page would carry their locked doors.
-  const design = letter.kind === "letter" ? await designFor(letter.slug) : null
+  // Calendars never get a design (a static page would carry their locked
+  // doors) or a voice note.
+  const [design, audio] = letter.kind === "letter" ? await Promise.all([designFor(letter.slug), audioFor(letter.slug)]) : [null, null]
   if (design) {
     // The design is HTML influenced by the sender, so it runs in a sandboxed
     // frame from /l/<slug>/design (strict CSP there); the frame cannot reach
@@ -63,6 +80,7 @@ export default async function LetterPage({ params }: Props) {
           title={`A letter for ${letter.content.recipientName}`}
           className="fixed inset-0 h-[100svh] w-full border-0"
         />
+        {audio && letter.kind === "letter" ? <AudioNoteOverlay audio={audio} senderName={letter.content.senderName} theme={letter.content.theme} /> : null}
         <OpenBeacon slug={letter.slug} ownerPreview={letter.ownerPreview} />
       </>
     )
@@ -70,7 +88,7 @@ export default async function LetterPage({ params }: Props) {
 
   return (
     <>
-      <LetterRenderer letter={letter} />
+      <LetterRenderer letter={letter} audio={audio} />
       <OpenBeacon slug={letter.slug} ownerPreview={letter.ownerPreview} />
     </>
   )
