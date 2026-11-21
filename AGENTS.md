@@ -41,7 +41,7 @@ Every task session works through the same five steps:
 1. **Plan.** Read this file, CLAUDE.md, `docs/plan.md` and the files the task names. Write a short plan (what changes, which files, how it will be checked) before editing.
 2. **Build.** Edit only the files the brief gives you. Contract files change only if the brief says so; otherwise report the change you need.
 3. **Verify** with the tools you have, as described in "Checking your work".
-4. **Commit and push** your task branch only.
+4. **Commit and push** your task branch only, then wait for its CI run (`gh run watch`) and fix it until it is green.
 5. **Report and stop.** Give the branch, the last commit, the GitHub issues your work finishes (and any it only partly covers), what changed, what you verified and how, what you did not verify, and what the lead must do next (contract changes, migrations, secrets). Then wait.
 
 A brief from the lead always states the goal, the files the session owns, the files it must not touch, the contract it codes against, how to verify the work (including its own dev-server port), and that contract changes are reported, not made.
@@ -50,7 +50,8 @@ The lead:
 
 - never gives two sessions the same files, and gives each session its own dev-server port (3101, 3102 and so on);
 - applies database migrations itself, with a dry run first;
-- reviews each report and diff, merges one branch at a time into `main` (`git merge --no-ff task/<name>`), reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, then pushes `main`;
+- merges a branch only when the job is done (the report covers every item of the brief and the diff matches it) and the CI run for the branch's last commit is green;
+- merges one branch at a time into `main` (`git merge --no-ff task/<name>`), reruns `npm run typecheck`, `npm test` and `npm run build`, checks the result in a browser, pushes `main`, and waits for `main`'s CI to be green before deploying;
 - closes each session, with its worktree and branch, as soon as its branch is merged;
 - closes the GitHub issues the merged work finished (see "GitHub issues");
 - deploys only when the developer asks.
