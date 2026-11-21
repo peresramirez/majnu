@@ -6,6 +6,9 @@ import { Reveal } from "@/components/landing/reveal"
 import { SiteFooter } from "@/components/landing/site-footer"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { Wordmark } from "@/components/brand/wordmark"
+import { firstName } from "@/components/letters/names"
+import { TemplateCard } from "@/components/letters/template-card"
+import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { plans } from "@/lib/plans"
 
 const focusRing =
@@ -39,6 +42,14 @@ const kinds = [
   { icon: MapPin, name: "Invitation", body: "Date, place and a map your guests can open.", plan: "Free", motion: "motion-pin", hover: "motion-safe:group-hover:-translate-y-1" },
   { icon: CalendarDays, name: "Advent calendar", body: "One door a day, each with a note or a small gift.", plan: "Full moon", motion: "motion-calendar", hover: "motion-safe:group-hover:rotate-6" },
 ]
+
+// The demo links always resolve to the fixtures (lib/letters/store.ts), so the
+// thumbnails and the pages they open show the same gift.
+const examples = [
+  { slug: "demo-letter", templateId: "classic-envelope", cta: `Open ${firstName(letterFixtures["classic-envelope"].recipientName)}'s letter` },
+  { slug: "demo-gift", templateId: "gift-reveal", cta: `Open ${firstName(letterFixtures["gift-reveal"].recipientName)}'s gift` },
+  { slug: "demo-calendar", templateId: "advent-classic", cta: `Open ${firstName(calendarFixtures["advent-classic"].recipientName)}'s calendar` },
+] as const
 
 const questions = [
   {
@@ -150,6 +161,42 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
+
+            {/* Real examples: the demo pages a recipient would open, drawn as still thumbnails (no script). */}
+            <div className="mt-20 sm:mt-24">
+              <Reveal>
+                <div className="reveal-item max-w-xl">
+                  <h3 className="font-display text-3xl leading-tight sm:text-4xl">Open a real one</h3>
+                  <p className="mt-3 leading-relaxed text-night-lilac">
+                    These are the pages Majnu makes. Open one the way the person you send it to will, from a link on their phone.
+                  </p>
+                </div>
+              </Reveal>
+              <ul className="mt-10 grid gap-4 md:grid-cols-3 md:gap-5">
+                {examples.map((example, i) => (
+                  <li key={example.slug} style={{ "--i": i } as CSSProperties}>
+                    <Reveal className="h-full">
+                      {/* A plain link: Next's <Link> would prefetch three dynamic pages for every visitor. */}
+                      <a href={`/l/${example.slug}`} className={`reveal-item group block h-full rounded-3xl ${focusRing}`}>
+                        <TemplateCard
+                          id={example.templateId}
+                          orientation="responsive"
+                          className="h-full transition-shadow duration-500 ease-calm group-hover:ring-night-rose/40"
+                        >
+                          <span className="mt-3 inline-flex items-center gap-2 text-[15px] font-semibold text-night-rose">
+                            {example.cta}
+                            <ArrowRight
+                              className="h-4 w-4 transition-transform duration-300 ease-calm motion-safe:group-hover:translate-x-1"
+                              aria-hidden="true"
+                            />
+                          </span>
+                        </TemplateCard>
+                      </a>
+                    </Reveal>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
 
