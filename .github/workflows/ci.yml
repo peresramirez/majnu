@@ -17,11 +17,8 @@ concurrency:
 permissions:
   contents: read
 
-# Public values: both ship in the browser bundle, so they are not secrets.
-env:
-  NEXT_PUBLIC_SUPABASE_URL: https://tncihimbvhpodgohnpha.supabase.co
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_zbkt23tVpmCQ-F2fTZqC2A_EMq3uvGq
-  NEXT_PUBLIC_SITE_URL: https://majnu-app.vercel.app
+# Public values (site URL, Supabase URL and publishable key) come from the
+# committed .env.production file. Only secrets are passed in below.
 
 jobs:
   checks:

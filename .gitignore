@@ -14,9 +14,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (only the empty template is tracked)
+# env files: only the empty template and the public production values are tracked
 .env*
 !.env.sample
+!.env.production
+
+# cloudflare
+/.open-next/
+/.wrangler/
+.dev.vars
+cloudflare-env.d.ts
 
 # vercel
 .vercel

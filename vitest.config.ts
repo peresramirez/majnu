@@ -9,8 +9,10 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    // Loads .env and .env.local so tests see the same keys as `next dev`.
-    env: loadEnv("", process.cwd(), ""),
+    // Public values from .env.production, then .env.local on top, so tests
+    // see the same keys as `next dev` locally and still run in CI, where
+    // there is no .env.local and secrets arrive as environment variables.
+    env: { ...loadEnv("production", process.cwd(), ""), ...loadEnv("", process.cwd(), "") },
     testTimeout: 20_000,
   },
 })
