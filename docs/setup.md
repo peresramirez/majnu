@@ -28,12 +28,11 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `MAJNU_MODEL` | Optional | Defaults to `claude-opus-5-5` |
 | `TAVILY_API_KEY` | Optional, app.tavily.com → API keys | Web search for the gift research agent. Server only. When it is empty, research uses Anthropic's web search instead |
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
-| `STRIPE_PRICE_FULL_MOON` | Stripe Dashboard → Product catalog → Full moon → the €4.99 monthly price's id | The price Checkout charges. Test and live mode have different ids |
-| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → the endpoint for `https://majnu.app/api/stripe/webhook` | Verifies that webhook calls come from Stripe |
+| `STRIPE_PRICE_WRAPPER` | Stripe Dashboard → Product catalog → Majnu personalised wrapper → the €2.99 one-time price's id (test mode: `price_1UeMy7Ieh8tCba0kv2rSa9af`) | The price Checkout charges. Test and live mode have different ids; `npm run test:smoke` checks it matches `lib/plans.ts` |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → the endpoint for `https://majnu.app/api/stripe/webhook`, subscribed to `checkout.session.completed`, `.async_payment_succeeded`, `.async_payment_failed` and `.expired` | Verifies that webhook calls come from Stripe |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
-| `MAJNU_BILLING` | Optional, `on` or unset | Unset (the default): everyone gets Full moon features and only the spending guard applies. `on` enforces the plans in `lib/plans.ts` |
 | `OPEN_HASH_SECRET` | Generate one: `openssl rand -hex 32` | Server only. Mixed into the visitor hash in `/api/open` so the stored visitor id cannot be traced back to an IP address. Without it, opens are not recorded. Changing it makes returning visitors count as new |
-| `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
+| `DAYTONA_API_KEY` | app.daytona.io → API keys | The personalised wrapper's design job (the queue consumer). Server only |
 | `DAYTONA_ANTHROPIC_API_KEY` | Optional. Anthropic Console → API keys, a separate key with a low spend limit | Claude Code inside the Daytona sandbox; without it the app's `ANTHROPIC_API_KEY` is used |
 | `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Optional | Defaults: `majnu-letters-v1`, `eu`, `https://app.daytona.io/api` |
 | `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images and video (FLUX) for the site during development. Generation spends credits. The running app does not use it, so it is not uploaded to Cloudflare or CI |
@@ -41,7 +40,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 Production values come from two places:
 
 - **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
-- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_FULL_MOON`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
+- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `DAYTONA_ANTHROPIC_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`, `OPENAI_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
 
 ## Services
 

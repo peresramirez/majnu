@@ -1,228 +1,303 @@
-// The Full moon subscription: starting Checkout, confirming it on return,
-// opening the customer portal, and keeping profiles in step with Stripe.
+// The personalised wrapper: €2.99 once for a design made for one gift
+// (docs/business-plan.md). Opening Checkout, confirming it on return, and
+// acting on Stripe's events.
 //
-// How the plan stays correct (docs/plan.md, "Billing"):
-// * The return page sets the plan straight away, so the upgrade shows at once.
-// * The webhook is the source of truth for everything after that (renewals,
-//   failed payments, cancellations). Stripe may deliver events late, twice or
-//   out of order, so a handler never trusts the snapshot in the event: it
-//   retrieves the subscription and writes its current state. Replaying any
-//   event therefore leaves the same result (idempotent), and an old event
-//   cannot undo a newer change.
-// * Each event is matched to a user through Stripe's object graph
-//   (subscription → customer → profiles.stripe_customer_id), not metadata.
+// How a purchase stays correct (docs/features/billing.md):
+// * POST /api/checkout records a pending purchase with the sender's request
+//   and consent, then opens a Stripe Checkout Session in payment mode that
+//   carries the purchase id. Nothing is charged before the consent is on file.
+// * The webhook (checkout.session.completed and, for delayed payment methods,
+//   checkout.session.async_payment_succeeded) is the source of truth; the
+//   return page applies the same step so the sender sees progress at once.
+//   Both retrieve the session from Stripe and move the purchase from pending
+//   to paid with a conditional update, so replays and races change nothing.
+// * Every caller that finds the purchase paid hands it to the design queue.
+//   Duplicates are harmless: the job claims it once (lib/billing/fulfil.ts).
 import "server-only"
 import type Stripe from "stripe"
-import { getBillingProfile, getBillingProfileByCustomer, saveCustomerId, savePlanState, type BillingProfile } from "./profiles"
-import { CHECKOUT_INTEGRATION_ID, createStripeClient, fullMoonPriceId } from "./stripe"
-import { customerIdOf, isActiveStatus, planStateOf, type PlanState } from "./subscription"
+import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
+import { getMyLetterForWrapper } from "./my-purchases"
+import { safeNextPath } from "./next-path"
+import {
+  attachCheckoutSession,
+  deletePendingPurchase,
+  getActivePurchaseForLetter,
+  getPendingPurchasesForLetter,
+  getPurchase,
+  insertPendingPurchase,
+  markPaid,
+  type Purchase,
+  type PurchaseStatus,
+} from "./purchases"
+import { enqueueDesign } from "./queue"
+import { refundPurchase } from "./refunds"
+import { CHECKOUT_INTEGRATION_ID, createStripeClient, wrapperPriceId } from "./stripe"
 
-export type BillingUser = { id: string; email?: string | null }
+export type BillingUser = { id: string; email?: string | null; isAnonymous: boolean }
 
-// ---------- Checkout ----------
+// ---------- Opening Checkout ----------
 
-export type CheckoutStart = { kind: "redirect"; url: string } | { kind: "already_subscribed" }
+export type CheckoutInput = { letterId: unknown; request: unknown; consent: unknown; returnTo?: unknown }
 
-export async function startCheckout(user: BillingUser, siteUrl: string): Promise<CheckoutStart> {
-  const profile = await getBillingProfile(user.id)
-  if (profile?.plan === "full-moon") return { kind: "already_subscribed" }
+export type CheckoutRefusal =
+  | "invalid_request"
+  | "consent_required"
+  | "account_required"
+  | "letter_not_found"
+  | "not_a_letter"
+  | "not_built"
+  | "in_progress"
 
-  const priceId = fullMoonPriceId()
+export type CheckoutStart =
+  | { kind: "redirect"; url: string; purchaseId: string }
+  | { kind: "refused"; reason: CheckoutRefusal; message: string }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const REFUSALS: Record<CheckoutRefusal, string> = {
+  invalid_request: `Describe the look you want in a few words (at most ${WRAPPER_REQUEST_MAX_CHARS} characters).`,
+  consent_required: "Tick the box to agree that we start your design straight away.",
+  account_required: "Create a free account first, so your receipt and your design have a home. Your gifts come with you.",
+  letter_not_found: "We couldn't find that gift.",
+  not_a_letter: "Personalised wrappers are for letters and gifts. A calendar keeps its own design.",
+  not_built: "Wrap the gift first, then make it unique.",
+  in_progress: "A design for this gift is already being made. It shows on the gift page as soon as it is ready.",
+}
+
+function refused(reason: CheckoutRefusal): CheckoutStart {
+  return { kind: "refused", reason, message: REFUSALS[reason] }
+}
+
+// The sender's request as we store it: one paragraph of plain text.
+export function cleanWrapperRequest(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const text = value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  if (text.length < 3 || text.length > WRAPPER_REQUEST_MAX_CHARS) return null
+  return text
+}
+
+// Checkout Sessions last this long; an abandoned one cannot be paid later.
+const SESSION_LIFETIME_SECONDS = 60 * 60
+
+export async function startWrapperCheckout(user: BillingUser, input: CheckoutInput, siteUrl: string): Promise<CheckoutStart> {
+  // The consent is checked before anything else is read or written: no
+  // Checkout without it, and the server never trusts a consent text it was sent.
+  if (input.consent !== true) return refused("consent_required")
+  const request = cleanWrapperRequest(input.request)
+  if (!request) return refused("invalid_request")
+  if (typeof input.letterId !== "string" || !UUID.test(input.letterId)) return refused("letter_not_found")
+  // A guest account lives in one browser and has no email for the receipt.
+  if (user.isAnonymous) return refused("account_required")
+
+  const letter = await getMyLetterForWrapper(input.letterId)
+  if (!letter) return refused("letter_not_found")
+  // A calendar baked into one static page would carry its locked doors.
+  if (letter.kind !== "letter") return refused("not_a_letter")
+  if (!letter.built) return refused("not_built")
+
   const stripe = createStripeClient()
+  if (await hasRunInProgress(stripe, letter.id, user.id)) return refused("in_progress")
 
-  let customerId = profile?.stripeCustomerId ?? null
-  if (customerId) {
-    // A subscription that is live in Stripe but not yet in our database (a
-    // missed webhook, a tab closed before the return page) must not be paid twice.
-    const live = await findLiveSubscription(stripe, customerId)
-    if (live) {
-      await applySubscription(user.id, live, profile)
-      return { kind: "already_subscribed" }
-    }
-  } else {
-    // The idempotency key makes a double click (or two tabs) get one customer.
-    const customer = await stripe.customers.create(
-      { email: user.email ?? undefined, metadata: { user_id: user.id } },
-      { idempotencyKey: `majnu-customer-${user.id}` },
+  const purchase = await insertPendingPurchase({
+    ownerId: user.id,
+    letterId: letter.id,
+    request,
+    consentAt: new Date().toISOString(),
+    consentText: WRAPPER_CONSENT_TEXT,
+    amountCents: wrapper.priceCents,
+    currency: wrapper.currency,
+  })
+
+  const back = (typeof input.returnTo === "string" && safeNextPath(input.returnTo)) || "/dashboard/purchases"
+  const metadata = { purchase_id: purchase.id, letter_id: letter.id, user_id: user.id }
+  let session: Stripe.Checkout.Session
+  try {
+    session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        line_items: [{ price: wrapperPriceId(), quantity: 1 }],
+        client_reference_id: user.id,
+        customer_email: user.email ?? undefined,
+        metadata,
+        payment_intent_data: { metadata, description: wrapper.productName },
+        // No payment_method_types: Stripe shows the methods enabled in the Dashboard.
+        success_url: `${siteUrl}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${siteUrl}${back}`,
+        expires_at: Math.floor(Date.now() / 1000) + SESSION_LIFETIME_SECONDS,
+        // Majnu is the seller and states prices including VAT (docs/business-
+        // plan.md). The Stripe account has Managed Payments (Stripe as merchant
+        // of record) on by default; it is switched off per session until the
+        // developer decides otherwise, since it changes who sells, the fees,
+        // the terms and how VAT is handled.
+        managed_payments: { enabled: false },
+        integration_identifier: CHECKOUT_INTEGRATION_ID,
+      },
+      // A double click gets the same session, not a second one.
+      { idempotencyKey: `majnu-wrapper-checkout-${purchase.id}` },
     )
-    customerId = await saveCustomerId(user.id, customer.id)
+    if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL")
+    await attachCheckoutSession(purchase.id, session.id)
+  } catch (error) {
+    await deletePendingPurchase(purchase.id).catch(() => undefined)
+    throw error
+  }
+  return { kind: "redirect", url: session.url, purchaseId: purchase.id }
+}
+
+// True when the letter already has a paid design on its way. Earlier unpaid
+// Checkouts for the letter are expired first, so one gift is not paid for
+// twice from two tabs; one that turns out to be paid already is applied.
+async function hasRunInProgress(stripe: Stripe, letterId: string, ownerId: string): Promise<boolean> {
+  if (await getActivePurchaseForLetter(letterId)) return true
+  for (const pending of await getPendingPurchasesForLetter(letterId, ownerId)) {
+    if (!pending.checkoutSessionId) {
+      await deletePendingPurchase(pending.id)
+      continue
+    }
+    const session = await stripe.checkout.sessions.retrieve(pending.checkoutSessionId, { expand: ["payment_intent.latest_charge"] })
+    if (session.status === "open") {
+      await stripe.checkout.sessions.expire(session.id)
+      await deletePendingPurchase(pending.id)
+    } else if (session.status === "expired") {
+      await deletePendingPurchase(pending.id)
+    } else if (isPaid(session)) {
+      // Paid, but the webhook has not arrived yet.
+      const status = await applyPaidSession(session)
+      if (status === "paid" || status === "designing") return true
+    }
+  }
+  return false
+}
+
+// ---------- Paid sessions (return page and webhook) ----------
+
+function isPaid(session: Stripe.Checkout.Session): boolean {
+  return session.mode === "payment" && session.status === "complete" && (session.payment_status === "paid" || session.payment_status === "no_payment_required")
+}
+
+function idOf(value: string | { id: string } | null | undefined): string | null {
+  if (!value) return null
+  return typeof value === "string" ? value : value.id
+}
+
+// Moves the session's purchase to paid (once) and hands it to the design
+// queue. Expects the session retrieved from Stripe with
+// payment_intent.latest_charge expanded (for the receipt). Returns the
+// purchase's status afterwards, or null when the session is not one of ours.
+export async function applyPaidSession(session: Stripe.Checkout.Session): Promise<PurchaseStatus | null> {
+  const purchaseId = session.metadata?.purchase_id
+  if (!purchaseId || !UUID.test(purchaseId) || !isPaid(session)) return null
+
+  const intent = typeof session.payment_intent === "object" ? session.payment_intent : null
+  const charge = intent && typeof intent.latest_charge === "object" ? intent.latest_charge : null
+  const result = await markPaid(purchaseId, {
+    checkoutSessionId: session.id,
+    paymentIntentId: idOf(session.payment_intent),
+    receiptUrl: charge?.receipt_url ?? null,
+    amountCents: session.amount_total ?? null,
+    currency: session.currency ?? null,
+  })
+
+  if (result.outcome === "conflict") {
+    // A second payment for a letter whose design is already being made (two
+    // Checkout tabs paid at once). Give it back rather than run it twice.
+    if (result.purchase?.status === "pending") {
+      await refundPurchase(
+        { id: purchaseId, paymentIntentId: idOf(session.payment_intent) },
+        "Paid twice: a design for this gift was already being made",
+      )
+    }
+    return (await getPurchase(purchaseId))?.status ?? null
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    client_reference_id: user.id,
-    line_items: [{ price: priceId, quantity: 1 }],
-    // No payment_method_types: Stripe shows the methods enabled in the Dashboard.
-    success_url: `${siteUrl}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/dashboard/plan`,
-    subscription_data: { metadata: { user_id: user.id } },
-    integration_identifier: CHECKOUT_INTEGRATION_ID,
-  })
-  if (!session.url) throw new Error("Stripe returned a Checkout Session without a URL")
-  return { kind: "redirect", url: session.url }
+  const purchase = result.purchase
+  if (!purchase) return null
+  // Hand it over whenever it is (still) paid: after this transition, or when
+  // an earlier caller marked it paid but could not reach the queue.
+  if (purchase.status === "paid") await enqueueDesign(purchase.id)
+  return purchase.status
 }
 
-async function findLiveSubscription(stripe: Stripe, customerId: string): Promise<Stripe.Subscription | null> {
-  const { data } = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 })
-  return data.find((subscription) => isActiveStatus(subscription.status)) ?? null
-}
-
-// ---------- Return from Checkout ----------
-
-export type ReturnOutcome = "full_moon" | "pending" | "not_found"
+export type ReturnOutcome =
+  | { outcome: "paid" | "processing"; purchaseId: string }
+  | { outcome: "not_found" }
 
 const SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]{10,250}$/
 
-// Confirms a finished Checkout Session for the signed-in user. Only the session
-// id comes from the URL; everything else is read back from Stripe, and the
-// session must have been created for this user (client_reference_id) and,
-// if the profile already has a customer, for that customer.
-export async function confirmCheckout(user: BillingUser, sessionId: string | null): Promise<ReturnOutcome> {
-  if (!sessionId || !SESSION_ID.test(sessionId)) return "not_found"
+// The return page: only the session id comes from the URL, and only as a key
+// to look the session up in Stripe. It must have been created for this user,
+// for one of their purchases.
+export async function confirmCheckout(user: Pick<BillingUser, "id">, sessionId: string | null): Promise<ReturnOutcome> {
+  if (!sessionId || !SESSION_ID.test(sessionId)) return { outcome: "not_found" }
 
-  const stripe = createStripeClient()
   let session: Stripe.Checkout.Session
   try {
-    session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] })
+    session = await createStripeClient().checkout.sessions.retrieve(sessionId, { expand: ["payment_intent.latest_charge"] })
   } catch (error) {
-    if (isMissingResource(error)) return "not_found"
+    if (isMissingResource(error)) return { outcome: "not_found" }
     throw error
   }
 
-  if (session.client_reference_id !== user.id || session.mode !== "subscription") return "not_found"
-  const customerId = typeof session.customer === "string" ? session.customer : (session.customer?.id ?? null)
-  if (!customerId) return "not_found"
+  const purchaseId = session.metadata?.purchase_id
+  if (session.client_reference_id !== user.id || session.mode !== "payment" || !purchaseId) return { outcome: "not_found" }
+  const purchase = await getPurchase(purchaseId)
+  if (!purchase || purchase.ownerId !== user.id || purchase.checkoutSessionId !== session.id) return { outcome: "not_found" }
 
-  let profile = await getBillingProfile(user.id)
-  if (profile?.stripeCustomerId && profile.stripeCustomerId !== customerId) return "not_found"
-  // An open or expired session was never paid. A complete one can still be
-  // waiting on a delayed payment method; its subscription then is not active
-  // yet, and the webhook switches the plan on once the payment succeeds.
-  if (session.status !== "complete") return "not_found"
-
-  if (!profile?.stripeCustomerId) {
-    await saveCustomerId(user.id, customerId)
-    profile = await getBillingProfile(user.id)
-  }
-
-  const subscription =
-    typeof session.subscription === "string"
-      ? await stripe.subscriptions.retrieve(session.subscription)
-      : session.subscription
-  if (!subscription) return "pending"
-
-  const state = await applySubscription(user.id, subscription, profile)
-  return state?.plan === "full-moon" ? "full_moon" : "pending"
+  if (purchase.status !== "pending") return { outcome: "paid", purchaseId }
+  // Complete but unpaid: a delayed payment method. The webhook finishes it.
+  if (!isPaid(session)) return session.status === "complete" ? { outcome: "processing", purchaseId } : { outcome: "not_found" }
+  await applyPaidSession(session)
+  return { outcome: "paid", purchaseId }
 }
 
 function isMissingResource(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "resource_missing"
-  )
-}
-
-// ---------- Customer portal ----------
-
-// A portal session where a Full moon subscriber can cancel (at the end of the
-// paid period, set in the portal configuration), resume or change their card.
-// Null when the user has nothing to manage.
-export async function openPortal(user: BillingUser, siteUrl: string): Promise<string | null> {
-  const profile = await getBillingProfile(user.id)
-  if (!profile?.stripeCustomerId || profile.plan !== "full-moon") return null
-  const session = await createStripeClient().billingPortal.sessions.create({
-    customer: profile.stripeCustomerId,
-    return_url: `${siteUrl}/dashboard/plan`,
-  })
-  return session.url
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "resource_missing"
 }
 
 // ---------- Webhook ----------
 
-export type SyncOutcome =
-  | { outcome: "synced"; userId: string; plan: PlanState["plan"] }
-  | { outcome: "ignored"; reason: string }
+export type EventOutcome = { outcome: "applied"; status: PurchaseStatus | null } | { outcome: "ignored"; reason: string }
 
 // The events the webhook endpoint subscribes to in the Stripe Dashboard.
 export const HANDLED_EVENTS = [
   "checkout.session.completed",
   "checkout.session.async_payment_succeeded",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
-  "customer.subscription.paused",
-  "customer.subscription.resumed",
-  "invoice.paid",
-  "invoice.payment_failed",
+  "checkout.session.async_payment_failed",
+  "checkout.session.expired",
 ] as const
 
-export async function handleStripeEvent(event: Stripe.Event): Promise<SyncOutcome> {
+export async function handleStripeEvent(event: Stripe.Event): Promise<EventOutcome> {
   switch (event.type) {
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
-      const session = event.data.object
-      if (session.mode !== "subscription" || !session.subscription) return ignored("not a subscription checkout")
-      const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription.id
-      return syncSubscription(subscriptionId, session.client_reference_id)
+      const snapshot = event.data.object
+      if (snapshot.mode !== "payment" || !snapshot.metadata?.purchase_id) return ignored("not a wrapper checkout")
+      // Fulfil only what is paid; a delayed method completes first and pays later.
+      if (snapshot.payment_status === "unpaid") return ignored("waiting for a delayed payment")
+      // The snapshot may be old; read the session as it is now, with the charge for the receipt.
+      const session = await createStripeClient().checkout.sessions.retrieve(snapshot.id, { expand: ["payment_intent.latest_charge"] })
+      const status = await applyPaidSession(session)
+      return status ? { outcome: "applied", status } : ignored("no matching purchase")
     }
-    case "customer.subscription.created":
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted":
-    case "customer.subscription.paused":
-    case "customer.subscription.resumed":
-      return syncSubscription(event.data.object.id)
-    case "invoice.paid":
-    case "invoice.payment_failed": {
-      const subscription = event.data.object.parent?.subscription_details?.subscription
-      if (!subscription) return ignored("invoice without a subscription")
-      return syncSubscription(typeof subscription === "string" ? subscription : subscription.id)
+    case "checkout.session.async_payment_failed":
+    case "checkout.session.expired": {
+      // Never paid: the pending row was not a purchase.
+      const purchaseId = event.data.object.metadata?.purchase_id
+      if (!purchaseId || !UUID.test(purchaseId)) return ignored("not a wrapper checkout")
+      await deletePendingPurchase(purchaseId)
+      return { outcome: "applied", status: null }
     }
     default:
       return ignored(`unhandled event type ${event.type}`)
   }
 }
 
-// Brings one user's plan in line with the subscription's current state in
-// Stripe. `userIdHint` is the Checkout Session's client_reference_id (set by
-// our server), used only when the customer is not yet linked to a profile.
-export async function syncSubscription(subscriptionId: string, userIdHint?: string | null): Promise<SyncOutcome> {
-  const stripe = createStripeClient()
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const customerId = customerIdOf(subscription)
-
-  let profile = await getBillingProfileByCustomer(customerId)
-  if (!profile && userIdHint) {
-    const candidate = await getBillingProfile(userIdHint)
-    if (candidate && !candidate.stripeCustomerId) {
-      await saveCustomerId(userIdHint, customerId)
-      profile = { ...candidate, stripeCustomerId: customerId }
-    }
-  }
-  if (!profile) return ignored("customer not linked to a profile")
-
-  const state = await applySubscription(profile.userId, subscription, profile)
-  return state ? { outcome: "synced", userId: profile.userId, plan: state.plan } : ignored("another subscription is current")
-}
-
-// Writes the plan a subscription implies. A customer can end up with two
-// subscriptions (two Checkout tabs paid at once); the one on file governs, so
-// the end of the other one never downgrades a Full moon user.
-async function applySubscription(
-  userId: string,
-  subscription: Stripe.Subscription,
-  profile: BillingProfile | null,
-): Promise<PlanState | null> {
-  const state = planStateOf(subscription)
-  const otherIsCurrent =
-    profile?.plan === "full-moon" && profile.stripeSubscriptionId !== null && profile.stripeSubscriptionId !== subscription.id
-  if (state.plan === "free" && otherIsCurrent) return null
-  await savePlanState(userId, state)
-  return state
-}
-
-function ignored(reason: string): SyncOutcome {
+function ignored(reason: string): EventOutcome {
   return { outcome: "ignored", reason }
 }
+
+export type { Purchase }

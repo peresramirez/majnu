@@ -55,8 +55,8 @@ The theme is a mood, not a colour value: `palette` is one of `night`, `petal`, `
 | `gift-box-3d` | letter | 3D gift box | A ribbon-tied box in 3D (three.js). The bow unties, the lid floats away, the sides fold open and a card with their name and the headline rises in sparkles to face them; then the gift card and the note. See "The 3D gift box" below | [`gift-box-3d.tsx`](../../components/letters/templates/gift-box-3d.tsx), mood `gift` | Free |
 | `party-box` | letter | Party pop box | The same box in polka dots: it squashes, the lid pops off, confetti bursts and balloons rise, and the card springs up. Then the gift, the party's date, place and a maps link if the content has an event, and the note | [`gift-box-3d.tsx`](../../components/letters/templates/gift-box-3d.tsx), mood `party` | Free |
 | `treasure-map` | letter | Treasure map | A folded map on old paper, sealed with wax. Breaking the seal swings its two halves open (CSS 3D); inside, the letter is inked over a faint map whose dotted path draws itself to an X with their name. CSS and SVG only | [`treasure-map.tsx`](../../components/letters/templates/treasure-map.tsx) | Free |
-| `advent-classic` | calendar | Advent calendar | 24 numbered doors, each with a moon one step fuller than the last | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `advent` | Full moon |
-| `countdown` | calendar | Countdown | Tear-off calendar pages counting the days left, 1 to 31 doors | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `countdown` | Full moon |
+| `advent-classic` | calendar | Advent calendar | 24 numbered doors, each with a moon one step fuller than the last | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `advent` | Free, with an account |
+| `countdown` | calendar | Countdown | Tear-off calendar pages counting the days left, 1 to 31 doors | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `countdown` | Free, with an account |
 
 Both invitations show the date and time as the sender wrote them (the event's own local time, never converted to the viewer's), a Google Maps search link, an `.ics` file made in the browser (times in UTC, three hours long by default) and a live countdown ([`event-time.ts`](../../components/letters/event-time.ts)). The map is a link, not an embed, so the page loads nothing from Google. A gift is a card ([`gift-card.tsx`](../../components/letters/gift-card.tsx)) with its title, price, description, a code that stays hidden until the recipient asks for it, a copy button and a link to redeem it.
 
@@ -100,7 +100,7 @@ flowchart TD
 
 ## The Templates tab
 
-`/dashboard/templates` ([`page.tsx`](../../app/(app)/dashboard/templates/page.tsx), [`templates-view.tsx`](../../app/(app)/dashboard/templates/templates-view.tsx)) is a fifth tab in the app shell, after Letters & invitations ([`app-shell.tsx`](../../components/app/app-shell.tsx)).
+`/dashboard/templates` ([`page.tsx`](../../app/(app)/dashboard/templates/page.tsx), [`templates-view.tsx`](../../app/(app)/dashboard/templates/templates-view.tsx)) is a fifth tab in the app shell, after Letters & invitations, defined with the others in [`tabs.ts`](../../components/app/tabs.ts) (`appTabs` and `activeTab()`, covered by its test).
 
 ```mermaid
 flowchart LR
@@ -219,7 +219,6 @@ The index links each state the issues asked to check (0, 1, 12 and 24 open doors
 
 - **Builder rules for the new ids** live in `lib/agents/builder.ts`, outside this change: `checkContent` should require a gift for `gift-box-3d` (as for `gift-reveal`), `titleFor` should call `gift-box-3d` and `party-box` "A gift for …" (they fall through to "A letter for …" today), and the builder prompt names only `gift-reveal` as needing a gift.
 - **The gift finder's wrap step** offers `gift-reveal`, `classic-envelope` and `postcard` (`lib/finder/events.ts`, `lib/finder/wrap.ts`, `components/finder/finder-state.ts`). `gift-box-3d` fits it well once the builder requires its gift.
-- **The Templates tab lives in `app-shell.tsx`**, not in `components/app/tabs.ts` with the other four tabs and their test, because this change did not own `tabs.ts`. Moving it there would let `activeTab()` and its test cover it.
 - **The preview modal depends on `/dev/templates/<id>`.** If the workbench is taken down after launch, the modal needs a public preview route of its own.
 
 - Issues still open for this area: [#18](https://github.com/peresramirez/majnu/issues/18) (gift reveal) and [#27](https://github.com/peresramirez/majnu/issues/27) (the link-preview image), though both are in the code.

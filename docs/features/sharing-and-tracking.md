@@ -83,7 +83,7 @@ Nothing finer is read: Cloudflare's region, postal code, coordinates, timezone a
 
 The QR encoding comes from `uqr`, a small dependency-free encoder, at error-correction level M ([`qr.ts`](../../components/share/qr.ts)); everything else is ours. The code is deterministic, so the server and the browser draw the same one.
 
-`locked` shows the upgrade state instead of the link: a blurred QR code and a "Choose Full moon" button that takes the sender to the Plan tab. The create page sets it only when plans are enforced (`MAJNU_BILLING=on`), the sender is on Crescent, and the gift uses a Full moon template ([billing.md](billing.md)).
+`locked` shows "Create a free account to send it" instead of the link, with a blurred QR code, and `onUnlock` starts the sign-up. Nothing is locked behind a payment any more, so the create page no longer sets it; it stays in the contract for a gift that needs an account. Under the share panel, the letter preview and the finder's wrapped gift show "Make it unique, €2.99", the personalised wrapper ([billing.md](billing.md)).
 
 ## The visitor hash
 

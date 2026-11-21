@@ -2,12 +2,13 @@
 
 // Share a letter's link: copy, QR code (with PNG and SVG downloads), WhatsApp,
 // and the phone's own share sheet where there is one. Part of the contract.
-// `locked` shows the upgrade state instead of the link, and `onUnlock` starts
-// the upgrade. Used inside the signed-in app, on the night palette.
+// `locked` shows "create a free account" instead of the link (for a gift that
+// needs an account to send, such as a calendar made by a guest), and
+// `onUnlock` starts the sign-up. Nothing in Majnu is locked behind a payment.
+// Used inside the signed-in app, on the night palette.
 import { useEffect, useMemo, useState } from "react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { CopyButton } from "@/components/letters/copy-button"
-import { plans } from "@/lib/plans"
 import { downloadBlob, qrMatrix, qrPath, qrPng, qrSvg } from "./qr"
 
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-night-rose"
@@ -52,7 +53,6 @@ function ShareIcon() {
 }
 
 function LockedPanel({ onUnlock }: { onUnlock?: () => void }) {
-  const plan = plans.fullMoon
   return (
     <section aria-label="Share" className="overflow-hidden rounded-[22px] bg-night-velvet p-5 text-night-petal ring-1 ring-white/5">
       <div className="flex items-start gap-4">
@@ -63,9 +63,9 @@ function LockedPanel({ onUnlock }: { onUnlock?: () => void }) {
           </span>
         </div>
         <div className="min-w-0">
-          <p className="font-display text-[22px] leading-tight">Send it with {plan.name}</p>
+          <p className="font-display text-[22px] leading-tight">Create a free account to send it</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-night-lilac">
-            {plan.name} is {plan.price} {plan.period}: unlimited gifts, advent calendars and gift research. Cancel anytime.
+            It is opened day after day, so it lives in an account. Creating one is free, and everything you made comes with you.
           </p>
         </div>
       </div>
@@ -74,7 +74,7 @@ function LockedPanel({ onUnlock }: { onUnlock?: () => void }) {
         onClick={onUnlock}
         className={`mt-5 w-full rounded-full bg-night-rose px-5 py-3.5 text-[15px] font-semibold text-night-plum transition-opacity duration-200 hover:opacity-90 ${focusRing}`}
       >
-        {plan.cta}
+        Create a free account
       </button>
     </section>
   )

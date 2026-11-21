@@ -1,10 +1,10 @@
-# Billing: Crescent and Full moon
+# Billing: the personalised wrapper
 
 ## What it does
 
-Majnu has two plans. **Crescent** is free: 3 gifts a month (letters, invitations and gift pages). **Full moon** costs €4.99 a month: unlimited gifts, advent calendars and countdowns, and gift research on the web. A sender upgrades on the Plan tab, pays on a Stripe-hosted page, comes back to Full moon at once, and can manage or cancel in Stripe's customer portal; a cancelled subscription stays on until the end of the paid period.
+Majnu is free: finding a gift, wrapping it in our designs, letters, invitations, gift lists, calendars (with a free account), sharing and open tracking cost nothing. The one thing a sender can buy is a **personalised wrapper**: a design Majnu's designer makes for one gift, **€2.99 once**, VAT included ([business-plan.md](../business-plan.md)). On a wrapped gift the sender taps "Make it unique, €2.99", describes the look they want, ticks a box agreeing that the design starts at once (which ends their right of withdrawal), and pays on a Stripe-hosted page. They come back to the Purchases tab, which shows the design being made and then links to the gift page that shows it. If the design cannot be made, the payment is refunded automatically.
 
-The whole flow is built, but **plans are not enforced yet**. Until Stripe takes live payments, `MAJNU_BILLING` stays unset: everyone gets Full moon features, the Plan tab says so, checkout sends people straight back, and only the spending guard applies.
+There is no subscription. The Full moon subscription built earlier (issue #14) and its code are removed.
 
 ## How it works
 
@@ -12,121 +12,115 @@ The whole flow is built, but **plans are not enforced yet**. Until Stripe takes 
 sequenceDiagram
   participant B as Sender's browser
   participant App as Majnu Worker
+  participant DB as Supabase purchases
   participant S as Stripe
-  participant DB as Supabase profiles
-  B->>App: "Choose Full moon" on the landing page
-  App-->>B: /signin?plan=full-moon, then /dashboard/plan after sign-in
-  B->>App: POST /api/checkout (plain form)
-  App->>DB: read the profile
-  App->>S: create the customer once, or look for a live subscription
-  App->>S: create a Checkout Session in subscription mode
-  App-->>B: 303 to Stripe Checkout
+  participant Q as Queue majnu-designs
+  participant J as Design job (queue consumer)
+  B->>App: GET /api/purchases?letterId (account, letter, newest purchase)
+  B->>App: POST /api/checkout {letterId, request, consent: true}
+  App->>DB: insert pending purchase with request, consent time and text
+  App->>S: create Checkout Session, mode payment, metadata purchase_id
+  App-->>B: { url }
   B->>S: pays
   S-->>B: redirect to /billing/return?session_id=cs_...
   B->>App: GET /billing/return
-  App->>S: retrieve the session and its subscription
-  App->>DB: write plan, subscription id and dates (service role)
-  App-->>B: 303 to /dashboard/plan
-  S->>App: POST /api/stripe/webhook (signed), now and on every later change
-  App->>S: retrieve the subscription's current state
-  App->>DB: write the plan it implies
+  S->>App: POST /api/stripe/webhook checkout.session.completed (signed)
+  App->>S: retrieve the session (payment intent, charge, receipt)
+  App->>DB: pending → paid, once (conditional update)
+  App->>Q: send { purchaseId }
+  App-->>B: 303 /dashboard/purchases?purchase=id
+  Q->>J: one message
+  J->>DB: paid → designing, once
+  J->>J: redesignLetter (Daytona, about 90 s)
+  alt design stored
+    J->>DB: designing → done, design_id
+  else run failed
+    J->>S: refunds.create (idempotency key per purchase)
+    J->>DB: → refunded
+  end
+  B->>App: GET /api/purchases/id every 4 s until done or refunded
 ```
 
-### Checkout
+### Opening Checkout
 
-1. "Choose Full moon" on the landing page links to `/signin?plan=full-moon`. Email and Google sign-in carry that intent to `/dashboard/plan` through a `next` parameter that accepts only same-site paths ([`next-path.ts`](../../lib/billing/next-path.ts): exactly one leading `/`, never `//`, a backslash, a scheme, whitespace or control characters), so a crafted sign-in link cannot become an open redirect. The middleware applies the same check when a signed-in user lands on a sign-in page.
-2. The Plan tab's button posts a plain HTML form to [`POST /api/checkout`](../../app/api/checkout/route.ts). The route refuses a post whose `Origin` names another site (403), sends a signed-out form to sign-in (or answers 401 to anything that is not a form), and while billing is off answers 303 back to the Plan tab.
-3. [`startCheckout()`](../../lib/billing/service.ts) does nothing for a user already on Full moon. If the profile has a Stripe customer, it first asks Stripe for a live subscription on that customer: one the database missed (a lost webhook, a tab closed before the return page) is applied instead of charged again. Otherwise it creates the customer once, with the idempotency key `majnu-customer-<user id>` so a double click or two tabs get one customer, and stores its id only if the profile has none yet.
-4. It creates a Checkout Session in `subscription` mode with the price from `STRIPE_PRICE_FULL_MOON`, `client_reference_id` set to the user id, `success_url` `/billing/return?session_id={CHECKOUT_SESSION_ID}`, `cancel_url` `/dashboard/plan`, and an `integration_identifier` that tags the flow in the Stripe Dashboard. No payment methods are listed in code: Stripe shows the ones enabled in the Dashboard. The route answers 303 to the session's URL, or to `/dashboard/plan?billing=error` if Stripe fails.
+1. The "Make it unique" button ([`make-it-unique.tsx`](../../components/wrapper/make-it-unique.tsx)) sits under the share panel on the finder's wrapped gift ([`wrap-view.tsx`](../../components/finder/wrap-view.tsx)) and on the letter preview in the app ([`preview-pane.tsx`](../../components/create/preview-pane.tsx)). It first asks [`GET /api/purchases?letterId=`](../../app/api/purchases/route.ts) where the letter stands: nothing is shown for a calendar or an unbuilt letter, a design on its way or done shows its status instead, and otherwise the button opens a dialog (not a new page).
+2. A **guest** (an anonymous account from the finder) is asked to create a free account first, with links to `/signup?next=/create/<letterId>` and `/signin?next=...`. Signing up upgrades the guest account in place ([guest-accounts.md](guest-accounts.md)), so the gift is already theirs, and the same button waits on the gift in the app. The `next` path is checked by [`next-path.ts`](../../lib/billing/next-path.ts) (same-site only).
+3. A **member** writes a short design request (3 to 500 characters, with example chips) and ticks a required box with the sentence in `WRAPPER_CONSENT_TEXT` ([`lib/plans.ts`](../../lib/plans.ts)): "Start making my design straight away. I understand that because it is made just for me, I lose my right of withdrawal once you start." The dialog posts JSON to [`POST /api/checkout`](../../app/api/checkout/route.ts).
+4. [`startWrapperCheckout()`](../../lib/billing/service.ts) refuses, before reading or writing anything, unless `consent` is exactly `true`; then refuses an empty or too-long request, a guest, a letter that is not the sender's (read through row-level security), a calendar and an unbuilt letter. If a paid design for the letter is already on its way it refuses with "in progress". Earlier unpaid Checkouts for the same letter are expired (`checkout.sessions.expire`), so one gift is not paid for twice from two tabs; one that turns out to be paid already is applied instead of selling a second wrapper.
+5. It inserts a **pending** purchase with the request, `consent_at` and the server's own copy of the consent sentence (never text the browser sent), then creates a Checkout Session: `mode: "payment"`, one line item with the price in `STRIPE_PRICE_WRAPPER`, `client_reference_id` = the user id, `customer_email`, `metadata` and `payment_intent_data.metadata` = `{ purchase_id, letter_id, user_id }`, `success_url` `/billing/return?session_id={CHECKOUT_SESSION_ID}`, `cancel_url` the same-site page the dialog was opened on, `expires_at` one hour, `managed_payments: { enabled: false }` (see below), `integration_identifier`, and the idempotency key `majnu-wrapper-checkout-<purchase id>`. No payment methods are listed in code: Stripe shows those enabled in the Dashboard. If Stripe fails, the pending row is deleted and the dialog says nothing was charged.
 
-### The return page
+### Payment, return and webhook
 
-[`GET /billing/return`](../../app/billing/return/route.ts) uses nothing from the URL but the session id, and that only as a key to look the session up. [`confirmCheckout()`](../../lib/billing/service.ts) checks that the id looks like `cs_test_…` or `cs_live_…`, retrieves the session from Stripe with its subscription, and accepts it only if it was created for this user (`client_reference_id`), in subscription mode, for this user's customer if one is on file, and is `complete`. It then writes the plan the subscription implies with the service-role client and redirects to the Plan tab, so the upgrade shows at once. A delayed payment method leaves the subscription inactive: the Plan tab then says the payment is being confirmed (`?billing=pending`) and the webhook switches Full moon on when it succeeds. A signed-out visitor goes to sign-in and comes back to the same URL.
+- **The webhook** ([`POST /api/stripe/webhook`](../../app/api/stripe/webhook/route.ts)) is the source of truth. It verifies `Stripe-Signature` against `STRIPE_WEBHOOK_SECRET` with `constructEventAsync` and Web Crypto (400 if invalid, 413 above 512 KB, 500 if processing fails so Stripe retries, 200 otherwise). It handles `checkout.session.completed` and `checkout.session.async_payment_succeeded` (fulfilled only when `payment_status` is not `unpaid`, so a delayed method waits for its success event), and `checkout.session.async_payment_failed` and `checkout.session.expired` (the pending row is deleted: it never became a purchase). Everything else gets 200 and is ignored.
+- **The return page** ([`GET /billing/return`](../../app/billing/return/route.ts)) does the same step for the sender's own session, so the design starts at once even if the webhook is slow, then redirects to `/dashboard/purchases?purchase=<id>` (`&billing=processing` for a delayed method). Only the session id comes from the URL; the session must belong to the signed-in user and to one of their purchases.
+- Both retrieve the session from Stripe with `payment_intent.latest_charge` expanded and call `applyPaidSession()`: a **conditional update** `pending → paid` that also requires the session id on file, so a session can only pay for its own purchase and a replay changes nothing. It records the payment intent, the charge's `receipt_url` and the amount Checkout charged. Whenever the purchase is (still) `paid` afterwards, it is handed to the design queue; a duplicate hand-over is harmless (below).
+- **Paid twice**: the partial unique index `purchases_one_run_per_letter_idx` allows one `paid` or `designing` purchase per letter. A second payment for the same letter fails the update with 23505 and is refunded at once.
 
-### The webhook
+### The design job and refunds
 
-[`POST /api/stripe/webhook`](../../app/api/stripe/webhook/route.ts) is the source of truth after the return page.
+[`enqueueDesign()`](../../lib/billing/queue.ts) sends `{ purchaseId }` to the `DESIGN_QUEUE` binding on Workers; in `next dev` it runs the job in the background of the dev server; anywhere else without a queue the purchase stays `paid` for `node scripts/daytona/run-purchase.mts <purchaseId>`. The queue consumer ([`worker.ts`](../../worker.ts), [`consumer.ts`](../../lib/billing/consumer.ts)) calls [`runPurchaseDesign()`](../../lib/billing/fulfil.ts):
 
-- It reads the raw body (at most 512 KB; 413 above that) and verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` with `constructEventAsync` and Web Crypto, as Workers require ([`stripe.ts`](../../lib/billing/stripe.ts)). A missing or bad signature gets 400; a missing secret or a processing failure gets 500, and Stripe retries with backoff for up to three days; everything else, including events we do not act on, gets 200.
-- It handles `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `.updated`, `.deleted`, `.paused` and `.resumed`, `invoice.paid` and `invoice.payment_failed` (`HANDLED_EVENTS` in [`service.ts`](../../lib/billing/service.ts)).
-- Stripe can deliver events late, twice or out of order, so no handler trusts the snapshot in the event. [`syncSubscription()`](../../lib/billing/service.ts) retrieves the subscription and writes its **current** state: replaying any event leaves the same result, and an old event cannot undo a newer change.
-- An event is matched to a user through Stripe's own objects (subscription → customer → `profiles.stripe_customer_id`), not metadata. Only for a checkout whose customer is not linked yet is the session's `client_reference_id`, which our server set, used to link it.
-- A customer can end up with two subscriptions (two Checkout tabs paid at once). The one on file governs, so the end of the other never downgrades a Full moon user.
+1. Claim: `paid → designing`, a conditional update, so a duplicate message or a second consumer finds nothing to claim and the paid run happens once.
+2. Run [`redesignLetter()`](../../lib/daytona/redesign.ts) ([daytona-redesign.md](daytona-redesign.md)), which checks and stores the page in `letter_designs`.
+3. `designing → done` with `design_id`; `/l/<slug>` shows the design from then on.
+4. If anything failed, [`refundPurchase()`](../../lib/billing/refunds.ts) calls `refunds.create({ payment_intent, reason: "requested_by_customer" })` with the idempotency key `majnu-wrapper-refund-<purchase id>`, so any retry gets the same refund back, and marks the purchase `refunded` with the refund id and a `failure_reason` the owner cannot read. If the refund itself fails, the purchase is marked `failed` for a refund by hand.
 
-### What a subscription means
+A message whose consumer threw or died goes (with `max_retries: 0`) to `majnu-designs-dlq`, whose consumer refunds the purchase if it is still `paid` or `designing`.
 
-[`planStateOf()`](../../lib/billing/subscription.ts) is pure:
+### What the sender sees
 
-- `active` or `trialing` means Full moon; every other status (`incomplete`, `past_due`, `unpaid`, `paused`, `canceled`, `incomplete_expired`) means free.
-- The end of the paid period is read from the subscription items (`items.data[].current_period_end`), where it has lived since API version 2025-03-31, and stored in `plan_renews_at`.
-- A cancellation scheduled in the portal shows up as `cancel_at_period_end` or as a `cancel_at` date. Either way Full moon stays on until then, `plan_cancel_at` records the date, and the Plan tab says "It ends on … and won't renew." At that moment `customer.subscription.deleted` sets the plan back to free.
+- **Status card** ([`purchase-status.tsx`](../../components/wrapper/purchase-status.tsx)): polls [`GET /api/purchases/<id>`](../../app/api/purchases/[id]/route.ts) every 4 seconds (for at most 15 minutes) and announces each change politely: "Paid, starting soon", "Being designed", "Ready" with "Open the gift page", or "Refunded".
+- **Purchases tab** ([`app/(app)/dashboard/purchases/`](../../app/(app)/dashboard/purchases/page.tsx)), which replaced the Plan tab (`/dashboard/plan` redirects there): every purchase that was paid, newest first, with the gift, the request, the date, the amount, the status, a link to the gift page when done and Stripe's receipt. The purchase just paid for, and any still in progress, get the live status card; the list refreshes when one settles.
 
-### The customer portal
+### Managed Payments
 
-The Plan tab's "Manage or cancel" button posts to [`POST /api/billing/portal`](../../app/api/billing/portal/route.ts), which answers 303 to a Stripe customer portal session for a Full moon user with a customer on file, returning to `/dashboard/plan`. It is **not gated on `MAJNU_BILLING`**, so whoever pays can always cancel, even if billing is switched off later.
-
-### The gates
-
-| Where | Check | Effect with `MAJNU_BILLING=on` |
-|---|---|---|
-| `build_letter`, `edit_letter` on a calendar | `canUseFeature("calendar")` | Calendars need Full moon |
-| `build_letter` on an empty letter | `canUseFeature("new_gift")` | The free plan's 4th gift in a calendar month (UTC) is refused; rebuilding or editing does not count |
-| `research_gifts` | `canUseFeature("research")` | Gift research needs Full moon |
-| Create page share panel | `fullMoonLocked()` in [`session.ts`](../../components/app/session.ts) | A Full moon template shows the upgrade state instead of the link |
-
-All of these live in [`lib/limits.ts`](../../lib/limits.ts) and the chat tools ([letters-chat.md](letters-chat.md#tools)). A sender who hits one sees what Full moon unlocks and a button to choose it, not an error. With `MAJNU_BILLING` unset, `canUseFeature()` returns "allowed" without a database call.
+The Stripe account has **Managed Payments** (Stripe as merchant of record) switched on by default. It refuses `custom_text` and requires a product tax code, and it would make Stripe the seller, with its own fees and VAT handling. The business plan and the terms make Majnu the seller with prices including VAT, so sessions pass `managed_payments: { enabled: false }`. Whether to use Managed Payments instead (it would take over VAT outside Germany) is the developer's decision; switching needs a product tax code on the wrapper product, removing that flag, and rewording the terms.
 
 ## Pieces
 
 | Piece | Job |
 |---|---|
-| [`lib/plans.ts`](../../lib/plans.ts) | The two plans: names, prices, limits and the features listed on the landing page |
-| [`lib/limits.ts`](../../lib/limits.ts) | `billingEnabled()`, `canUseFeature()` and the messages a sender sees |
-| [`lib/billing/stripe.ts`](../../lib/billing/stripe.ts) | The Stripe client (API version `2026-11-18.endive`, the `fetch` HTTP client, 2 network retries) and webhook verification |
-| [`lib/billing/service.ts`](../../lib/billing/service.ts) | Checkout, the return confirmation, the portal and the webhook sync |
-| [`lib/billing/subscription.ts`](../../lib/billing/subscription.ts) | What a subscription means for the plan |
-| [`lib/billing/profiles.ts`](../../lib/billing/profiles.ts) | Reads and service-role writes of the billing columns |
-| [`lib/billing/http.ts`](../../lib/billing/http.ts) | Same-origin checks, 303 helpers, the site origin for Stripe URLs |
-| [`lib/billing/next-path.ts`](../../lib/billing/next-path.ts) | The same-site `next` check for sign-in |
-| [`app/(app)/dashboard/plan/page.tsx`](../../app/(app)/dashboard/plan/page.tsx), [`plan-view.tsx`](../../app/(app)/dashboard/plan/plan-view.tsx) | The Plan tab: current plan, "renews on" or "ends on", the buttons, and notices after Checkout |
-| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `POST /api/billing/portal` | The four routes |
-| `profiles`: `plan`, `stripe_customer_id`, `stripe_subscription_id`, `plan_renews_at`, `plan_cancel_at` | Billing state, one row per user, created by a trigger at sign-up; `plan_cancel_at` comes from [`0002_billing.sql`](../../supabase/migrations/0002_billing.sql) |
-| `STRIPE_SECRET_KEY`, `STRIPE_PRICE_FULL_MOON`, `STRIPE_WEBHOOK_SECRET` | Server-only Worker secrets |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_TIP_URL` | Public values; the tip link is shown if Stripe is not live |
-| `MAJNU_BILLING` | Unset: plans are not enforced. `on`: they are |
+| [`lib/plans.ts`](../../lib/plans.ts) | The free tier and the wrapper: names, €2.99 (`priceCents: 299`, `eur`), features, the consent sentence. The landing page, Purchases tab, dialog and terms read it |
+| [`lib/limits.ts`](../../lib/limits.ts) | The spending guard (5 letters a day, 40 chat turns per letter) and "calendars need a real account". No plan gating |
+| [`lib/billing/service.ts`](../../lib/billing/service.ts) | Opening Checkout, the return confirmation, the webhook events |
+| [`lib/billing/purchases.ts`](../../lib/billing/purchases.ts) | Reads and conditional writes of `purchases` |
+| [`lib/billing/refunds.ts`](../../lib/billing/refunds.ts) | The automatic refund |
+| [`lib/billing/queue.ts`](../../lib/billing/queue.ts), [`consumer.ts`](../../lib/billing/consumer.ts), [`fulfil.ts`](../../lib/billing/fulfil.ts) | Handing a paid purchase to the job, the queue consumer, the job |
+| [`lib/billing/view.ts`](../../lib/billing/view.ts) | What the browser is told about a purchase, and the status wording |
+| [`lib/billing/stripe.ts`](../../lib/billing/stripe.ts) | The Stripe client (API `2026-11-18.endive`, fetch HTTP client, 2 retries), the price id, webhook verification |
+| [`lib/billing/http.ts`](../../lib/billing/http.ts), [`next-path.ts`](../../lib/billing/next-path.ts) | Same-origin checks and redirects; the same-site `next` check |
+| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `GET /api/purchases`, `GET /api/purchases/[id]` | The routes |
+| [`components/wrapper/`](../../components/wrapper/) | The button and dialog, the status card |
+| `purchases` table ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per wrapper |
+| `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET` | Server-only Worker secrets (`npm run cf:secrets`) |
+| `DESIGN_QUEUE` binding, queues `majnu-designs` and `majnu-designs-dlq` | [`wrangler.jsonc`](../../wrangler.jsonc); `scripts/deploy.sh` creates the queues if missing |
 
-The Stripe SDK is `stripe` 23.2 (the range in `package.json` is `^23.2.0`). The integration was built from the Stripe skills in `.claude/skills/`, not from memory.
+The test-mode product is "Majnu personalised wrapper" (`prod_VfiOBakdbyQU8Z`) with the one-time price `price_1UeMy7Ieh8tCba0kv2rSa9af` (€2.99, `tax_behavior: inclusive`, lookup key `majnu_wrapper_eur_299`). `tests/smoke/stripe-wrapper-price.test.ts` checks that the configured price matches `lib/plans.ts`.
 
 ## Data and privacy
 
-- **We store** the plan, the Stripe customer and subscription ids, and the renewal and cancellation dates. Users can read their own profile through row-level security and **cannot write any of it**: every column in `profiles` is written by server code with the service-role key, never from a value the browser sent.
-- **Stripe receives** the user's email and their user id (as customer and subscription metadata) and handles the payment. We never see a card number.
-- Stripe is named on the privacy page.
+- **`purchases`** holds the owner, the letter (set to null if the letter is deleted, so the record of the payment stays), the request, the consent time and sentence, the amount and currency, the Stripe session, payment intent and refund ids, the receipt URL, the design, the status and its timestamps, and an internal `failure_reason`. Row-level security is on; owners read their own rows through a column grant that leaves `failure_reason` out (so `select *` fails for them); anon has nothing; only the service role writes. Rows are deleted with the user.
+- **Stripe receives** the sender's email and the purchase, letter and user ids as metadata. We never see a card number. Stripe emails the receipt.
+- The request and the letter go to Daytona and Anthropic to make the design ([daytona-redesign.md](daytona-redesign.md)). The privacy page names Stripe and Daytona.
 
 ## Limits and costs
 
-- Full moon is €4.99 a month (`priceCents: 499`, currency `eur`). Stripe's own fees are not recorded in the repository.
-- One subscription per user: checkout refuses when the profile already has Full moon and repairs a subscription the database missed instead of selling a second one.
-
-## What is left before `MAJNU_BILLING=on`
-
-From the go-live list in [docs/plan.md](../plan.md#billing-stripe), tracked in [#14](https://github.com/peresramirez/majnu/issues/14):
-
-1. Activate the Stripe account for live payments.
-2. Create the Full moon product and its €4.99 monthly price in live mode, and put the price id in `STRIPE_PRICE_FULL_MOON`.
-3. Add the webhook endpoint `https://majnu.app/api/stripe/webhook` with the nine events above, and put its signing secret in `STRIPE_WEBHOOK_SECRET` as a Worker secret (`npm run cf:secrets`).
-4. Set the customer portal's default configuration to cancel **at the end of the billing period**.
-5. Give the restricted key write access to Customers, Checkout Sessions and Customer portal, and read access to Subscriptions.
-6. Run the plan's check: a free user's 4th gift in a month, any advent calendar and any gift research show the upgrade prompt; subscribe with a test card, return, and they unlock; cancel in the portal and the plan stays until the period ends. Then once more with a real card.
-
-Not handled yet: disputes, refunds and early fraud warnings (Stripe's Billing settings can cancel a subscription automatically after a dispute), and VAT (Stripe Tax is off).
+- €2.99 per wrapper including VAT; Stripe's fee is about €0.29 on a standard EU card; one run costs about $0.26 in model use (capped at $3) plus sandbox time ([business-plan.md](../business-plan.md#unit-economics-estimates-to-be-replaced-by-measured-numbers)).
+- One paid run per letter at a time; Checkout Sessions expire after an hour.
+- The design request is at most 500 characters (the job accepts 2,000).
 
 ## How it was checked
 
-- **Unit tests** in [`tests/unit/lib/billing/`](../../tests/unit/lib/billing/): `service.test.ts` (one customer, no double sale, repairing a missed subscription, refusing someone else's or another customer's session, unpaid and delayed sessions, the webhook handlers), `stripe.test.ts` (valid, tampered, wrong-secret and replayed signatures), `subscription.test.ts` (active, trialing, both cancellation modes), `profiles.test.ts` and `next-path.test.ts`. The four routes have their own tests in [`tests/unit/app/`](../../tests/unit/app/), and [`next-redirects.test.ts`](../../tests/unit/app/auth/next-redirects.test.ts) covers the `next` parameter through Google sign-in, the OAuth callback and the middleware.
-- **Not verified:** an end-to-end subscription with a Stripe test card is not recorded in the repository, and nothing has run against live mode.
+- **Unit tests** in [`tests/unit/lib/billing/`](../../tests/unit/lib/billing/): `service.test.ts` (payment mode and the session's parameters; no Checkout without `consent === true`, and the stored consent is the server's sentence; refusals for guests, other people's letters, calendars, unbuilt letters, runs in progress; expiring an earlier open Checkout and applying an earlier paid one; webhook fulfilment from Stripe's current session; idempotent replays; delayed payment methods; a session that cannot pay for another purchase; refunding a second payment for the same letter; expired sessions; the return page), `fulfil.test.ts` (claim once, done with the design, refund on failure with the idempotency key, a failed refund marks it failed, the dead-letter path), `consumer.test.ts`, `queue.test.ts`, `stripe.test.ts`, `next-path.test.ts`; the route tests in [`tests/unit/app/`](../../tests/unit/app/); `limits.test.ts` (no plan gating left). The model and Daytona are faked in every test.
+- **Live, in Stripe test mode, on a dev server (22 November):** a test user paid €2.99 with `4242 4242 4242 4242` from the dialog at 375 px. Stripe redirected to `/billing/return`, the purchase went `pending → paid → designing`, the job ran with `DAYTONA_SNAPSHOT` set to a snapshot that does not exist (so it failed before any model call; the Anthropic key is over its usage limit), and the payment was refunded automatically: in Stripe the payment intent succeeded for €2.99 with the purchase metadata and the refund `re_3UeNIhIeh8tCba0k1NMDcSLQ` succeeded for €2.99; in the database the row is `refunded` with the consent, receipt and refund id. The Purchases tab showed it as refunded with the receipt.
+- **The webhook route, live:** test mode's webhook endpoint points at production, so it cannot reach a laptop. A correctly signed `checkout.session.completed` for the real session above, signed with `STRIPE_WEBHOOK_SECRET`, was posted to the dev server twice: both 200 and changed nothing (the purchase was already finished, no second refund); a tampered signature got 400.
+- **Row-level security, live:** with the anon key, select and insert on `purchases` are refused (42501); the owner can read their purchases with explicit columns, but `failure_reason`, `select *`, update and insert are refused (42501); a second `paid` purchase for the same letter fails with 23505 and `done` without a design with 23514.
+- **The other screens:** "Being designed" and "Ready" (with the gift page showing a stored design) were checked with a temporary row and a stand-in design, removed afterwards; the guest dialog with a mocked account state, since a guest session needs Turnstile.
+- **Not verified:** a successful real design run after payment (the Anthropic key is over its usage limit until it is raised); the webhook arriving from Stripe itself at a deployed Worker with the new code; the queue consumer on Cloudflare (it runs only after a deploy); delayed payment methods; live mode.
 
 ## Open questions
 
-- Disputes, refunds, fraud warnings and VAT, as above.
-- The free plan's monthly count is the letters **created** this UTC month that already have content. Rebuilding or editing never costs a second gift, as intended, but a letter started on the last day of a month and first built the next day counts in neither month. Small, but worth knowing before plans are enforced.
+- **Managed Payments** (above): keep it off, or let Stripe be the merchant of record and handle VAT.
+- **The confirmation on a durable medium** that § 356 (5) BGB also asks for: the consent is stored with the purchase, but Stripe's receipt does not repeat it. Options: Checkout's post-payment invoice (`invoice_creation` with the consent in the footer, a small Stripe fee) or our own email.
+- Disputes and early fraud warnings are not handled.
+- Abandoned pending rows are deleted when their session expires (webhook) or when the sender opens Checkout again; with the webhook not reaching a laptop, some may remain in development.

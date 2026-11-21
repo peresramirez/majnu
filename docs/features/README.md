@@ -20,8 +20,8 @@ Every page follows the same outline:
 | [letters-chat.md](letters-chat.md) | The main agent, the builder and research sub-agents, `POST /api/chat` and its NDJSON events, stored history, model settings |
 | [templates-and-gift-pages.md](templates-and-gift-pages.md) | The letter contract, the ten templates (including the 3D gift box, party pop box and treasure map from the prototype archive, issue #40), the Templates tab with its preview modal, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
 | [sharing-and-tracking.md](sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, place, language and device of each open (country and city from Cloudflare), crawlers ignored, the statistics, My gifts and the Tracker tab with a timeline of every open (issue #49) |
-| [billing.md](billing.md) | Crescent and Full moon, the Stripe subscription, return page, webhook and portal, the `MAJNU_BILLING` switch |
-| [daytona-redesign.md](daytona-redesign.md) | One-off designs made by Claude Code in a Daytona sandbox: snapshot, job, page checker, serving, costs |
+| [billing.md](billing.md) | The personalised wrapper, €2.99 once: the "Make it unique" dialog with its consent, Stripe Checkout in payment mode, the return page and webhook, the `purchases` table, automatic refunds and the Purchases tab (issue #39) |
+| [daytona-redesign.md](daytona-redesign.md) | The personalised wrapper's designer: Claude Code in a Daytona sandbox, reached with `fetch` from a Cloudflare Queue consumer in the same Worker; snapshot, job, page checker, serving, costs |
 | [data-and-security.md](data-and-security.md) | Schema and migrations, row-level security, server-only writes, the spending guard, secrets, deploying |
 | [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |

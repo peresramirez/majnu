@@ -4,8 +4,7 @@ import "server-only"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 
-// The public origin for URLs we hand to Stripe (success, cancel and return
-// URLs): NEXT_PUBLIC_SITE_URL, falling back to the request's own origin.
+// The public origin for URLs we hand to Stripe (success and cancel URLs): NEXT_PUBLIC_SITE_URL, falling back to the request's own origin.
 export function siteOrigin(request: Request): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "")
   if (configured) {
@@ -47,8 +46,13 @@ export function jsonError(status: number, error: string): Response {
 }
 
 // What a signed-out POST gets: a form goes to sign-in and comes back to the
-// Plan tab afterwards; anything else gets a 401.
+// Purchases tab afterwards; anything else gets a 401.
 export function signedOut(request: Request): Response {
-  if (isFormPost(request)) return seeOther(request, `/signin?next=${encodeURIComponent("/dashboard/plan")}`)
+  if (isFormPost(request)) return seeOther(request, `/signin?next=${encodeURIComponent("/dashboard/purchases")}`)
   return jsonError(401, "Sign in first.")
+}
+
+// A POST whose body is JSON, as the "Make it unique" dialog sends.
+export function isJsonPost(request: Request): boolean {
+  return (request.headers.get("content-type") ?? "").startsWith("application/json")
 }

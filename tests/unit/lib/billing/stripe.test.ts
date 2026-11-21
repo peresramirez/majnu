@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import Stripe from "stripe"
-import { BillingConfigError, constructWebhookEvent, createStripeClient, fullMoonPriceId } from "@/lib/billing/stripe"
+import { BillingConfigError, constructWebhookEvent, createStripeClient, wrapperPriceId } from "@/lib/billing/stripe"
 
 const SECRET = "whsec_test_unit_secret"
 
 const payload = JSON.stringify({
   id: "evt_1",
   object: "event",
-  type: "customer.subscription.updated",
-  data: { object: { id: "sub_1", object: "subscription" } },
+  type: "checkout.session.completed",
+  data: { object: { id: "cs_test_1", object: "checkout.session" } },
 })
 
 function sign(body: string, options: { secret?: string; timestamp?: number } = {}) {
@@ -37,12 +37,12 @@ describe("constructWebhookEvent", () => {
   it("returns the event for a valid signature", async () => {
     const event = await constructWebhookEvent(payload, await sign(payload))
     expect(event.id).toBe("evt_1")
-    expect(event.type).toBe("customer.subscription.updated")
+    expect(event.type).toBe("checkout.session.completed")
   })
 
   it("rejects a tampered body", async () => {
     const header = await sign(payload)
-    await expect(constructWebhookEvent(payload.replace("sub_1", "sub_2"), header)).rejects.toThrow()
+    await expect(constructWebhookEvent(payload.replace("cs_test_1", "cs_test_2"), header)).rejects.toThrow()
   })
 
   it("rejects a signature made with another secret", async () => {
@@ -68,11 +68,11 @@ describe("constructWebhookEvent", () => {
 describe("configuration", () => {
   it("needs the secret key and the price id from the environment", () => {
     vi.stubEnv("STRIPE_SECRET_KEY", "")
-    vi.stubEnv("STRIPE_PRICE_FULL_MOON", "")
+    vi.stubEnv("STRIPE_PRICE_WRAPPER", "")
     expect(() => createStripeClient()).toThrow(BillingConfigError)
-    expect(() => fullMoonPriceId()).toThrow(/STRIPE_PRICE_FULL_MOON/)
-    vi.stubEnv("STRIPE_PRICE_FULL_MOON", "price_test_123")
-    expect(fullMoonPriceId()).toBe("price_test_123")
+    expect(() => wrapperPriceId()).toThrow(/STRIPE_PRICE_WRAPPER/)
+    vi.stubEnv("STRIPE_PRICE_WRAPPER", "price_test_123")
+    expect(wrapperPriceId()).toBe("price_test_123")
   })
 
   it("builds a client on the pinned API version without making a request", () => {
