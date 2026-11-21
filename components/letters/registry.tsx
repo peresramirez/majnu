@@ -23,9 +23,9 @@ function Template({ letter }: { letter: PublicLetter }) {
     case "gift-reveal":
       return <GiftReveal content={letter.content} />
     case "wedding-invite":
-      return <Invitation content={letter.content} mood="elegant" />
+      return <Invitation content={letter.content} mood="elegant" slug={letter.slug} />
     case "party-invite":
-      return <Invitation content={letter.content} mood="playful" />
+      return <Invitation content={letter.content} mood="playful" slug={letter.slug} />
     case "postcard":
       return <Postcard content={letter.content} />
     case "classic-envelope":
