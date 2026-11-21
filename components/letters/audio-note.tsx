@@ -25,15 +25,20 @@ import { themeStyle } from "./theme"
 // what was said, if it is known.
 export type LetterAudio = { src: string; seconds?: number; caption?: string | null }
 
-// "Sam", or null when the letter is not signed.
-function senderFirst(senderName: string): string | null {
-  return senderName.trim() ? firstName(senderName) : null
+// How the button names the sender: as they sign ("Lea and Max", "Mum") when
+// that is short, else their first name; null when the letter is not signed.
+const MAX_NAME_CHARS = 20
+
+export function senderLabel(senderName: string): string | null {
+  const name = senderName.replace(/\s+/g, " ").trim()
+  if (!name) return null
+  return name.length <= MAX_NAME_CHARS ? name : firstName(name)
 }
 
 export function AudioNote({ audio, senderName }: { audio: LetterAudio; senderName: string }) {
   const player = useAudioPlayer(audio.src, audio.seconds)
   const captionId = useId()
-  const name = senderFirst(senderName)
+  const name = senderLabel(senderName)
   const whose = name ? `${name}'s voice note` : "the voice note"
   const caption = audio.caption?.trim()
 
