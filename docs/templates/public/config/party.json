@@ -1,0 +1,12 @@
+{
+  "heading": "You're invited to",
+  "names": "Sara's 25th Birthday!",
+  "subheading": "Let's party all night",
+  "date": "Friday, 5 March 2027",
+  "time": "8:00 PM",
+  "venue": "Skyline Rooftop, Karachi",
+  "message": "Dress code: Neon & Glitter",
+  "rsvpUrl": "https://example.com/rsvp",
+  "rsvpLabel": "I'M IN!",
+  "colors": { "primary": "#ffffff", "accent": "#ff3d7f", "background": "#1b1446", "box": "#7b3cff" }
+}
