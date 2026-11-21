@@ -83,8 +83,21 @@ start)
   herdr pane wait-output "$pane" --regex 'SESSION_2_(READY|FAILED)' --source recent-unwrapped --timeout 600000 >/dev/null
   herdr pane read "$pane" --source recent-unwrapped --lines 5 | grep -q SESSION_2_READY || die "npm ci failed in $path; see the $name workspace"
 
-  herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- \
-    --name "$name" --dangerously-skip-permissions --no-chrome --mcp-config scripts/agents/browser-mcp.json >/dev/null
+  # The marker can print a moment before the shell is back at its prompt, and
+  # Herdr only starts an agent in an idle shell, so retry while the pane is busy.
+  err="$(mktemp)"
+  started=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- \
+      --name "$name" --dangerously-skip-permissions --no-chrome --mcp-config scripts/agents/browser-mcp.json >/dev/null 2>"$err"; then
+      started=1
+      break
+    fi
+    grep -q agent_pane_busy "$err" || { cat "$err" >&2; rm -f "$err"; die "could not start Claude Code in $pane"; }
+    sleep 2
+  done
+  rm -f "$err"
+  [ "$started" = 1 ] || die "pane $pane stayed busy; start the agent by hand"
 
   prompt="$(sed -e "s/{{name}}/$name/g" -e "s/{{port}}/$port/g" "$here/brief-header.md")
 $(cat "$brief")"
