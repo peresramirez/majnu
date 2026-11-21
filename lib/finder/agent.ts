@@ -5,13 +5,18 @@
 // up to three questions with tappable answers and searches again.
 //
 // A short loop of its own on client.beta.messages.stream(), like the main agent
-// (lib/agents/main.ts), with two tools:
+// (lib/agents/main.ts), with three tools:
 // - find_gifts: the model's assumptions come in as the tool input; the server
 //   fills in default age ranges, checks the limits, and runs the research
 //   sub-agent (lib/agents/research.ts) in the visitor's language and country;
-// - ask_questions: the personalising questions.
-// Both end the turn: the visitor's next move is to look at the options or tap
-// an answer, so no closing request is spent on a sentence they would skip.
+// - ask_questions: the personalising questions;
+// - read_profile (issue #34): a public Instagram or TikTok profile, or another
+//   public page, that the visitor pasted, read once per session and turned
+//   into a few interests (lib/social/). Only the interests reach the
+//   conversation; they are merged into the next search's context.
+// find_gifts and ask_questions end the turn: the visitor's next move is to look
+// at the options or tap an answer, so no closing request is spent on a
+// sentence they would skip. read_profile does not: find_gifts follows it.
 //
 // The conversation is stored exactly as the API returned it and replayed
 // append-only (lib/finder/sessions.ts); the system prompt and the tools are
@@ -31,6 +36,9 @@ import { CONTEXT_TAG, describeToday } from "@/lib/agents/context"
 import { describeError } from "@/lib/agents/errors"
 import { echoableContent } from "@/lib/agents/history"
 import { ResearchRefusal, researchGiftReport, type ResearchReport } from "@/lib/agents/research"
+import { parseProfileLink, type LinkProblem } from "@/lib/social/links"
+import { canReadSource, readProfileInterests } from "@/lib/social/read"
+import type { ReadFailure } from "@/lib/social/apify"
 import {
   baseLanguage,
   cleanAgeRange,
@@ -41,9 +49,9 @@ import {
   type RelationshipKind,
 } from "./context"
 import type { FinderContext, FinderEvent, GiftOption } from "./events"
-import { canSearch, claimSearch, releaseSearch } from "./limits"
+import { canSearch, claimProfileRead, claimSearch, releaseSearch } from "./limits"
 import { textsFor } from "./messages"
-import type { StoredOptions } from "./sessions"
+import type { ProfileRead, StoredOptions } from "./sessions"
 
 // Model requests per visitor message, not counting the research sub-agent's own
 // (at most 4): enough to retry a tool call the model got wrong once.
@@ -78,6 +86,13 @@ Personalising
 - When the visitor asks to personalise the gift, or says none of the options fit, call ask_questions with one to three short questions that would change the choice most, such as their name or exact age, what they love or do in their free time, or their job. Give each question two to four short answers the visitor can tap. Then wait for the answers.
 - The app's personalise button sends the message "Personalise the gift" in English, whatever language the visitor uses. Treat it as the visitor asking to personalise, and keep to the language of their own messages.
 - When the visitor answers, call find_gifts again with everything you now know.
+- Once in a conversation, while personalising, you may offer to look at the person's public Instagram or TikTok profile, or any public page about them: make it one of your questions, such as "Do they have a public Instagram or TikTok? Paste the link if you like.", with answers such as "No public profile". Never insist, and don't offer it again.
+
+Public profiles
+- When the visitor's message has a link to a public Instagram or TikTok profile, a handle they say is on Instagram or TikTok, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
+- read_profile gives back a few of the person's interests. Put them in find_gifts' interests next to what the visitor said. Don't list them in your reply: the app shows them as chips.
+- If the profile could not be read, say so kindly in one short sentence (it may be private) and search with what you know.
+- One profile per conversation. Never describe or quote what is on someone's profile.
 
 After the options
 - When the visitor likes an option, tell them in a sentence that they can choose it to wrap it in a gift page and send it as a link.
@@ -168,8 +183,35 @@ const ASK_QUESTIONS_TOOL: BetaTool = {
   },
 }
 
+const READ_PROFILE_TOOL: BetaTool = {
+  name: "read_profile",
+  description:
+    "Read a public Instagram or TikTok profile, or another public web page about the person, that the visitor shared, and get back a few of the person's interests. Only for a link or handle the visitor gave. One per conversation; call find_gifts afterwards.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      link: {
+        type: "string",
+        description: "The link or handle exactly as the visitor wrote it, e.g. 'https://www.instagram.com/natgeo/', '@natgeo' or 'https://example.com/about'",
+      },
+      platform: nullable(
+        { type: "string", enum: ["instagram", "tiktok"] },
+        "For a bare handle, the platform the visitor named. Null for a full link, or if they did not say.",
+      ),
+      language: { type: "string", description: "The ISO 639-1 code of the language the visitor writes in, e.g. 'de'" },
+      status: {
+        type: "string",
+        description: "A few words in the visitor's language for the line shown while reading, e.g. 'Ich schaue mir ihr Profil an…'",
+      },
+    },
+    required: ["link", "platform", "language", "status"],
+    additionalProperties: false,
+  },
+}
+
 // The order and wording never change between requests.
-export const FINDER_TOOLS: BetaTool[] = [FIND_GIFTS_TOOL, ASK_QUESTIONS_TOOL]
+export const FINDER_TOOLS: BetaTool[] = [FIND_GIFTS_TOOL, ASK_QUESTIONS_TOOL, READ_PROFILE_TOOL]
 export const FINDER_TOOL_CHOICE = { type: "auto", disable_parallel_tool_use: true } as const
 
 const shortText = (max: number) => z.string().trim().min(1).transform((s) => s.slice(0, max))
@@ -214,6 +256,13 @@ const AskQuestionsInput = z.object({
     .transform((questions) => questions.slice(0, MAX_QUESTIONS)),
 })
 
+const ReadProfileInput = z.object({
+  link: z.string().trim().min(1).max(300),
+  platform: z.enum(["instagram", "tiktok"]).optional().catch(undefined),
+  language: z.string().optional().catch(undefined),
+  status: shortText(100).optional().catch(undefined),
+})
+
 // ---------- State ----------
 
 export type FinderTurnState = {
@@ -230,6 +279,9 @@ export type FinderTurnState = {
   // The options last shown; set by each search. A search in a session that has
   // already shown options is a personalised one.
   lastOptions: StoredOptions | null
+  // The public profile read in this session, if any (one per session). Set
+  // by read_profile and saved with the session.
+  profile: ProfileRead | null
   emit: (event: FinderEvent) => void
 }
 
@@ -255,17 +307,37 @@ export function contextBlockText(state: Pick<FinderTurnState, "now" | "timezone"
     .concat("</context>")
 }
 
+const MAX_CONTEXT_INTERESTS = 8
+
+// The visitor's interests first, then a profile's, without repeats.
+export function mergeInterests(given: readonly string[], fromProfile: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const interest of [...given, ...fromProfile]) {
+    const key = interest.trim().toLocaleLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    merged.push(interest.trim())
+  }
+  return merged.slice(0, MAX_CONTEXT_INTERESTS)
+}
+
 // What Majnu assumed for this search: the place and currency from the request,
 // the rest from the model, with a default age range when the visitor gave none.
-export function contextFor(base: BaseContext, input: FindGiftsInput): FinderContext {
+// `profileInterests` are those of a profile read in this turn: merged in, so
+// the search right after a read always uses them, even if the model left them
+// out. Later searches rely on the model, which sees them in the conversation,
+// so a visitor who says "she's not into that any more" is listened to.
+export function contextFor(base: BaseContext, input: FindGiftsInput, profileInterests: readonly string[] = []): FinderContext {
   const ageRange = cleanAgeRange(input.age) ?? defaultAgeRange(input.kind, input.senderAge)
+  const interests = mergeInterests(input.interests ?? [], profileInterests)
   return {
     ...base,
     language: baseLanguage(input.language) ?? base.language,
     relationship: input.relationship,
     ...(ageRange ? { ageRange } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
-    ...(input.interests && input.interests.length > 0 ? { interests: input.interests } : {}),
+    ...(interests.length > 0 ? { interests } : {}),
   }
 }
 
@@ -287,7 +359,7 @@ export function recipientBrief(input: FindGiftsInput, context: FinderContext): s
   const given = cleanAgeRange(input.age)
   if (given) parts.push(given[0] === given[1] ? `${given[0]} years old` : `${given[0]} to ${given[1]} years old`)
   else if (context.ageRange) parts.push(`probably about ${context.ageRange[0]} to ${context.ageRange[1]} years old (assumed)`)
-  if (input.interests?.length) parts.push(`loves ${input.interests.join(", ")}`)
+  if (context.interests?.length) parts.push(`loves ${context.interests.join(", ")}`)
   return `${parts.join(", ")}. ${input.about}`
 }
 
@@ -349,7 +421,12 @@ function failureMessage(error: unknown, language: string): string {
   return errors.generic
 }
 
-type TurnFlags = { searched: boolean }
+type TurnFlags = {
+  searched: boolean
+  // read_profile ran in this turn; its interests, if it found any.
+  readProfile?: boolean
+  profileInterests?: string[]
+}
 
 async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
   if (flags.searched) {
@@ -359,7 +436,7 @@ async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: 
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
   flags.searched = true
   const input = parsed.data
-  const context = contextFor(state.base, input)
+  const context = contextFor(state.base, input, flags.profileInterests)
   const personalised = state.lastOptions !== null
 
   const claim = await claimSearch({
@@ -441,10 +518,97 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
   return { result: result(call, "The visitor sees the questions with answers to tap. Wait for their answers."), terminal: true }
 }
 
+// What the model is told when a link cannot be read. Each ends with what to do
+// next, so the search goes on without the profile.
+const LINK_PROBLEMS: Record<LinkProblem, string> = {
+  not_a_profile:
+    "Nothing was read: that link is a post, a short link or a page on Instagram or TikTok that is not a profile. In one short sentence, say you can read a profile link such as instagram.com/name or tiktok.com/@name, and search with what you know.",
+  needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram or TikTok.",
+  unsupported:
+    "Nothing was read: that is not a link to a public profile or page that can be read. Say so in one short sentence and search with what you know.",
+}
+
+const READ_FAILURES: Record<ReadFailure, string> = {
+  private: "the profile is private",
+  not_found: "the profile or page was not found",
+  empty: "it showed nothing about what the person likes",
+  blocked: "the site did not let it be read",
+  timeout: "it took too long",
+  failed: "it could not be read for a technical reason",
+}
+
+const SEARCH_WITHOUT_IT = "Tell the visitor kindly in one short sentence, then call find_gifts with what you know."
+
+function profileSummary(interests: string[]): string {
+  return JSON.stringify({
+    interests,
+    note: "Interests from the public profile the visitor shared. Call find_gifts now with these in interests, next to what the visitor said. Don't list them in your reply; the app shows them.",
+  })
+}
+
+async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
+  if (flags.readProfile || state.profile) {
+    const known = state.profile?.interests.length ? ` Interests it gave: ${state.profile.interests.join(", ")}.` : ""
+    return {
+      result: result(call, `Not read: one profile per conversation, and one was already read.${known} ${SEARCH_WITHOUT_IT}`),
+      terminal: false,
+    }
+  }
+  const parsed = ReadProfileInput.safeParse(withoutNulls(call.input))
+  if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
+  const input = parsed.data
+  const link = parseProfileLink(input.link, input.platform)
+  if (!link.ok) return { result: result(call, LINK_PROBLEMS[link.problem]), terminal: false }
+  const target = link.target
+  if (!canReadSource(target.source)) {
+    return { result: result(call, `Not read: profiles can't be read at the moment. ${SEARCH_WITHOUT_IT}`), terminal: false }
+  }
+
+  // The interests are for the next search: don't spend a read on a search that would be refused.
+  const language = baseLanguage(input.language) ?? languageOf(state)
+  const allowed = await canSearch(state.ownerId, state.lastOptions !== null, state.now, language)
+  if (!allowed.ok) {
+    state.emit({ type: "limit", reason: allowed.reason, message: allowed.message })
+    return {
+      result: result(call, `Not read: ${allowed.message} The visitor sees this note. Help them with the options they already have.`),
+      terminal: true,
+    }
+  }
+
+  let claim: Awaited<ReturnType<typeof claimProfileRead>>
+  try {
+    claim = await claimProfileRead({
+      session: { id: state.sessionId, ownerId: state.ownerId },
+      context: state.context,
+      source: target.source,
+      now: state.now,
+    })
+  } catch (error) {
+    // The database failed: no read, but the search can still go ahead.
+    console.error("[finder] could not claim a profile read", describeError(error))
+    return { result: result(call, `The profile could not be read: ${READ_FAILURES.failed}. ${SEARCH_WITHOUT_IT}`), terminal: false }
+  }
+  if (!claim.ok) {
+    const why = claim.reason === "daily_cap" ? "no more profiles can be read today" : "one profile per conversation, and one was already read"
+    return { result: result(call, `Not read: ${why}. ${SEARCH_WITHOUT_IT}`), terminal: false }
+  }
+  flags.readProfile = true
+  state.emit({ type: "status", label: input.status ?? textsFor(language).profileStatus })
+
+  const read = await readProfileInterests(target, language)
+  state.profile = { ...claim.profile, interests: read.ok ? read.interests : [] }
+  if (!read.ok) {
+    return { result: result(call, `The profile could not be read: ${READ_FAILURES[read.reason]}. Nothing from it is used. ${SEARCH_WITHOUT_IT}`), terminal: false }
+  }
+  flags.profileInterests = read.interests
+  return { result: result(call, profileSummary(read.interests)), terminal: false }
+}
+
 async function runCall(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
   try {
     if (call.name === FIND_GIFTS_TOOL.name) return await findGifts(call, state, flags)
     if (call.name === ASK_QUESTIONS_TOOL.name) return await askQuestions(call, state)
+    if (call.name === READ_PROFILE_TOOL.name) return await readProfile(call, state, flags)
     return { result: result(call, `There is no tool called ${call.name}.`, true), terminal: false }
   } catch (error) {
     // A limit check or the database failed. The call still needs a result.

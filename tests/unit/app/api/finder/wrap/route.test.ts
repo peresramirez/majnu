@@ -36,6 +36,7 @@ const SESSION: FinderSession = {
   timezone: "Europe/Berlin",
   chat: [],
   lastOptions: { options: [OPTION], recommendedId: "o2", why: "Weil." },
+  profile: null,
 }
 
 function post(body: unknown): Request {

@@ -7,7 +7,8 @@ vi.mock("@/lib/agents/research", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/agents/research")>()),
   researchGiftReport: vi.fn(),
 }))
-vi.mock("@/lib/finder/limits", () => ({ claimSearch: vi.fn(), releaseSearch: vi.fn(), canSearch: vi.fn() }))
+vi.mock("@/lib/finder/limits", () => ({ claimSearch: vi.fn(), releaseSearch: vi.fn(), canSearch: vi.fn(), claimProfileRead: vi.fn() }))
+vi.mock("@/lib/social/read", () => ({ canReadSource: vi.fn(), readProfileInterests: vi.fn() }))
 
 import { getClient } from "@/lib/agents/client"
 import { ResearchIncomplete, ResearchRefusal, researchGiftReport, type ResearchReport } from "@/lib/agents/research"
@@ -22,8 +23,9 @@ import {
   type FinderTurnState,
 } from "@/lib/finder/agent"
 import type { FinderEvent } from "@/lib/finder/events"
-import { canSearch, claimSearch, releaseSearch } from "@/lib/finder/limits"
-import type { StoredOptions } from "@/lib/finder/sessions"
+import { canSearch, claimProfileRead, claimSearch, releaseSearch } from "@/lib/finder/limits"
+import type { ProfileRead, StoredOptions } from "@/lib/finder/sessions"
+import { canReadSource, readProfileInterests } from "@/lib/social/read"
 
 type Block = Record<string, unknown>
 
@@ -96,6 +98,7 @@ function state(overrides: Partial<FinderTurnState> = {}): FinderTurnState {
     browserLanguage: "de-DE",
     context: { country: "DE", region: "Berlin", language: "de", currency: "EUR" },
     lastOptions: null,
+    profile: null,
     emit: (event) => events.push(event),
     ...overrides,
   }
@@ -107,6 +110,9 @@ beforeEach(() => {
   vi.mocked(claimSearch).mockResolvedValue({ ok: true, claimId: 7 })
   vi.mocked(canSearch).mockResolvedValue({ ok: true })
   vi.mocked(researchGiftReport).mockResolvedValue(REPORT)
+  vi.mocked(canReadSource).mockReturnValue(true)
+  vi.mocked(claimProfileRead).mockImplementation(async ({ source, now }) => ({ ok: true, profile: { source, readAt: now.toISOString(), interests: [] } }))
+  vi.mocked(readProfileInterests).mockResolvedValue({ ok: true, interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -387,5 +393,149 @@ describe("toOptions", () => {
     expect(shown.why).toBe("Grund.")
     // Without a description, the reason stands in.
     expect(shown.options[0].description).toBe("Grund.")
+  })
+})
+
+describe("reading a public profile", () => {
+  const readCall = (input: Block = {}, id = "read-1"): Block => ({
+    type: "tool_use",
+    id,
+    name: "read_profile",
+    input: { link: "https://www.instagram.com/natgeo/", platform: null, language: "de", status: "Ich schaue mir ihr Profil an…", ...input },
+  })
+  const SISTER = { ...MOTHER, relationship: "Schwester", kind: "sibling", interests: ["Lesen"], about: "Die Schwester des Besuchers." }
+  const toolResult = (request: Record<string, unknown>, id: string) =>
+    ((request.messages as BetaMessageParam[]).at(-1)!.content as { tool_use_id: string; content: string; is_error?: boolean }[]).find(
+      (block) => block.tool_use_id === id,
+    )!
+
+  it("offers it once while personalising, and only for links the visitor gave", () => {
+    expect(FINDER_TOOLS.map((tool) => tool.name)).toEqual(["find_gifts", "ask_questions", "read_profile"])
+    expect(FINDER_SYSTEM_PROMPT).toContain("Once in a conversation, while personalising, you may offer")
+    expect(FINDER_SYSTEM_PROMPT).toContain("never guess one or look someone up")
+    const schema = FINDER_TOOLS[2].input_schema as { properties: Record<string, unknown>; required: string[] }
+    expect([...schema.required].sort()).toEqual(Object.keys(schema.properties).sort())
+  })
+
+  it("reads the profile, then searches with its interests in the context and the research brief", async () => {
+    const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    const s = state({ lastOptions: { options: [], recommendedId: "x", why: "" } })
+    const result = await runFinderTurn({ history: [], message: "Hier ist ihr Insta: https://www.instagram.com/natgeo/", state: s })
+
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "instagram", username: "natgeo" }, "de")
+    expect(claimProfileRead).toHaveBeenCalledWith({
+      session: { id: "session-1", ownerId: "user-1" },
+      context: state().context,
+      source: "instagram",
+      now: expect.any(Date),
+    })
+    expect(events.map((e) => e.type)).toEqual(["status", "context", "status", "options"])
+    expect(events[0]).toEqual({ type: "status", label: "Ich schaue mir ihr Profil an…" })
+    // The model did not repeat the profile's interests; the server adds them for this search.
+    expect(events[1]).toMatchObject({ type: "context", context: { interests: ["Lesen", "Bouldern", "Kaffee", "Analogfotografie"] } })
+    expect(researchGiftReport).toHaveBeenCalledWith(expect.objectContaining({ recipient: expect.stringContaining("loves Lesen, Bouldern, Kaffee, Analogfotografie") }))
+    expect(claimSearch).toHaveBeenCalledWith(expect.objectContaining({ personalised: true }))
+
+    // The conversation keeps only the interests, and the session the marker with them.
+    const read = toolResult(requests[1], "read-1")
+    expect(JSON.parse(read.content)).toMatchObject({ interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
+    expect(read.is_error).toBeUndefined()
+    expect(s.profile).toEqual({ source: "instagram", readAt: "2026-11-21T15:00:00.000Z", interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
+    expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant", "user"])
+    expect(requests).toHaveLength(2)
+  })
+
+  it("does not repeat interests the model already passed on", async () => {
+    scriptModel(reply([readCall()]), reply([findCall({ ...SISTER, interests: ["bouldern", "Lesen"] })]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state() })
+    expect(events.find((e) => e.type === "context")).toMatchObject({ context: { interests: ["bouldern", "Lesen", "Kaffee", "Analogfotografie"] } })
+  })
+
+  it("fails politely for a private profile, and the search goes on without it", async () => {
+    vi.mocked(readProfileInterests).mockResolvedValue({ ok: false, reason: "private" })
+    const { requests } = scriptModel(reply([readCall()]), reply([text("Das Profil ist privat, ich suche ohne."), findCall(SISTER)]))
+    const s = state()
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: s })
+
+    const read = toolResult(requests[1], "read-1")
+    expect(read.content).toContain("the profile is private")
+    expect(read.content).toContain("call find_gifts with what you know")
+    expect(events.some((e) => e.type === "error")).toBe(false)
+    expect(events.map((e) => e.type)).toEqual(["status", "text", "context", "status", "options"])
+    expect(events.find((e) => e.type === "context")).toMatchObject({ context: { interests: ["Lesen"] } })
+    // The read still counts: the session cannot read another profile.
+    expect(s.profile).toEqual({ source: "instagram", readAt: "2026-11-21T15:00:00.000Z", interests: [] })
+  })
+
+  it("reads one profile per session", async () => {
+    const profile: ProfileRead = { source: "tiktok", readAt: "2026-11-21T10:00:00.000Z", interests: ["Kaffee"] }
+    const { requests } = scriptModel(reply([readCall({ link: "https://www.tiktok.com/@other" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "tiktok.com/@other", state: state({ profile }) })
+
+    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(readProfileInterests).not.toHaveBeenCalled()
+    expect(toolResult(requests[1], "read-1").content).toContain("one profile per conversation")
+    expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
+  })
+
+  it("stops at the site-wide daily cap, and searches without the profile", async () => {
+    vi.mocked(claimProfileRead).mockResolvedValue({ ok: false, reason: "daily_cap" })
+    const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    const s = state()
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: s })
+
+    expect(readProfileInterests).not.toHaveBeenCalled()
+    expect(toolResult(requests[1], "read-1").content).toContain("no more profiles can be read today")
+    expect(s.profile).toBeNull()
+    expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
+  })
+
+  it("does not read a profile for a search the visitor could not run", async () => {
+    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "personalise_daily", message: "Zwei am Tag." })
+    const { requests } = scriptModel(reply([readCall()]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state({ lastOptions: { options: [], recommendedId: "x", why: "" } }) })
+
+    expect(canSearch).toHaveBeenCalledWith("user-1", true, expect.any(Date), "de")
+    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(events).toEqual([{ type: "limit", reason: "personalise_daily", message: "Zwei am Tag." }])
+    expect(requests).toHaveLength(1)
+  })
+
+  it("explains links it cannot read, without claiming a read", async () => {
+    const { requests } = scriptModel(
+      reply([readCall({ link: "https://www.instagram.com/p/DNQuxufAih9/" })]),
+      reply([text("Schick mir den Link zum Profil.")], "end_turn"),
+    )
+    await runFinderTurn({ history: [], message: "https://www.instagram.com/p/DNQuxufAih9/", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("instagram.com/name")
+    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(readProfileInterests).not.toHaveBeenCalled()
+  })
+
+  it("asks which platform a bare handle is on, and reads it once the visitor says", async () => {
+    const { requests } = scriptModel(reply([readCall({ link: "@natgeo" })]), reply([text("Instagram oder TikTok?")], "end_turn"))
+    await runFinderTurn({ history: [], message: "@natgeo", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("whether it is on Instagram or TikTok")
+
+    scriptModel(reply([readCall({ link: "@natgeo", platform: "tiktok" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "TikTok", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "tiktok", username: "natgeo" }, "de")
+  })
+
+  it("says profiles can't be read when the deployment has no key for them", async () => {
+    vi.mocked(canReadSource).mockReturnValue(false)
+    const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("can't be read at the moment")
+    expect(claimProfileRead).not.toHaveBeenCalled()
+  })
+
+  it("searches without the profile when the claim cannot be recorded", async () => {
+    vi.mocked(claimProfileRead).mockRejectedValue(new Error("Could not record the profile read: timeout"))
+    const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("technical reason")
+    expect(events.some((e) => e.type === "error")).toBe(false)
+    expect(events.some((e) => e.type === "options")).toBe(true)
   })
 })
