@@ -1,20 +1,15 @@
-import { Bricolage_Grotesque, Caveat, Courier_Prime } from "next/font/google"
+import { Gilda_Display, Hanken_Grotesk } from "next/font/google"
 
-export const sans = Bricolage_Grotesque({
+export const display = Gilda_Display({
   subsets: ["latin"],
+  weight: "400",
+  variable: "--font-display",
+  display: "swap",
+})
+
+export const sans = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
   variable: "--font-sans",
-  display: "swap",
-})
-
-export const typewriter = Courier_Prime({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-typewriter",
-  display: "swap",
-})
-
-export const hand = Caveat({
-  subsets: ["latin"],
-  variable: "--font-hand",
   display: "swap",
 })

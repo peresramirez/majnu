@@ -1,245 +1,222 @@
 import Link from "next/link"
-import { ArrowRight, CalendarDays, Gift, Mail, MapPin } from "lucide-react"
-import { site } from "@/lib/site"
+import { ArrowRight, CalendarDays, Check, Gift, Mail, MapPin } from "lucide-react"
+import { GiftScene } from "@/components/landing/gift-scene"
+import { MoonPhase } from "@/components/brand/moon-phase"
+import { Wordmark } from "@/components/brand/wordmark"
+import { plans } from "@/lib/plans"
 
-const formats = [
-  {
-    name: "Gift",
-    note: "A gift card or code they unwrap with a tap.",
-    price: "Free",
-    icon: Gift,
-    panel: "bg-airmail-sun text-airmail-ink",
-  },
-  {
-    name: "Letter",
-    note: "Your own words, to go with a gift or on their own.",
-    price: "Free",
-    icon: Mail,
-    panel: "bg-airmail-blue text-white",
-  },
-  {
-    name: "Invitation",
-    note: "Date, place and a map your guests can open.",
-    price: "Free",
-    icon: MapPin,
-    panel: "bg-airmail-red text-white",
-  },
-  {
-    name: "Advent calendar",
-    note: "One door a day, each with a note or a gift.",
-    price: "€4.99",
-    icon: CalendarDays,
-    panel: "bg-airmail-ink text-white",
-  },
-]
+const focusRing =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
+
+const primaryButton = `inline-flex items-center justify-center gap-2 rounded-full bg-night-rose px-6 py-3.5 text-[15px] font-semibold text-night-plum transition-colors duration-200 ease-calm hover:bg-[#F1C4A9] ${focusRing}`
+const secondaryButton = `inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-semibold text-night-petal ring-1 ring-inset ring-night-petal/25 transition-colors duration-200 ease-calm hover:ring-night-petal/50 ${focusRing}`
 
 const steps = [
   {
-    title: "Tell Majnu who it's for",
-    body: "Answer a few questions in a chat. It helps you pick the gift and find the words, and you change whatever you like.",
+    lit: 0.22,
+    title: "Tell Majnu who it is for",
+    body: "Your partner, your mum, a friend who just moved away. Answer a few questions in a chat, and Majnu helps you find the right words.",
   },
   {
-    title: "Choose a design",
-    body: "Pick the look that fits: a gift to unwrap, a classic letter, a party invitation, a calendar of doors.",
+    lit: 0.55,
+    title: "Make it yours",
+    body: "Choose a design, add a gift code, a date and a place, or a calendar of small surprises. Change anything until it feels like you.",
   },
   {
-    title: "Share the link",
-    body: "Send it by WhatsApp, email or QR code. You can see when it has been opened.",
+    lit: 1,
+    title: "Send the link",
+    body: "Share it by WhatsApp, email or QR code. They open it on their phone with nothing to install, and you see when they do.",
   },
 ]
 
-const focusOnBlue =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+const kinds = [
+  { icon: Gift, name: "Gift", body: "A gift card or code, wrapped in a page they unwrap with a tap.", plan: "Free" },
+  { icon: Mail, name: "Letter", body: "Your own words, for a birthday, a thank-you or no reason at all.", plan: "Free" },
+  { icon: MapPin, name: "Invitation", body: "Date, place and a map your guests can open.", plan: "Free" },
+  { icon: CalendarDays, name: "Advent calendar", body: "One door a day, each with a note or a small gift.", plan: "Full moon" },
+]
 
-function CreateButton({ className = "" }: { className?: string }) {
-  return (
-    <Link
-      href="/signin"
-      className={`inline-flex items-center justify-center gap-2 rounded-md bg-airmail-red px-7 py-3.5 text-base font-bold text-white shadow-[0_4px_0_0_#9E1F1B] transition-transform hover:translate-y-0.5 hover:shadow-[0_2px_0_0_#9E1F1B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-airmail-ink motion-reduce:transition-none ${className}`}
-    >
-      Create a gift
-      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-    </Link>
-  )
-}
-
-function Postmark({ id, className = "" }: { id: string; className?: string }) {
-  return (
-    <svg viewBox="0 0 150 80" className={className} fill="none" stroke="currentColor" aria-hidden="true">
-      <circle cx="40" cy="40" r="37" strokeWidth="2" />
-      <circle cx="40" cy="40" r="23" strokeWidth="1.5" />
-      <path id={id} d="M 11 40 a 29 29 0 1 1 58 0 a 29 29 0 1 1 -58 0" stroke="none" />
-      <text fill="currentColor" stroke="none" fontSize="7" fontWeight="700" letterSpacing="1.1" className="font-mono">
-        <textPath href={`#${id}`}>MAJNU POST • DELIVERED BY LINK •</textPath>
-      </text>
-      <text x="40" y="38" textAnchor="middle" fill="currentColor" stroke="none" fontSize="9" fontWeight="700" className="font-mono">
-        BY
-      </text>
-      <text x="40" y="49" textAnchor="middle" fill="currentColor" stroke="none" fontSize="9" fontWeight="700" className="font-mono">
-        LINK
-      </text>
-      {[22, 34, 46, 58].map((y) => (
-        <path key={y} d={`M80 ${y} q8.5 -6 17 0 t17 0 t17 0 t17 0`} strokeWidth="2" strokeLinecap="round" />
-      ))}
-    </svg>
-  )
-}
+const questions = [
+  {
+    q: "Does the person I send it to need an account?",
+    a: "No. They open a link in their browser on any phone or computer. There is nothing to install.",
+  },
+  {
+    q: "Who can see my gift?",
+    a: "Only people who have the link. Gift pages are hidden from search engines, and link previews never show your message or gift codes.",
+  },
+  {
+    q: "Can I cancel Full moon?",
+    a: "Yes, at any time from your account. It stays active until the end of the month you paid for, and you keep everything you made.",
+  },
+]
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-airmail-blue text-white">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-        <span className="text-2xl font-extrabold tracking-tight">{site.name}</span>
-        <Link
-          href="/signin"
-          className={`rounded text-sm font-semibold underline decoration-white/40 underline-offset-4 hover:decoration-white ${focusOnBlue}`}
-        >
-          Sign in
-        </Link>
+    <div className="min-h-screen bg-night-plum text-night-petal">
+      <header className="absolute inset-x-0 top-0 z-20">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8" aria-label="Main">
+          <Link href="/" className={`rounded ${focusRing}`} aria-label="Majnu home">
+            <Wordmark width={124} />
+          </Link>
+          <div className="flex items-center gap-1 text-sm font-medium sm:gap-2">
+            <a href="#how" className={`hidden rounded-full px-3 py-2 text-night-lilac hover:text-night-petal sm:inline-block ${focusRing}`}>How it works</a>
+            <a href="#pricing" className={`hidden rounded-full px-3 py-2 text-night-lilac hover:text-night-petal sm:inline-block ${focusRing}`}>Pricing</a>
+            <Link href="/signin" className={`rounded-full px-4 py-2 ring-1 ring-inset ring-night-petal/25 hover:ring-night-petal/50 ${focusRing}`}>Sign in</Link>
+          </div>
+        </nav>
       </header>
 
       <main>
-        <section className="mx-auto w-full max-w-6xl px-4 pb-16 pt-2 sm:px-6 sm:pb-24">
-          <div className="airmail-edge rounded-md p-2.5 shadow-2xl shadow-black/30 sm:p-3">
-            <div className="grid gap-8 rounded-sm bg-airmail-paper p-5 text-airmail-ink sm:p-9 lg:grid-cols-[1.35fr_1fr] lg:gap-10 lg:p-14">
-              <div className="flex flex-col">
-                <div className="flex items-start justify-between gap-4">
-                  <p className="w-fit shrink-0 whitespace-nowrap bg-airmail-blue px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white sm:tracking-[0.2em]">
-                    Par avion · By link
-                  </p>
-                  <div className="relative lg:hidden">
-                    <Stamp />
+        {/* Hero and how it works share one scene: as you scroll, Majnu's moon travels to Layla. */}
+        <div data-gift-track className="relative bg-[radial-gradient(120%_80%_at_72%_18%,#3E2759_0%,#1B1226_55%,#100A17_100%)]">
+          <div className="hidden md:contents">
+            <GiftScene variant="backdrop" />
+          </div>
+
+          {/* Pulled up over the pinned scene, so the scene scrolls away when this content ends. */}
+          <div className="relative z-10 md:-mt-[100svh]">
+          <section className="relative z-10 mx-auto flex max-w-6xl items-center px-5 pb-12 pt-28 sm:px-8 md:min-h-[100svh] md:pb-20 md:pt-32">
+            <div className="max-w-xl">
+              <p className="mb-6 text-xs font-semibold uppercase tracking-[0.22em] text-night-lilac">Personalized digital gifting</p>
+              <h1 className="font-display text-[clamp(46px,8vw,92px)] leading-[1.02] tracking-[-0.01em]">Give something personal.</h1>
+              <p className="mt-6 max-w-md text-lg leading-relaxed text-night-lilac">
+                Tell Majnu who it is for. It helps you find the words, wraps your gift in a page made just for them,
+                and sends it as a link they can open tonight.
+              </p>
+              <div className="mt-9 flex flex-wrap gap-3">
+                <Link href="/signin" className={primaryButton}>
+                  Create a gift <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+                <a href="#how" className={secondaryButton}>See how it works</a>
+              </div>
+              <p className="mt-6 text-sm text-night-lilac/80">Free to start. Nothing to install for the person you send it to.</p>
+            </div>
+          </section>
+
+          <div className="relative z-10 px-5 pb-10 sm:px-8 md:hidden">
+            <GiftScene variant="card" />
+          </div>
+
+          <section id="how" aria-labelledby="how-title" className="relative z-10 mx-auto max-w-6xl scroll-mt-8 px-5 pb-28 pt-10 sm:px-8 md:pb-32 md:pt-0">
+            <h2 id="how-title" className="max-w-md font-display text-4xl leading-tight sm:text-5xl">How it works</h2>
+            <p className="mt-4 max-w-md leading-relaxed text-night-lilac">
+              In the old story, Majnu would have given Layla the moon. Giving something just as personal takes three steps.
+            </p>
+            <ol className="mt-12 space-y-5 md:mt-14 md:space-y-[22vh] md:pb-[18vh]">
+              {steps.map((step, i) => (
+                <li key={step.title} className="max-w-md rounded-3xl bg-night-velvet/80 p-7 ring-1 ring-inset ring-night-petal/10 backdrop-blur-sm">
+                  <div className="flex items-center gap-3 text-night-rose">
+                    <MoonPhase lit={step.lit} size={30} />
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-night-lilac">Step {i + 1}</span>
                   </div>
-                </div>
+                  <h3 className="mt-4 font-display text-3xl leading-tight">{step.title}</h3>
+                  <p className="mt-3 leading-relaxed text-night-lilac">{step.body}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+          </div>
+        </div>
 
-                <h1 className="mt-7 text-[2.25rem] font-extrabold leading-[1.04] tracking-tight sm:text-6xl lg:mt-10 lg:text-7xl">
-                  Give something personal. Send it as a link.
-                </h1>
-                <p className="mt-5 max-w-xl text-lg leading-relaxed text-airmail-ink/75">
-                  Majnu is a personalized digital gifting platform. Tell it who it&apos;s for, and it wraps a gift
-                  code, a letter, an invitation or an advent calendar in a page made just for them.
-                </p>
+        <section aria-labelledby="send-title" className="bg-night-plum px-5 py-24 sm:px-8">
+          <div className="mx-auto max-w-6xl">
+            <h2 id="send-title" className="font-display text-4xl leading-tight sm:text-5xl">What you can send</h2>
+            <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {kinds.map(({ icon: Icon, name, body, plan }) => (
+                <li key={name} className="flex flex-col rounded-3xl bg-night-velvet p-6 ring-1 ring-inset ring-night-petal/10">
+                  <div className="flex items-start justify-between">
+                    <Icon className="h-6 w-6 text-night-rose" aria-hidden="true" />
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${plan === "Free" ? "bg-night-petal/10 text-night-lilac" : "bg-night-rose/15 text-night-rose"}`}>{plan}</span>
+                  </div>
+                  <h3 className="mt-8 font-display text-2xl">{name}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-night-lilac">{body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-                <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <CreateButton className="w-full sm:w-auto" />
-                  <a
-                    href="#send"
-                    className="rounded text-center text-sm font-semibold text-airmail-ink underline decoration-airmail-ink/30 underline-offset-4 hover:decoration-airmail-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-airmail-ink"
+        <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-8 bg-night-deep px-5 py-24 sm:px-8">
+          <div className="mx-auto max-w-4xl">
+            <h2 id="pricing-title" className="text-center font-display text-4xl leading-tight sm:text-5xl">Simple pricing</h2>
+            <p className="mx-auto mt-4 max-w-md text-center text-night-lilac">Start free. Upgrade when you want calendars and help finding the gift.</p>
+            <div className="mt-12 grid gap-5 md:grid-cols-2">
+              {[plans.free, plans.fullMoon].map((plan) => {
+                const highlighted = plan.id === "full-moon"
+                return (
+                  <div
+                    key={plan.id}
+                    className={`flex flex-col rounded-3xl p-8 ${highlighted ? "bg-night-velvet ring-2 ring-inset ring-night-rose" : "bg-night-plum ring-1 ring-inset ring-night-petal/15"}`}
                   >
-                    See what you can send
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-between gap-10">
-                <div className="relative hidden self-end lg:block">
-                  <Stamp large />
-                </div>
-                <dl className="w-full max-w-xs space-y-4 self-start font-mono lg:self-end">
-                  {[
-                    ["To", "Layla"],
-                    ["From", "Majnu"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex items-end gap-3 border-b border-airmail-ink/25 pb-1">
-                      <dt className="w-12 shrink-0 pb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-airmail-postmark">
-                        {label}
-                      </dt>
-                      <dd className="font-hand text-4xl leading-none">{value}</dd>
+                    <div className="flex items-center gap-3 text-night-rose">
+                      <MoonPhase lit={highlighted ? 1 : 0.22} size={28} />
+                      <h3 className="font-display text-2xl text-night-petal">{plan.name}</h3>
                     </div>
-                  ))}
-                </dl>
-              </div>
+                    <p className="mt-6">
+                      <span className="font-display text-5xl">{plan.price}</span>
+                      {plan.period && <span className="ml-2 text-night-lilac">{plan.period}</span>}
+                    </p>
+                    <p className="mt-2 text-night-lilac">{plan.summary}</p>
+                    <ul className="mt-8 flex-1 space-y-3 text-[15px]">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex gap-3">
+                          <Check className="mt-0.5 h-4 w-4 flex-none text-night-rose" aria-hidden="true" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href={highlighted ? "/signin?plan=full-moon" : "/signin"}
+                      className={`mt-10 ${highlighted ? primaryButton : secondaryButton}`}
+                    >
+                      {plan.cta}
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros. Paid securely by card through Stripe. Cancel anytime.</p>
+          </div>
+        </section>
+
+        <section aria-labelledby="faq-title" className="bg-night-plum px-5 py-24 sm:px-8">
+          <div className="mx-auto max-w-3xl">
+            <h2 id="faq-title" className="font-display text-4xl leading-tight sm:text-5xl">Questions</h2>
+            <div className="mt-10 divide-y divide-night-petal/10 border-y border-night-petal/10">
+              {questions.map(({ q, a }) => (
+                <details key={q} className="group py-5">
+                  <summary className={`flex cursor-pointer list-none items-center justify-between gap-6 rounded text-lg font-medium ${focusRing}`}>
+                    {q}
+                    <span className="text-2xl leading-none text-night-rose transition-transform duration-200 ease-calm group-open:rotate-45" aria-hidden="true">+</span>
+                  </summary>
+                  <p className="mt-3 max-w-2xl leading-relaxed text-night-lilac">{a}</p>
+                </details>
+              ))}
             </div>
           </div>
         </section>
 
-        <section id="send" className="mx-auto w-full max-w-6xl scroll-mt-6 px-4 pb-20 sm:px-6 sm:pb-28">
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">What you can send</h2>
-          <ul className="mt-8 flex flex-wrap gap-4 sm:gap-6">
-            {formats.map(({ name, note, price, icon: Icon, panel }) => (
-              <li key={name} className="stamp-perf h-[204px] w-[156px] drop-shadow-md sm:h-[228px] sm:w-[192px]">
-                <div className={`flex h-full flex-col justify-between p-3 sm:p-4 ${panel}`}>
-                  <div className="flex items-start justify-between">
-                    <Icon className="h-6 w-6" aria-hidden="true" />
-                    <span className="font-mono text-xs font-bold tracking-wide">{price}</span>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold leading-tight sm:text-xl">{name}</h3>
-                    <p className="mt-1 text-[13px] leading-snug opacity-90 sm:text-sm">{note}</p>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-white/85">
-            Postage: gifts, letters and invitations are free. An advent calendar costs €4.99 (EUR), paid once.
-          </p>
-        </section>
-
-        <section className="bg-airmail-paper text-airmail-ink">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">From idea to unwrapped</h2>
-            <ol className="mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
-              {steps.map((step, index) => (
-                <li key={step.title}>
-                  <span
-                    className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-airmail-postmark font-mono text-lg font-bold text-airmail-postmark outline outline-1 outline-offset-[-6px] outline-airmail-postmark/60"
-                    aria-hidden="true"
-                  >
-                    {index + 1}
-                  </span>
-                  <h3 className="mt-5 text-xl font-bold">{step.title}</h3>
-                  <p className="mt-2 leading-relaxed text-airmail-ink/75">{step.body}</p>
-                </li>
-              ))}
-            </ol>
+        <section className="bg-[radial-gradient(90%_120%_at_50%_100%,#3E2759_0%,#1B1226_60%)] px-5 py-28 text-center sm:px-8">
+          <div className="mx-auto flex max-w-2xl flex-col items-center">
+            <MoonPhase lit={1} size={40} className="text-night-rose" />
+            <h2 className="mt-6 font-display text-[clamp(40px,6vw,64px)] leading-tight">Who is yours for?</h2>
+            <Link href="/signin" className={`mt-8 ${primaryButton}`}>
+              Create a gift <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </div>
-        </section>
-
-        <section className="mx-auto flex w-full max-w-6xl flex-col items-start gap-7 px-4 py-16 sm:px-6 sm:py-24">
-          <h2 className="text-balance text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
-            Who is yours for?
-          </h2>
-          <CreateButton />
         </section>
       </main>
 
-      <footer className="bg-airmail-ink">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-white/70 sm:px-6">
-          <span>
-            © {new Date().getFullYear()} {site.name}
-          </span>
-          <Link href="/signin" className={`rounded underline-offset-4 hover:text-white hover:underline ${focusOnBlue}`}>
-            Sign in
-          </Link>
+      <footer className="border-t border-night-petal/10 bg-night-deep px-5 py-10 sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 text-sm text-night-lilac sm:flex-row sm:items-center sm:justify-between">
+          <Wordmark width={104} />
+          <p>
+            Questions? <a href="mailto:hello@majnu.app" className={`rounded text-night-petal underline underline-offset-4 ${focusRing}`}>hello@majnu.app</a>
+          </p>
+          <p>© {new Date().getFullYear()} Majnu</p>
         </div>
       </footer>
     </div>
-  )
-}
-
-function Stamp({ large = false }: { large?: boolean }) {
-  return (
-    <>
-      <div
-        className={`stamp-perf rotate-[4deg] animate-stamp-press drop-shadow-[0_1px_1px_rgba(19,26,51,0.35)] motion-reduce:animate-none ${
-          large ? "h-[132px] w-[108px]" : "h-[96px] w-[84px]"
-        }`}
-        aria-hidden="true"
-      >
-        <div className="flex h-full flex-col items-center justify-center bg-airmail-sun text-airmail-ink">
-          <span className={`font-extrabold leading-none ${large ? "text-6xl" : "text-4xl"}`}>M</span>
-          <span className={`mt-1 font-mono font-bold uppercase tracking-[0.18em] ${large ? "text-[9px]" : "text-[7px]"}`}>
-            Majnu post
-          </span>
-        </div>
-      </div>
-      <Postmark
-        id={large ? "postmark-ring-large" : "postmark-ring"}
-        className={`pointer-events-none absolute animate-postmark-in text-airmail-postmark opacity-80 motion-reduce:animate-none ${
-          large ? "-left-28 top-9 w-44 -rotate-12" : "-left-[4.5rem] top-9 w-28 -rotate-12"
-        }`}
-      />
-    </>
   )
 }

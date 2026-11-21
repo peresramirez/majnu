@@ -12,7 +12,7 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 
 - **Letters are data, not generated code.** Templates are React pages in our app. The builder agent fills a JSON content object stored in Supabase, so a letter is live in seconds and its link never expires.
 - **AI runs on the official Anthropic TypeScript SDK** with our own API key. The model id comes from `MAJNU_MODEL` (default `claude-opus-5-5`, low effort). Switch to `claude-sonnet-5-5` if replies feel slow or costs run high.
-- **Billing is Stripe checkout.** Letters are free. Publishing an advent calendar costs a one-off €4.99 (one constant). If Stripe cannot take live payments by checkpoint 2, show the tip link (`NEXT_PUBLIC_TIP_URL`) and make calendars free.
+- **Pricing is two plans**, defined once in `lib/plans.ts` and shown on the landing page: **Crescent**, free, 3 gifts a month (letters, invitations, gift pages); **Full moon**, €4.99 a month, unlimited gifts plus advent calendars and gift research. Billing is a Stripe subscription. If Stripe cannot take live payments by checkpoint 2, show the tip link (`NEXT_PUBLIC_TIP_URL`) and leave Full moon features on for everyone.
 - **Daytona is an optional extra**, built only if everything else is done. Its sandboxes stop 15 minutes after the last SDK call, so anything built there is copied to our storage and served from our domain.
 
 ## Architecture
@@ -30,7 +30,7 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 | `/impressum`, `/privacy` | public | Required before ads run in Germany |
 | `POST /api/chat` | owner | Main agent, streamed |
 | `POST /api/open` | public | Records `open`, `door_open`, `gift_click` |
-| `POST /api/checkout`, `GET /paid` | owner | Start Stripe checkout; verify payment on return |
+| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook` | owner, owner, Stripe | Start the Full moon subscription, confirm it on return, and keep its status current |
 
 Short link: `majnu.app/l/<slug>`, where the slug is 10 random characters from `crypto.randomBytes`.
 
@@ -40,13 +40,14 @@ Short link: `majnu.app/l/<slug>`, where the slug is 10 random characters from `c
 
 One migration: `supabase/migrations/0001_init.sql`.
 
-- `letters`: `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` | `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, `paid` bool, `stripe_session_id`, timestamps.
+- `letters`: `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` | `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, timestamps.
+- `profiles`: `user_id` → `auth.users`, `plan` (`free` | `full-moon`), `stripe_customer_id`, `stripe_subscription_id`, `plan_renews_at`. One row per user.
 - `letter_events`: `letter_id`, `type`, `day int not null default 0`, `visitor_id`, `user_agent`, `created_at`, with a unique index on `(letter_id, type, day, visitor_id)` so repeat visits do not inflate counts.
 
 Security rules:
 
 - Turn row-level security on explicitly for both tables. Tables created by SQL have it off by default.
-- Owners can read their own letters and update only the content columns. `paid`, `slug` and `owner_id` are written only by server code.
+- Owners can read their own letters and update only the content columns. `slug`, `owner_id` and everything in `profiles` are written only by server code; users can read their own profile.
 - There is no anonymous read policy. The public page, `/api/open` and the link-preview image use a server-only service-role client (`lib/supabase/admin.ts`) and look up by exact slug. Content holds gift codes, and locked calendar doors must never reach the browser early.
 - Agent tools write letter content with the signed-in user's client, so the database enforces ownership.
 
@@ -98,9 +99,10 @@ Not tonight: Claude Managed Agents, where Anthropic hosts the agent loop and a s
 ### Billing (Stripe)
 
 - Build from the Stripe skills and the Stripe MCP server in this repo, not from memory.
-- Flow: "Unlock calendar" → `POST /api/checkout` creates a Stripe-hosted checkout for the letter (cards and wallets only) and saves `stripe_session_id` → Stripe returns to `/paid` → the server retrieves the session, confirms it is paid and belongs to a letter this user owns, and sets `letters.paid`.
-- No webhook in the first version. If a buyer closes the tab before returning, the create page and dashboard re-check any letter that has a session id and is still unpaid.
-- Unpaid calendar: the owner can preview it, the share panel is locked behind the unlock button, and other visitors see "not activated yet".
+- Plans and limits come from `lib/plans.ts`. Free users get 3 gifts a month; advent calendars and `research_gifts` require Full moon.
+- Flow: "Choose Full moon" → sign in → `POST /api/checkout` creates a Stripe-hosted Checkout Session in subscription mode with one €4.99 monthly price, tied to the user's Stripe customer → Stripe returns to `/billing/return`, which retrieves the session and sets `profiles.plan` → a webhook (`customer.subscription.updated` / `deleted`, signature verified) keeps the plan current through renewals, failed payments and cancellations.
+- Cancelling: the Stripe customer portal, linked from the dashboard. Full moon stays active until the end of the paid period (`cancel_at_period_end`), as the landing page promises.
+- A user who hits a Full moon feature on the free plan sees what it unlocks and a "Choose Full moon" button, not an error.
 
 ### Daytona redesign (only if everything else is done)
 
@@ -110,7 +112,7 @@ A `redesign_letter` tool queues a job. The job starts a sandbox, runs Claude Cod
 
 The brand is **Night Post**: plum night, petal white, a rose-gold crescent, Gilda Display headlines and Hanken Grotesk for everything else. The wordmark is MAJNU in wide capitals with the crescent above the J. Everything (logo files, colours, type, motion, voice) is in [brand.md](brand.md); assets are in `public/brand/`.
 
-The live landing page still uses the earlier airmail look (`airmail` colours in `tailwind.config.ts`, fonts in `app/fonts.ts`). Rebuilding it on Night Post, with the scroll-driven moon hero, replaces those. Letter and calendar templates may use their own palettes; the site chrome around them follows the brand.
+The landing page is built on it: a painted scene of Majnu giving Layla the moon (generated with FLUX, in `public/landing/`), with our own moon drawn on top that travels from his hands to hers as visitors scroll through how it works (`components/landing/gift-scene.tsx`). Brand colours are Tailwind's `night` and `day` palettes; fonts are in `app/fonts.ts`. Letter and calendar templates may use their own palettes; the site chrome around them follows the brand.
 
 ## Who builds what
 
@@ -152,7 +154,7 @@ Never cut: the middleware fix, row-level security, the spend limit, the legal pa
 - `npm run build` passes; `npm run dev`, then sign in → new letter → chat → build → the preview shows the chosen template.
 - Open `/l/<slug>` in a private window: the letter renders, one `open` event appears and the dashboard counts it. The owner's own preview does not count.
 - Calendar with `startDate` = today: door 1 opens, door 2 is locked, and door 2's text is absent from `curl -s .../l/<slug>`.
-- With only the public anon key, `select` on `letters` returns no rows, and an owner cannot set `paid` from the browser console.
-- Unpaid calendar: share panel locked for the owner, "not activated" for others. Pay with a Stripe test card, return, share panel unlocks. Repeat once with a real card after going live.
+- With only the public anon key, `select` on `letters` returns no rows, and a user cannot change their own `profiles.plan` from the browser console.
+- Free user: the 4th gift in a month and any advent calendar or gift research show the upgrade prompt. Subscribe with a Stripe test card, return, and those unlock; cancel in the customer portal and the plan stays active until the period ends. Repeat once with a real card after going live.
 - Phone-width pass on every template and the create page, then on two real phones.
 - After the final deploy, repeat sign-in → letter → open on https://majnu.app.

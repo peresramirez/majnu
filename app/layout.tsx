@@ -1,10 +1,10 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import AuthProvider from "@/components/auth/auth-provider"
 import { site } from "@/lib/site"
-import { hand, sans, typewriter } from "./fonts"
+import { display, sans } from "./fonts"
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
@@ -21,6 +21,15 @@ export const metadata: Metadata = {
     description: site.description,
     url: "/",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: `${site.name}: ${site.tagline}`,
+    description: site.description,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#1B1226",
 }
 
 export default function RootLayout({
@@ -30,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${sans.variable} ${typewriter.variable} ${hand.variable} font-sans`}>
+      <body className={`${sans.variable} ${display.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>

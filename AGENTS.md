@@ -44,7 +44,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 
 - `letters` and `letter_events` have row-level security on and no anonymous read policy. Public reads go through `lib/supabase/admin.ts`, by exact slug, on the server.
 - Locked calendar doors are removed on the server before rendering. Their text must never appear in the HTML or in any API response.
-- `paid`, `slug` and `owner_id` are written only by server code, never from a value the browser sent.
+- A user's plan (`profiles`), `slug` and `owner_id` are written only by server code, never from a value the browser sent.
 - Link previews and page titles stay generic ("A letter for Anna"). No message text, no gift codes.
 - Keep the per-user limits (letters per day, chat turns per letter) in place on every route that calls the model.
 
@@ -59,7 +59,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 ## Payments and database
 
 - Before changing anything in Postgres (tables, policies, indexes, functions), consult the Supabase guidance in `.claude/skills/`. Schema changes are migration files in `supabase/migrations/`.
-- Before writing Stripe code, consult the Stripe guidance in `.claude/skills/`. Use Stripe-hosted checkout and verify payment on the server.
+- Before writing Stripe code, consult the Stripe guidance in `.claude/skills/`. Use Stripe-hosted checkout in subscription mode, verify on the server, and keep plan status current with a signature-checked webhook. Prices and limits live in `lib/plans.ts`.
 
 ## Interface
 
