@@ -6,13 +6,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakes = vi.hoisted(() => ({
   signInWithOAuth: vi.fn(),
+  linkIdentity: vi.fn(),
   exchangeCodeForSession: vi.fn(),
-  middlewareUser: null as { id: string } | null,
+  serverUser: null as { id: string; is_anonymous?: boolean } | null,
+  middlewareUser: null as { id: string; is_anonymous?: boolean } | null,
 }))
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { signInWithOAuth: fakes.signInWithOAuth, exchangeCodeForSession: fakes.exchangeCodeForSession },
+    auth: {
+      getUser: async () => ({ data: { user: fakes.serverUser } }),
+      signInWithOAuth: fakes.signInWithOAuth,
+      linkIdentity: fakes.linkIdentity,
+      exchangeCodeForSession: fakes.exchangeCodeForSession,
+    },
   }),
 }))
 vi.mock("next/navigation", () => ({
@@ -32,7 +39,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://majnu.app")
   fakes.signInWithOAuth.mockResolvedValue({ data: { url: "https://accounts.google.example/o/oauth2" }, error: null })
+  fakes.linkIdentity.mockResolvedValue({ data: { url: "https://accounts.google.example/o/oauth2?link" }, error: null })
   fakes.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null })
+  fakes.serverUser = null
   fakes.middlewareUser = null
 })
 
@@ -58,6 +67,44 @@ describe("signInWithGoogle", () => {
   })
 })
 
+describe("signInWithGoogle for a guest", () => {
+  beforeEach(() => {
+    fakes.serverUser = { id: "guest-1", is_anonymous: true }
+  })
+
+  it("links Google to the guest account instead of signing in, keeping next", async () => {
+    await expect(signInWithGoogle("/dashboard/gifts")).rejects.toThrow("NEXT_REDIRECT")
+    expect(fakes.signInWithOAuth).not.toHaveBeenCalled()
+    expect(fakes.linkIdentity).toHaveBeenCalledWith({
+      provider: "google",
+      options: { redirectTo: "https://majnu.app/auth/callback?next=%2Fdashboard%2Fgifts" },
+    })
+  })
+
+  it("signs in to the Google account's own account when the guest chooses to switch", async () => {
+    await expect(signInWithGoogle(null, { switchAccount: true })).rejects.toThrow("NEXT_REDIRECT")
+    expect(fakes.linkIdentity).not.toHaveBeenCalled()
+    expect(fakes.signInWithOAuth).toHaveBeenCalledOnce()
+  })
+
+  it("returns a refused link as data, without redirecting", async () => {
+    fakes.linkIdentity.mockResolvedValue({
+      data: { url: null },
+      error: { message: "Manual linking is disabled", code: "manual_linking_disabled" },
+    })
+    expect(await signInWithGoogle(null)).toEqual({
+      error: { message: "Manual linking is disabled", code: "manual_linking_disabled" },
+    })
+  })
+
+  it("signs real users in with Google as before", async () => {
+    fakes.serverUser = { id: "user-1", is_anonymous: false }
+    await expect(signInWithGoogle(null)).rejects.toThrow("NEXT_REDIRECT")
+    expect(fakes.linkIdentity).not.toHaveBeenCalled()
+    expect(fakes.signInWithOAuth).toHaveBeenCalledOnce()
+  })
+})
+
 describe("GET /auth/callback", () => {
   const land = async (query: string) =>
     (await callback(new Request(`https://majnu.app/auth/callback${query}`))).headers.get("location")
@@ -76,6 +123,22 @@ describe("GET /auth/callback", () => {
 
   it("lands on the dashboard without a next", async () => {
     expect(await land("?code=abc")).toBe("https://majnu.app/dashboard")
+  })
+
+  it("sends a refused Google link to sign-in with its code, keeping next", async () => {
+    const query = "?next=%2Fdashboard%2Fplan&error=server_error&error_code=identity_already_exists&error_description=Identity+is+already+linked"
+    expect(await land(query)).toBe("https://majnu.app/signin?next=%2Fdashboard%2Fplan&auth_error=identity_already_exists")
+    expect(fakes.exchangeCodeForSession).not.toHaveBeenCalled()
+  })
+
+  it("passes on only short snake_case error codes", async () => {
+    expect(await land("?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E")).toBe("https://majnu.app/signin?auth_error=unknown")
+    expect(await land("?error=access_denied")).toBe("https://majnu.app/signin?auth_error=access_denied")
+  })
+
+  it("sends a code that cannot be exchanged in this browser to sign-in", async () => {
+    fakes.exchangeCodeForSession.mockResolvedValue({ data: {}, error: { message: "invalid request", code: "validation_failed" } })
+    expect(await land("?code=abc")).toBe("https://majnu.app/signin?auth_error=exchange_failed")
   })
 })
 

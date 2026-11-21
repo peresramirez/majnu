@@ -1,3 +1,4 @@
+import type React from "react"
 import { Loader2 } from "lucide-react"
 import { FcGoogle } from "react-icons/fc"
 
@@ -8,7 +9,9 @@ export const labelClass = "text-sm font-medium text-night-petal"
 export const submitClass =
   "h-12 w-full rounded-full bg-night-rose text-[15px] font-semibold text-night-plum hover:bg-[#F1C4A9]"
 
-export function GoogleButton({ onClick, loading, disabled }: { onClick: () => void; loading: boolean; disabled: boolean }) {
+type GoogleButtonProps = { onClick: () => void; loading: boolean; disabled: boolean; label?: string }
+
+export function GoogleButton({ onClick, loading, disabled, label = "Continue with Google" }: GoogleButtonProps) {
   return (
     <button
       type="button"
@@ -17,7 +20,7 @@ export function GoogleButton({ onClick, loading, disabled }: { onClick: () => vo
       className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-night-petal text-[15px] font-semibold text-night-plum transition-colors duration-200 ease-calm hover:bg-white disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FcGoogle className="h-5 w-5" aria-hidden="true" />}
-      Continue with Google
+      {label}
     </button>
   )
 }
@@ -32,15 +35,23 @@ export function OrDivider() {
   )
 }
 
-// Supabase's messages are written for developers; say what happened and what to do.
-// Errors returned from server actions arrive as plain objects, not Error instances.
-export function friendlyAuthError(err: unknown, fallback: string) {
-  const message = typeof err === "object" && err && "message" in err && typeof err.message === "string" ? err.message : undefined
-  if (!message) return fallback
-  const m = message.toLowerCase()
-  if (m.includes("invalid login credentials")) return "That email and password don't match. Check them and try again."
-  if (m.includes("email not confirmed")) return "Confirm your email first: open the link we sent you, then sign in."
-  if (m.includes("already registered")) return "There's already an account with this email. Sign in instead."
-  if (m.includes("rate limit")) return "Too many attempts. Wait a minute and try again."
-  return message
+// A quiet note above a form, e.g. for guests ("everything you made comes with you").
+export function AuthNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div role="note" className="rounded-2xl bg-night-velvet px-4 py-3.5 text-sm leading-relaxed text-night-lilac ring-1 ring-inset ring-night-petal/10">
+      {children}
+    </div>
+  )
+}
+
+// Shown to a guest when Google could not be added to the guest account (the
+// Google account already has a Majnu account, or manual linking is off): they
+// may still sign in to that account, and what they made as a guest stays behind.
+export function GoogleAnyway(props: Omit<GoogleButtonProps, "label">) {
+  return (
+    <div className="space-y-2">
+      <GoogleButton {...props} label="Sign in with Google anyway" />
+      <p className="text-center text-xs text-night-lilac/80">What you made as a guest stays with the guest account.</p>
+    </div>
+  )
 }
