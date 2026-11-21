@@ -10,7 +10,7 @@
 //   is asked to create a free account first (the account is upgraded in
 //   place, so the gift comes along), and a member writes a short design
 //   request and ticks the required consent box before going to Checkout.
-import { useEffect, useId, useRef, useState, type FormEvent } from "react"
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Sparkles, X } from "lucide-react"
@@ -64,16 +64,13 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
           Your last design could not be made{purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.
         </p>
       )}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`w-full ${secondaryButton} ring-night-rose/50 hover:ring-night-rose`}
-        aria-haspopup="dialog"
-      >
-        <Sparkles className="h-4 w-4 text-night-rose" aria-hidden="true" />
-        {wrapper.cta}
-      </button>
-      <WrapperDialog open={open} onOpenChange={setOpen} letterId={letterId} account={state.account} returnTo={returnTo} />
+      <WrapperDialog open={open} onOpenChange={setOpen} letterId={letterId} account={state.account} returnTo={returnTo}>
+        {/* A Dialog.Trigger, so focus comes back to it when the dialog closes. */}
+        <button type="button" className={`w-full ${secondaryButton} ring-night-rose/50 hover:ring-night-rose`}>
+          <Sparkles className="h-4 w-4 text-night-rose" aria-hidden="true" />
+          {wrapper.cta}
+        </button>
+      </WrapperDialog>
     </div>
   )
 }
@@ -84,15 +81,18 @@ function WrapperDialog({
   letterId,
   account,
   returnTo,
+  children,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   letterId: string
   account: WrapperState["account"]
   returnTo?: string
+  children: ReactNode
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Trigger asChild>{children}</DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] flex items-end justify-center bg-night-deep/80 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 sm:items-center sm:p-6">
           <DialogPrimitive.Content className="max-h-[calc(100dvh-24px)] w-full overflow-y-auto rounded-t-[24px] bg-night-plum p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-night-petal outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom-4 sm:max-w-[480px] sm:rounded-[24px] sm:p-7 sm:shadow-2xl sm:shadow-black/40">
@@ -208,7 +208,7 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
         onChange={(e) => setRequest(e.target.value)}
         maxLength={WRAPPER_REQUEST_MAX_CHARS}
         rows={3}
-        required
+        aria-required="true"
         aria-describedby={hintId}
         placeholder={EXAMPLES[0]}
         disabled={busy}
@@ -243,7 +243,6 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
           type="checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          required
           aria-required="true"
           disabled={busy}
           className={`mt-0.5 h-5 w-5 flex-none cursor-pointer rounded accent-night-rose ${focusRing}`}

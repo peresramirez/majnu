@@ -72,6 +72,8 @@ describe("startWrapperCheckout", () => {
       success_url: `${SITE}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE}/create/${LETTER}`,
       integration_identifier: "majnu_wrapper_test",
+      // Majnu stays the seller: Managed Payments is off for the session.
+      managed_payments: { enabled: false },
     })
     // Never a subscription, and no hard-coded payment methods.
     expect(params.mode).not.toBe("subscription")

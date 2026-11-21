@@ -54,4 +54,4 @@ export const WRAPPER_REQUEST_MAX_CHARS = 500
 // immediate delivery and confirms they lose the right (§ 356 (5) BGB). The
 // server stores this exact text with the purchase, never text the browser sent.
 export const WRAPPER_CONSENT_TEXT =
-  "Start making my design straight away. I understand that because it is made just for me, I lose my right of withdrawal once it is made."
+  "Start making my design straight away. I understand that because it is made just for me, I lose my right of withdrawal once you start."

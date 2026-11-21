@@ -151,11 +151,18 @@ export function restSandboxes(settings: RestSettings, fetchImpl: typeof fetch = 
     async deleteByLabels(labels) {
       const url = `${api}/sandbox?labels=${encodeURIComponent(JSON.stringify(labels))}`
       const listed = await json<SandboxDto[] | { items?: SandboxDto[] }>(url, { method: "GET", timeoutSeconds: 30 })
+      // Daytona answers { items, nextCursor }; one job has one sandbox, so the first page is enough.
       const sandboxes = Array.isArray(listed) ? listed : (listed.items ?? [])
       let deleted = 0
       for (const sandbox of sandboxes) {
-        await call(`${api}/sandbox/${encodeURIComponent(sandbox.id)}`, { method: "DELETE", timeoutSeconds: 60 })
-        deleted++
+        // The listing lags: a sandbox already on its way out answers 409 (or 404 once gone).
+        if (sandbox.state === "destroyed" || sandbox.state === "destroying") continue
+        try {
+          await call(`${api}/sandbox/${encodeURIComponent(sandbox.id)}`, { method: "DELETE", timeoutSeconds: 60 })
+          deleted++
+        } catch (error) {
+          if (!(error instanceof DaytonaApiError && (error.status === 404 || error.status === 409))) throw error
+        }
       }
       return deleted
     },

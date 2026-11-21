@@ -128,9 +128,12 @@ export async function startWrapperCheckout(user: BillingUser, input: CheckoutInp
         success_url: `${siteUrl}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${siteUrl}${back}`,
         expires_at: Math.floor(Date.now() / 1000) + SESSION_LIFETIME_SECONDS,
-        custom_text: {
-          submit: { message: "Majnu starts your design as soon as you pay. You agreed that this ends your right of withdrawal." },
-        },
+        // Majnu is the seller and states prices including VAT (docs/business-
+        // plan.md). The Stripe account has Managed Payments (Stripe as merchant
+        // of record) on by default; it is switched off per session until the
+        // developer decides otherwise, since it changes who sells, the fees,
+        // the terms and how VAT is handled.
+        managed_payments: { enabled: false },
         integration_identifier: CHECKOUT_INTEGRATION_ID,
       },
       // A double click gets the same session, not a second one.

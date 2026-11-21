@@ -98,13 +98,19 @@ describe("restSandboxes", () => {
     expect(calls[5]).toMatchObject({ url: "https://app.daytona.io/api/sandbox/sb1", method: "DELETE" })
   })
 
-  it("deletes every sandbox carrying the job's labels", async () => {
-    const { calls, fetchImpl } = fakeFetch([json({ items: [{ id: "a" }, { id: "b" }] }), json({}), json({})])
+  it("deletes every sandbox carrying the job's labels, skipping those already on their way out", async () => {
+    const { calls, fetchImpl } = fakeFetch([
+      json({ items: [{ id: "a", state: "started" }, { id: "old", state: "destroying" }, { id: "b", state: "creating" }, { id: "c", state: "started" }], nextCursor: null }),
+      json({}),
+      json({}),
+      json({ message: "Sandbox state change in progress" }, 409),
+    ])
     expect(await restSandboxes(SETTINGS, fetchImpl).deleteByLabels({ job: "j1" })).toBe(2)
     expect(calls[0].url).toBe(`https://app.daytona.io/api/sandbox?labels=${encodeURIComponent('{"job":"j1"}')}`)
     expect(calls.slice(1).map((c) => `${c.method} ${c.url}`)).toEqual([
       "DELETE https://app.daytona.io/api/sandbox/a",
       "DELETE https://app.daytona.io/api/sandbox/b",
+      "DELETE https://app.daytona.io/api/sandbox/c",
     ])
   })
 })

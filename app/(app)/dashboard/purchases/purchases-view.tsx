@@ -35,7 +35,7 @@ export function PurchasesView({ purchases, focusId, notice }: { purchases: Purch
       {live.length > 0 && (
         <div className="mt-8 space-y-3">
           {live.map((p) => (
-            <PurchaseStatusCard key={p.id} purchase={p} />
+            <PurchaseStatusCard key={p.id} purchase={p} refreshOnSettle />
           ))}
         </div>
       )}

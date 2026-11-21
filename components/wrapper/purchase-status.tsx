@@ -4,7 +4,8 @@
 // every few seconds until the design is done (or refunded), then shows the
 // link to the gift page. Used on the Purchases tab after Checkout and on the
 // letter's preview. The page announces each change politely to screen readers.
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ArrowUpRight } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { focusRing } from "@/components/app/styles"
@@ -47,8 +48,27 @@ export function usePurchaseStatus(initial: PurchaseView): PurchaseView {
   return purchase
 }
 
-export function PurchaseStatusCard({ purchase: initial, className = "" }: { purchase: PurchaseView; className?: string }) {
+// `refreshOnSettle`: re-render the server page around the card once the
+// design is done or refunded, so a list on the same page (the Purchases tab)
+// shows the same status.
+export function PurchaseStatusCard({
+  purchase: initial,
+  refreshOnSettle = false,
+  className = "",
+}: {
+  purchase: PurchaseView
+  refreshOnSettle?: boolean
+  className?: string
+}) {
   const purchase = usePurchaseStatus(initial)
+  const router = useRouter()
+  const firstStatus = useRef(initial.status)
+  useEffect(() => {
+    if (refreshOnSettle && purchase.status !== firstStatus.current && !isInProgress(purchase.status) && purchase.status !== "pending") {
+      firstStatus.current = purchase.status
+      router.refresh()
+    }
+  }, [purchase.status, refreshOnSettle, router])
   const words = STATUS_WORDS[purchase.status]
   const busy = isInProgress(purchase.status) || purchase.status === "pending"
   const done = purchase.status === "done"
