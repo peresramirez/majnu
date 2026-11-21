@@ -235,3 +235,13 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 | Daytona redesign | Built and run once by hand; not offered in the chat, which needs a queue consumer |
 | Gift finder, anonymous accounts, Turnstile | Contract frozen, code being built ([#31](https://github.com/peresramirez/majnu/issues/31) to [#34](https://github.com/peresramirez/majnu/issues/34)) |
 | Gift list on invitations | Decided, not started ([#35](https://github.com/peresramirez/majnu/issues/35)) |
+
+## Features added since this overview was written
+
+- [Gift finder, landing page](features/gift-finder-ui.md)
+- [Gift finder, server](features/gift-finder-api.md)
+- [Guest accounts](features/guest-accounts.md)
+- [Voice input](features/voice-input.md)
+- [Gift list on invitations](features/gift-list.md)
+
+The business model (free product, a paid personalised wrapper) is in [business-plan.md](business-plan.md).

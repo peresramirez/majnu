@@ -24,7 +24,7 @@ vi.mock("@/lib/agents/research", async (importOriginal) => ({
 import { buildContent } from "@/lib/agents/builder"
 import type { ChatEvent } from "@/lib/agents/events"
 import { researchGifts } from "@/lib/agents/research"
-import { MAIN_TOOLS, checkBuild, runTool, type TurnState } from "@/lib/agents/tools"
+import { MAIN_TOOLS, checkBuild, keepGiftList, runTool, type TurnState } from "@/lib/agents/tools"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { saveLetterContent } from "@/lib/letters/store"
 import { canUseFeature, type LimitResult } from "@/lib/limits"
@@ -66,8 +66,8 @@ beforeEach(() => {
 })
 
 describe("tool definitions", () => {
-  it("are the four main-agent tools, in a fixed order, with object schemas", () => {
-    expect(MAIN_TOOLS.map((t) => t.name)).toEqual(["suggest_templates", "research_gifts", "build_letter", "edit_letter"])
+  it("are the five main-agent tools, in a fixed order, with object schemas", () => {
+    expect(MAIN_TOOLS.map((t) => t.name)).toEqual(["suggest_templates", "research_gifts", "build_letter", "edit_letter", "update_gift_list"])
     for (const tool of MAIN_TOOLS) {
       expect(tool.input_schema.type).toBe("object")
       expect(tool.input_schema).not.toHaveProperty("$schema")
@@ -222,5 +222,81 @@ describe("suggest_templates", () => {
     const result = await runTool(call("suggest_templates", { templateIds: ["nope"] }), makeState())
     expect(result.is_error).toBe(true)
     expect(events.some((e) => e.type === "templates")).toBe(false)
+  })
+})
+
+describe("update_gift_list", () => {
+  const { wishlist: _list, ...partyWithoutList } = letterFixtures["party-invite"]
+  void _list
+  const builtParty = () => makeState({ kind: "letter", templateId: "party-invite", content: partyWithoutList })
+
+  it("adds the chosen gifts with server-made ids, keeps only https links, saves and shows the preview", async () => {
+    const state = builtParty()
+    const result = await runTool(
+      call("update_gift_list", {
+        add: [
+          { title: "Polaroid film", price: "€30", url: "https://shop.example/film" },
+          { title: "Fairy lights", url: "javascript:alert(1)" },
+        ],
+      }),
+      state,
+    )
+    const saved = vi.mocked(saveLetterContent).mock.calls[0]
+    expect(saved[0]).toBe("letter-1")
+    expect(saved[1]).toMatchObject({ kind: "letter", templateId: "party-invite", title: "An invitation for Everyone" })
+    const list = (saved[1].content as typeof partyWithoutList & { wishlist: { id: string }[] }).wishlist
+    expect(list).toEqual([
+      { id: expect.stringMatching(/^[A-Za-z0-9]{10}$/), title: "Polaroid film", price: "€30", url: "https://shop.example/film" },
+      { id: expect.stringMatching(/^[A-Za-z0-9]{10}$/), title: "Fairy lights" },
+    ])
+    expect(state.letter.content).toEqual(saved[1].content)
+    expect(events).toContainEqual({ type: "preview", letterId: "letter-1", kind: "letter", templateId: "party-invite" })
+    expect(result.is_error).toBeUndefined()
+    // The model gets the ids, so it can take a gift off later.
+    expect(String(result.content)).toContain(list[0].id)
+  })
+
+  it("takes gifts off by id and keeps the other ids, so their claims stay valid", async () => {
+    const state = makeState({ kind: "letter", templateId: "party-invite", content: letterFixtures["party-invite"] })
+    const result = await runTool(call("update_gift_list", { removeIds: ["fxpty02", "nope"] }), state)
+    const content = vi.mocked(saveLetterContent).mock.calls[0][1].content as typeof letterFixtures["party-invite"]
+    expect(content.wishlist?.map((item) => item.id)).toEqual(["fxpty01", "fxpty03"])
+    expect(String(result.content)).toContain("nope")
+  })
+
+  it("refuses letters that are not wedding or party invitations, and invitations not built yet", async () => {
+    const envelope = makeState({ kind: "letter", templateId: "classic-envelope", content: letterFixtures["classic-envelope"] })
+    expect((await runTool(call("update_gift_list", { add: [{ title: "Vase" }] }), envelope)).is_error).toBe(true)
+    expect((await runTool(call("update_gift_list", { add: [{ title: "Vase" }] }), makeState())).is_error).toBe(true)
+    expect(saveLetterContent).not.toHaveBeenCalled()
+  })
+
+  it("asks for something to change", async () => {
+    expect((await runTool(call("update_gift_list", {}), builtParty())).is_error).toBe(true)
+    expect(saveLetterContent).not.toHaveBeenCalled()
+  })
+})
+
+describe("the gift list across builds and edits", () => {
+  it("survives edit_letter: the builder never sees it, the tool puts it back", async () => {
+    const { wishlist: _list, ...edited } = { ...letterFixtures["party-invite"], headline: "Mia turns 26" }
+    void _list
+    vi.mocked(buildContent).mockResolvedValue({ kind: "letter", content: edited })
+    const state = makeState({ kind: "letter", templateId: "party-invite", content: letterFixtures["party-invite"] })
+    await runTool(call("edit_letter", { change: "She turns 26" }), state)
+
+    const saved = vi.mocked(saveLetterContent).mock.calls[0][1].content as typeof letterFixtures["party-invite"]
+    expect(saved.headline).toBe("Mia turns 26")
+    expect(saved.wishlist).toEqual(letterFixtures["party-invite"].wishlist)
+  })
+
+  it("keeps the list when an invitation is rebuilt, and adds none to a letter that had none", () => {
+    const built = { kind: "letter" as const, content: letterFixtures["classic-envelope"] }
+    expect(keepGiftList(letterFixtures["party-invite"], built)).toEqual({
+      kind: "letter",
+      content: { ...letterFixtures["classic-envelope"], wishlist: letterFixtures["party-invite"].wishlist },
+    })
+    expect(keepGiftList(letterFixtures["classic-envelope"], built)).toBe(built)
+    expect(keepGiftList(null, built)).toBe(built)
   })
 })

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/agents/client", () => ({ getClient: vi.fn(), agentRequestBase: () => ({}), AGENT_EFFORT: "low" }))
 
-import { BUILDER_SYSTEM_PROMPT, checkContent, sanitize, titleFor } from "@/lib/agents/builder"
+import { BUILDER_SYSTEM_PROMPT, BuilderLetterContent, checkContent, contentForBuilder, sanitize, titleFor } from "@/lib/agents/builder"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 
 describe("checkContent", () => {
@@ -67,5 +67,19 @@ describe("BUILDER_SYSTEM_PROMPT", () => {
   it("has no per-request facts in it, so it stays the same on every request", () => {
     expect(BUILDER_SYSTEM_PROMPT).not.toContain(new Date().toISOString().slice(0, 10))
     expect(BUILDER_SYSTEM_PROMPT).not.toMatch(/today is/i)
+  })
+})
+
+describe("the gift list and the builder", () => {
+  it("is not part of the builder's output schema, so it can never invent or drop gifts", () => {
+    expect(Object.keys(BuilderLetterContent.shape)).not.toContain("wishlist")
+    expect(Object.keys(BuilderLetterContent.shape)).toContain("event")
+  })
+
+  it("is left out of the current content the builder sees when editing", () => {
+    const shown = contentForBuilder(letterFixtures["party-invite"])
+    expect(shown).not.toHaveProperty("wishlist")
+    expect(shown).toMatchObject({ headline: letterFixtures["party-invite"].headline })
+    expect(contentForBuilder(calendarFixtures.countdown)).toBe(calendarFixtures.countdown)
   })
 })
