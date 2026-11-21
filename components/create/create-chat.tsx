@@ -121,6 +121,19 @@ export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGi
     [chatSend],
   )
 
+  // Cards and chips in the chat keep focus after a click, so Enter would send
+  // them again. With a mouse, move focus to the message box; on touch screens
+  // just let go of it, so the keyboard does not open while Majnu replies.
+  const sendFromChat = useCallback(
+    (text: string) => {
+      const sent = send(text)
+      if (window.matchMedia("(pointer: fine)").matches) composerRef.current?.focus()
+      else (document.activeElement as HTMLElement | null)?.blur()
+      return sent
+    },
+    [send],
+  )
+
   function sendDraft() {
     if (send(composeMessage(template?.name ?? null, draft))) {
       setDraft("")
@@ -189,9 +202,9 @@ export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGi
         >
           <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
             {items.length === 0 ? (
-              <EmptyState onPick={send} disabled={streaming} />
+              <EmptyState onPick={sendFromChat} disabled={streaming} />
             ) : (
-              <ChatMessages items={items} streaming={streaming} status={status} onSend={send} />
+              <ChatMessages items={items} streaming={streaming} status={status} onSend={sendFromChat} />
             )}
           </div>
         </div>
