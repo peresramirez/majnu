@@ -1,6 +1,6 @@
 # Majnu: build plan
 
-Majnu is a personalized digital gifting platform. Someone signs in, chats with an AI agent, and gets a gift, letter, invitation or advent calendar as a web page made for one person, with a short link and QR code. We track when the recipient opens it.
+Majnu is a personalized digital gifting platform. Its main flow (see "Gift finder") helps someone find the right gift for a person they love, without signing in, then wraps the chosen gift in a page made for that person, shared by link and QR code. Letters, invitations and advent calendars are made by chatting with the same agent. We track when the recipient opens a gift.
 
 The product's building block is still called a letter in the code and in this plan: a gift is a letter that carries a gift code, and an invitation is a letter with an event.
 
@@ -16,6 +16,29 @@ Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at 
 - **The signed-in app has three tabs**: Create, My gifts and Plan, as a bottom bar on phones and top tabs on desktop. Create opens on a chat. The message box has a **Template** button that opens the template cards; choosing one attaches it, and the message is sent as ordinary text (`Use the "Classic envelope" template.`), so the main agent always sees the choice in the conversation.
 - **Pricing is two plans**, defined once in `lib/plans.ts` and shown on the landing page: **Crescent**, free, 3 gifts a month (letters, invitations, gift pages); **Full moon**, €4.99 a month, unlimited gifts plus advent calendars and gift research. Billing is a Stripe subscription. Until Stripe takes live payments, `MAJNU_BILLING` stays unset: Full moon features are on for everyone, the Plan tab says so, and only the spending guard applies. Set `MAJNU_BILLING=on` to enforce plans.
 - **Daytona is an optional extra**, built only if everything else is done. Its sandboxes stop 15 minutes after the last SDK call, so anything built there is copied to our storage and served from our domain.
+
+## Gift finder: the main flow (decided 21 November)
+
+The product now leads with one job: **help someone find the right gift for a person they love.** Letters, invitations and calendars stay, but behind it: letters and invitations get their own app tab (free), and advent calendars need an account and Full moon.
+
+### The flow
+
+1. **Landing page.** The Majnu and Layla scene stays. The hero gets a chat box, as on layla.ai: Majnu's greeting ("Who are you looking for a gift for?"), a message box whose placeholder types out examples in turn ("Find a gift for my mother", "…for my girlfriend", "…for my best friend"), a primary button and a few suggestion chips. No sign-in.
+2. **Context without questions.** Sending opens the finder as a modal (a full-height sheet on phones). The server reads the visitor's **country and region from the network** (Cloudflare's request data; no browser permission prompt, no exact location) and the browser sends its **language** and timezone. Majnu infers the **relationship** and an **age range** from what was typed (girlfriend: about 20–35; mother: about 45–70; until the visitor says otherwise), and shows these assumptions as chips the visitor can correct.
+3. **Research.** The research sub-agent searches with Tavily in the visitor's language and country, and returns **three options**: image, title, short description, price in the local currency, shop and link, with **one recommended** and why.
+4. **Personalise the gift.** If none fits, Majnu asks a few questions (name, exact age, what they love, their job, a public social profile if the visitor wants to share one) and searches again. A public Instagram or TikTok profile is read with Apify, only when the sender pastes it, and only a short summary of interests is kept (never posts or images); other public pages are read with Tavily.
+5. **Wrap it.** Choosing an option shows the templates that fit a gift (gift reveal, classic envelope, postcard). Majnu writes the page around the chosen gift, shows it, and gives the link and QR code. "Make it unique" (the Daytona redesign) is offered on the preview.
+6. **Advent calendars** ask the visitor to sign up (and, with billing on, choose Full moon).
+
+### Accounts and limits
+
+- **Invisible anonymous accounts.** The first finder message signs the visitor in anonymously with Supabase (`signInAnonymously`), protected by an invisible Cloudflare Turnstile check that Supabase verifies. Everything that works for signed-in users (ownership, row-level security, limits, My gifts, sharing) works for them. Signing up later links an email or Google identity to the same account, so nothing is lost. Middleware treats anonymous users as signed out for `/signin` and `/signup`, so they can upgrade.
+- **Free use per visitor per day:** 3 searches, 2 of them personalised. A site-wide daily cap on searches (`MAJNU_DAILY_SEARCH_CAP`) protects the budget against ad traffic. Apify profile reads have their own small site-wide cap (`APIFY_DAILY_CAP`), because the Apify credit is $5.
+- **Privacy.** The country and region are stored with a finder session to explain its results; never an address or exact location. The privacy page must name Turnstile, Apify and anonymous accounts before this goes live.
+
+### Contract and work split
+
+`lib/finder/events.ts` defines the request, the streamed events and the wrap call. Issues: #31 finder agent and API, #32 landing page finder, #33 anonymous visitors, app tabs and privacy, #34 social profile reading.
 
 ## Architecture
 
