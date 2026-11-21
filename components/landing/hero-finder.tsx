@@ -105,7 +105,7 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
       </div>
 
       <form id="find" onSubmit={submit} className="mt-3 scroll-mt-28" aria-labelledby="finder-hero-label">
-        <div className="flex items-end gap-2 rounded-[26px] bg-night-plum/85 p-1.5 pl-4 ring-1 ring-inset ring-night-petal/20 backdrop-blur-md transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/70">
+        <div className="flex items-end gap-2 rounded-[26px] bg-night-plum/85 p-1.5 pl-4 shadow-[0_18px_48px_-20px_rgba(0,0,0,0.75)] ring-1 ring-inset ring-night-petal/20 backdrop-blur-md transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/70">
           <label id="finder-hero-label" htmlFor="finder-hero-message" className="sr-only">
             Who is the gift for?
           </label>
@@ -135,29 +135,30 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
         </div>
       </form>
 
-      <ul className="mt-4 flex flex-wrap gap-x-2 gap-y-3" aria-label="Start with">
-        {suggestions.map((s) => (
-          <li key={s.label}>
-            <button type="button" onClick={() => start(s.message)} className={suggestionChip}>
-              {s.label}
+      {/* The way back to the finder hangs below the chips once there is a
+          conversation. It takes no space in the layout, so nothing moves when
+          it appears. */}
+      <div className="relative mt-4">
+        <ul className="flex flex-wrap gap-x-2 gap-y-3" aria-label="Start with">
+          {suggestions.map((s) => (
+            <li key={s.label}>
+              <button type="button" onClick={() => start(s.message)} className={suggestionChip}>
+                {s.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {hasConversation && (
+          <div className="absolute left-0 top-full pt-3">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className={`relative inline-flex h-8 items-center gap-1.5 rounded-full bg-night-petal/[0.06] px-3 text-[13px] font-medium text-night-petal ring-1 ring-inset ring-night-petal/15 backdrop-blur-sm transition-colors duration-200 ease-calm before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] hover:bg-night-petal/10 hover:ring-night-petal/35 ${focusRing}`}
+            >
+              <MessageCircle className="h-3.5 w-3.5 text-night-rose" aria-hidden="true" />
+              Back to your gift ideas
             </button>
-          </li>
-        ))}
-      </ul>
-
-      {/* One line of fixed height: the note, or the way back once there is a search. */}
-      <div className="mt-4 flex h-8 items-center">
-        {hasConversation ? (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className={`relative inline-flex h-8 items-center gap-1.5 rounded-full bg-night-petal/[0.06] px-3 text-[13px] font-medium text-night-petal ring-1 ring-inset ring-night-petal/15 transition-colors duration-200 ease-calm before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] hover:bg-night-petal/10 hover:ring-night-petal/35 ${focusRing}`}
-          >
-            <MessageCircle className="h-3.5 w-3.5 text-night-rose" aria-hidden="true" />
-            Back to your gift ideas
-          </button>
-        ) : (
-          <p className="text-[13px] text-night-lilac/80">Free, no account needed.</p>
+          </div>
         )}
       </div>
 

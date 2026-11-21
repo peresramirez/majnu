@@ -116,7 +116,7 @@ export default function LandingPage() {
           <div className="relative z-10 md:-mt-[100svh]">
           <section
             aria-labelledby="hero-title"
-            className="relative z-10 mx-auto flex max-w-6xl items-center px-5 pb-10 pt-24 sm:px-8 sm:pt-28 md:min-h-[100svh] md:pb-16 md:pt-28"
+            className="relative z-10 mx-auto flex max-w-6xl items-center px-5 pb-14 pt-24 sm:px-8 sm:pt-28 md:min-h-[100svh] md:pb-16 md:pt-28"
           >
             <HeroFinder />
           </section>
