@@ -77,9 +77,17 @@ export function MadeWith({ className = "" }: { className?: string }) {
 }
 
 // A short rule with a small diamond in the middle.
-export function Ornament({ className = "", align = "center" }: { className?: string; align?: "center" | "start" }) {
+export function Ornament({
+  className = "",
+  align = "center",
+  style,
+}: {
+  className?: string
+  align?: "center" | "start"
+  style?: CSSProperties
+}) {
   return (
-    <div aria-hidden="true" className={`flex items-center gap-3 ${align === "start" ? "justify-start" : "justify-center"} ${className}`}>
+    <div aria-hidden="true" className={`flex items-center gap-3 ${align === "start" ? "justify-start" : "justify-center"} ${className}`} style={style}>
       <span className="h-px w-12 bg-current opacity-30" />
       <span className="h-1.5 w-1.5 rotate-45 bg-current opacity-60" />
       <span className="h-px w-12 bg-current opacity-30" />

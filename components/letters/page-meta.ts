@@ -8,8 +8,10 @@ import { paletteOf } from "./theme"
 
 const hidden = { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } }
 
-// The site's own preview image, the same for every letter (docs/brand.md).
-const image = { url: "/brand/majnu-og.png", width: 1200, height: 630, alt: "Majnu: personalized digital gifting" }
+// Preview images come from app/(public)/l/[slug]/opengraph-image.tsx and
+// twitter-image.tsx: an envelope addressed to the first name. If those routes
+// are removed, put the site image back here, the same for every letter:
+// images: [{ url: "/brand/majnu-og.png", width: 1200, height: 630, alt: "Majnu: personalized digital gifting" }]
 
 export function letterMetadata(letter: PublicLetter | null): Metadata {
   if (!letter) return { title: { absolute: "Majnu" }, robots: hidden, referrer: "no-referrer" }
@@ -20,8 +22,8 @@ export function letterMetadata(letter: PublicLetter | null): Metadata {
     description,
     robots: hidden,
     referrer: "no-referrer",
-    openGraph: { type: "website", siteName: "Majnu", title, description, images: [image] },
-    twitter: { card: "summary_large_image", title, description, images: [image] },
+    openGraph: { type: "website", siteName: "Majnu", title, description },
+    twitter: { card: "summary_large_image", title, description },
   }
 }
 

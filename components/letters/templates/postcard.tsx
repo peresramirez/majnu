@@ -2,11 +2,14 @@
 
 // postcard: a picture side with the headline over a little painted landscape,
 // and a written side with the message, a perforated stamp and a postmark.
-// Tap the card or "Turn over" to flip it.
+// Tap the card, or use the "Turn over" button (the keyboard's way in), to flip
+// it. The side facing away is inert, so it is neither focusable nor read out.
+// With reduced motion nothing flips: both sides are shown, one above the other.
 import { useId, useState } from "react"
 import type { LetterContent } from "@/lib/letters/schema"
 import { displayStyle, focusRing, MadeWith, paperStyle, Stars } from "../chrome"
 import { GiftList } from "../gift-card"
+import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { firstName } from "../names"
 import { paletteOf } from "../theme"
@@ -57,6 +60,9 @@ function Stamp() {
 
 export function Postcard({ content }: { content: LetterContent }) {
   const [flipped, setFlipped] = useState(false)
+  // Stacked: both sides visible at once (the layout itself comes from CSS, so
+  // it is right before this hook runs in the browser).
+  const stacked = useReducedMotion()
   const dark = paletteOf(content.theme).dark
   const name = firstName(content.recipientName)
 
@@ -68,21 +74,24 @@ export function Postcard({ content }: { content: LetterContent }) {
 
         <div className="postcard-scene mt-6 w-full max-w-[400px] sm:max-w-[640px]">
           <div
-            className="postcard relative aspect-[3/4] w-full cursor-pointer sm:aspect-[3/2]"
+            className="postcard relative aspect-[3/4] w-full cursor-pointer touch-manipulation sm:aspect-[3/2]"
             data-flipped={flipped}
-            onClick={() => setFlipped((f) => !f)}
+            onClick={() => {
+              if (!stacked) setFlipped((f) => !f)
+            }}
           >
             {/* Picture side */}
             <div
               className="postcard-face absolute inset-0 overflow-hidden rounded-[6px] p-[10px] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.6),0_8px_20px_-12px_rgba(0,0,0,0.35)]"
               style={{ background: "var(--paper)" }}
-              aria-hidden={flipped}
+              inert={!stacked && flipped}
             >
               <div
                 className="relative h-full w-full overflow-hidden rounded-[2px]"
                 style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 28%, var(--paper)) 0%, var(--paper) 70%)" }}
               >
-                <Landscape className="absolute inset-x-0 bottom-0 h-[62%] w-full" />
+                {/* Taller on the wide card, so the sun is not cut off at the top */}
+                <Landscape className="absolute inset-x-0 bottom-0 h-[62%] w-full sm:h-[88%]" />
                 <div className="relative p-6 sm:p-8">
                   <h1 className="max-w-[11ch] text-balance text-[44px] leading-[0.98] tracking-[-0.01em] text-[var(--paper-ink)] sm:text-[56px]" style={displayStyle}>
                     {content.headline}
@@ -98,7 +107,7 @@ export function Postcard({ content }: { content: LetterContent }) {
             <div
               className="postcard-face postcard-back absolute inset-0 overflow-hidden rounded-[6px] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.6),0_8px_20px_-12px_rgba(0,0,0,0.35)]"
               style={paperStyle}
-              aria-hidden={!flipped}
+              inert={!stacked && !flipped}
             >
               <div className="flex h-full flex-col p-5 sm:grid sm:grid-cols-[1.25fr_1fr] sm:gap-0 sm:p-7">
                 <div className="flex items-start justify-between gap-3 sm:order-2 sm:col-start-2 sm:row-start-1 sm:pl-6">
@@ -126,18 +135,19 @@ export function Postcard({ content }: { content: LetterContent }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFlipped((f) => !f)}
-          aria-pressed={flipped}
-          className={`mt-8 inline-flex items-center gap-2 rounded-full border px-5 py-3 text-[15px] font-medium transition-colors duration-200 ${focusRing}`}
-          style={{ borderColor: "color-mix(in srgb, var(--page-ink) 30%, transparent)" }}
-        >
-          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
-            <path d="M4 10a6 6 0 0 1 10.5-4M16 10a6 6 0 0 1-10.5 4M14.5 2.5V6H11M5.5 17.5V14H9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          {flipped ? "Turn back" : "Turn over"}
-        </button>
+        {stacked ? null : (
+          <button
+            type="button"
+            onClick={() => setFlipped((f) => !f)}
+            className={`postcard-turn mt-8 inline-flex items-center gap-2 rounded-full border px-5 py-3 text-[15px] font-medium transition-colors duration-200 ${focusRing}`}
+            style={{ borderColor: "color-mix(in srgb, var(--page-ink) 30%, transparent)" }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+              <path d="M4 10a6 6 0 0 1 10.5-4M16 10a6 6 0 0 1-10.5 4M14.5 2.5V6H11M5.5 17.5V14H9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {flipped ? "Turn back" : "Turn over"}
+          </button>
+        )}
 
         <GiftList gifts={content.gifts} />
         <MadeWith />
@@ -159,10 +169,13 @@ export function Postcard({ content }: { content: LetterContent }) {
           .postcard[data-flipped="true"] { animation: none; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .postcard, .postcard[data-flipped="true"] { transform: none; }
-          .postcard-back { transform: none; opacity: 0; transition: opacity 200ms; }
-          .postcard[data-flipped="true"] .postcard-back { opacity: 1; }
-          .postcard[data-flipped="true"] .postcard-face:not(.postcard-back) { opacity: 0; }
+          /* Both sides, picture first, nothing to flip. */
+          .postcard, .postcard[data-flipped="true"] { transform: none; aspect-ratio: auto; display: flex; flex-direction: column; gap: 20px; cursor: default; }
+          .postcard .postcard-face { position: relative; inset: auto; transform: none; aspect-ratio: 3 / 4; }
+          .postcard-turn { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) and (min-width: 640px) {
+          .postcard .postcard-face { aspect-ratio: 3 / 2; }
         }
         @keyframes postcard-peek { 0%, 100% { transform: rotateY(0); } 45% { transform: rotateY(-14deg); } }
       `}</style>

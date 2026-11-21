@@ -178,7 +178,8 @@ function Elegant({ content, start, countdown }: { content: LetterContent; start:
   return (
     <main className="relative min-h-[100svh] overflow-hidden" style={{ background: "var(--page)", color: "var(--page-ink)" }}>
       {dark ? <Stars className="opacity-60" /> : null}
-      <div className="relative mx-auto max-w-[520px] px-4 pb-12 pt-10 sm:pt-16">
+      {/* Centred when it is shorter than the screen (an invitation without an event). */}
+      <div className="relative mx-auto flex min-h-[100svh] max-w-[520px] flex-col justify-center px-4 pb-12 pt-10 sm:pt-16">
         <p className="rise text-center text-[12px] font-semibold uppercase tracking-[0.3em] text-[var(--page-muted)]">
           For {firstName(content.recipientName)}
         </p>
@@ -219,7 +220,10 @@ function Elegant({ content, start, countdown }: { content: LetterContent; start:
               <p className="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed text-[var(--paper-muted)]">{event.address}</p>
               <Ornament className="mt-8 text-[var(--paper-accent)]" />
             </div>
-          ) : null}
+          ) : (
+            // No date or place: the rule still closes the message before the names.
+            <Ornament className="rise mt-9 text-[var(--paper-accent)]" style={{ animationDelay: "320ms" }} />
+          )}
 
           <SignOff signOff={content.signOff} senderName={content.senderName} align="center" className="rise mt-9" />
         </article>
@@ -275,7 +279,8 @@ function Playful({ content, start, countdown }: { content: LetterContent; start:
   return (
     <main className="relative min-h-[100svh] overflow-hidden" style={{ background: "var(--page)", color: "var(--page-ink)" }}>
       <Confetti />
-      <div className="relative mx-auto max-w-[520px] px-4 pb-12 pt-10 sm:pt-16">
+      {/* Centred when it is shorter than the screen (an invitation without an event). */}
+      <div className="relative mx-auto flex min-h-[100svh] max-w-[520px] flex-col justify-center px-4 pb-12 pt-10 sm:pt-16">
         <div className="pop flex items-center justify-between gap-3">
           <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--page-muted)]">Hey {firstName(content.recipientName)}</p>
           <span
