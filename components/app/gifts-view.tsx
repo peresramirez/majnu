@@ -1,12 +1,22 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import type { HostGiftList } from "@/lib/claims/owner"
 import type { LetterSummary } from "@/lib/letters/store"
 import { GiftCard } from "./gift-card"
 import { pageContainer, primaryButton } from "./styles"
 
-// The My gifts tab: every gift, newest first, with when it was opened.
-export function GiftsView({ letters, now }: { letters: LetterSummary[]; now: Date }) {
+// The My gifts tab: every gift, newest first, with when it was opened, and for
+// invitations with a gift list, who is bringing what.
+export function GiftsView({
+  letters,
+  giftLists = {},
+  now,
+}: {
+  letters: LetterSummary[]
+  giftLists?: Record<string, HostGiftList>
+  now: Date
+}) {
   if (letters.length === 0) {
     return (
       <div className={pageContainer}>
@@ -41,7 +51,7 @@ export function GiftsView({ letters, now }: { letters: LetterSummary[]; now: Dat
       <ul className="mt-8 grid gap-4 md:grid-cols-2">
         {letters.map((letter) => (
           <li key={letter.id}>
-            <GiftCard letter={letter} now={now} />
+            <GiftCard letter={letter} giftList={giftLists[letter.id]} now={now} />
           </li>
         ))}
       </ul>
