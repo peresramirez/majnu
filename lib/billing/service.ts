@@ -16,12 +16,12 @@
 import "server-only"
 import type Stripe from "stripe"
 import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
+import { getMyLetterForWrapper } from "./my-purchases"
 import { safeNextPath } from "./next-path"
 import {
   attachCheckoutSession,
   deletePendingPurchase,
   getActivePurchaseForLetter,
-  getMyLetterForWrapper,
   getPendingPurchasesForLetter,
   getPurchase,
   insertPendingPurchase,

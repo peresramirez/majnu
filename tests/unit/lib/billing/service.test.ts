@@ -7,13 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/billing/stripe", async () => (await import("./fakes")).stripeModule)
 vi.mock("@/lib/billing/purchases", async () => (await import("./fakes")).purchasesModule)
+vi.mock("@/lib/billing/my-purchases", async () => (await import("./fakes")).myPurchasesModule)
 vi.mock("@/lib/billing/queue", () => ({ enqueueDesign: vi.fn(async () => "queued") }))
 
 import type Stripe from "stripe"
 import { enqueueDesign } from "@/lib/billing/queue"
 import { applyPaidSession, cleanWrapperRequest, confirmCheckout, handleStripeEvent, HANDLED_EVENTS, startWrapperCheckout } from "@/lib/billing/service"
 import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS } from "@/lib/plans"
-import { addLetter, addPurchase, db, paidSession, purchasesModule, resetDb, resetStripe, stripe } from "./fakes"
+import { addLetter, addPurchase, db, myPurchasesModule, paidSession, purchasesModule, resetDb, resetStripe, stripe } from "./fakes"
 
 const SITE = "https://majnu.app"
 const USER = { id: "user-1", email: "anna@example.com", isAnonymous: false }
@@ -25,6 +26,7 @@ beforeEach(() => {
   vi.stubEnv("STRIPE_PRICE_WRAPPER", "price_test_wrapper")
   vi.mocked(enqueueDesign).mockClear()
   Object.values(purchasesModule).forEach((fn) => fn.mockClear())
+  myPurchasesModule.getMyLetterForWrapper.mockClear()
   resetDb()
   resetStripe()
   addLetter(LETTER)
@@ -92,7 +94,7 @@ describe("startWrapperCheckout", () => {
     const result = await startWrapperCheckout(USER, { ...INPUT, consent }, SITE)
     expect(result).toMatchObject({ kind: "refused", reason: "consent_required" })
     expect(db.purchases.size).toBe(0)
-    expect(purchasesModule.getMyLetterForWrapper).not.toHaveBeenCalled()
+    expect(myPurchasesModule.getMyLetterForWrapper).not.toHaveBeenCalled()
     expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
   })
 
@@ -115,7 +117,7 @@ describe("startWrapperCheckout", () => {
   it("asks a guest to create an account first, without reading the letter", async () => {
     const result = await startWrapperCheckout({ ...USER, isAnonymous: true }, INPUT, SITE)
     expect(result).toMatchObject({ kind: "refused", reason: "account_required" })
-    expect(purchasesModule.getMyLetterForWrapper).not.toHaveBeenCalled()
+    expect(myPurchasesModule.getMyLetterForWrapper).not.toHaveBeenCalled()
   })
 
   it("refuses someone else's letter, a calendar and a letter that is not built", async () => {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { listMyPurchases } from "@/lib/billing/purchases"
+import { listMyPurchases } from "@/lib/billing/my-purchases"
 import { toPurchaseView } from "@/lib/billing/view"
 import { PurchasesView, type PurchasesNotice } from "./purchases-view"
 

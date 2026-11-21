@@ -4,7 +4,7 @@
 // 200 PurchaseView (lib/billing/view.ts); 400 for a bad id; 401 without a
 // session; 404 for a purchase that is not the sender's (row-level security).
 import { jsonError } from "@/lib/billing/http"
-import { getMyPurchase } from "@/lib/billing/purchases"
+import { getMyPurchase } from "@/lib/billing/my-purchases"
 import { toPurchaseView } from "@/lib/billing/view"
 import { createClient } from "@/lib/supabase/server"
 

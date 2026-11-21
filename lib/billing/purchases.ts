@@ -5,11 +5,11 @@
 // the browser sent. Each change of status is a conditional update ("... where
 // status = <the one before>"), so it happens once however often Stripe
 // delivers an event or the queue delivers a message, and two runs can never
-// claim the same purchase. Owners read their own rows through row-level
-// security, with an explicit column list: failure_reason is not granted to them.
+// claim the same purchase. The owner's own reads, through row-level security,
+// are in ./my-purchases.ts, so the queue consumer never loads the cookie-based
+// client.
 import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { createClient } from "@/lib/supabase/server"
 
 export type PurchaseStatus = "pending" | "paid" | "designing" | "done" | "failed" | "refunded"
 
@@ -34,10 +34,7 @@ export type Purchase = {
   createdAt: string
 }
 
-// What the owner sees: the purchase and the gift it is for.
-export type OwnPurchase = Purchase & { letter: { slug: string; title: string | null } | null }
-
-type Row = {
+export type Row = {
   id: string
   owner_id: string
   letter_id: string | null
@@ -59,7 +56,7 @@ type Row = {
 }
 
 // Every column owners may read (failure_reason is left out on purpose).
-const COLUMNS =
+export const COLUMNS =
   "id, owner_id, letter_id, status, request, consent_at, amount_cents, currency, stripe_checkout_session_id, stripe_payment_intent_id, stripe_refund_id, receipt_url, design_id, paid_at, design_started_at, finished_at, refunded_at, created_at"
 
 const STATUSES: readonly PurchaseStatus[] = ["pending", "paid", "designing", "done", "failed", "refunded"]
@@ -243,70 +240,4 @@ export async function markFailed(purchaseId: string, reason: string): Promise<vo
     .eq("id", purchaseId)
     .in("status", ["pending", "paid", "designing"])
   if (error) throw new Error(`Could not mark the purchase failed: ${error.message}`)
-}
-
-// ---------- The owner's reads (row-level security) ----------
-
-type OwnRow = Row & { letter: { slug: string; title: string | null } | null }
-
-const OWN_COLUMNS = `${COLUMNS}, letter:letters (slug, title)`
-
-function toOwnPurchase(row: OwnRow): OwnPurchase {
-  return { ...toPurchase(row), letter: row.letter ?? null }
-}
-
-// The Purchases tab: everything that was paid for, newest first. Pending rows
-// are Checkouts that were opened and never paid; they are not purchases.
-export async function listMyPurchases(): Promise<OwnPurchase[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("purchases")
-    .select(OWN_COLUMNS)
-    .neq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(100)
-    .returns<OwnRow[]>()
-  if (error) throw new Error(`Could not load your purchases: ${error.message}`)
-  return (data ?? []).map(toOwnPurchase)
-}
-
-export async function getMyPurchase(purchaseId: string): Promise<OwnPurchase | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.from("purchases").select(OWN_COLUMNS).eq("id", purchaseId).maybeSingle<OwnRow>()
-  if (error) throw new Error(`Could not load the purchase: ${error.message}`)
-  return data ? toOwnPurchase(data) : null
-}
-
-// The newest paid purchase of one of the owner's letters, for the letter's
-// preview: is a design being made, or ready?
-export async function getMyLatestPurchaseForLetter(letterId: string): Promise<OwnPurchase | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("purchases")
-    .select(OWN_COLUMNS)
-    .eq("letter_id", letterId)
-    .neq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<OwnRow>()
-  if (error) throw new Error(`Could not load the letter's purchases: ${error.message}`)
-  return data ? toOwnPurchase(data) : null
-}
-
-// ---------- The letter a wrapper is bought for ----------
-
-export type WrapperLetter = { id: string; slug: string; kind: string; built: boolean }
-
-// The signed-in user's own letter, read through row-level security, so a
-// letter id that belongs to someone else is simply not found.
-export async function getMyLetterForWrapper(letterId: string): Promise<WrapperLetter | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("letters")
-    .select("id, slug, kind, content")
-    .eq("id", letterId)
-    .maybeSingle<{ id: string; slug: string; kind: string; content: unknown }>()
-  if (error) throw new Error(`Could not load the letter: ${error.message}`)
-  if (!data) return null
-  return { id: data.id, slug: data.slug, kind: data.kind, built: data.content !== null && typeof data.content === "object" }
 }

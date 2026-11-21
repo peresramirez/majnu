@@ -7,7 +7,7 @@
 // session; 404 for a letter that is not the sender's. Read through row-level
 // security, so nobody sees another sender's letters or purchases.
 import { jsonError } from "@/lib/billing/http"
-import { getMyLatestPurchaseForLetter, getMyLetterForWrapper } from "@/lib/billing/purchases"
+import { getMyLatestPurchaseForLetter, getMyLetterForWrapper } from "@/lib/billing/my-purchases"
 import { toPurchaseView, type WrapperState } from "@/lib/billing/view"
 import { createClient } from "@/lib/supabase/server"
 

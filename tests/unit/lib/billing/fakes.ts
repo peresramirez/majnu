@@ -4,7 +4,8 @@
 // only pay for its own purchase, and at most one purchase per letter may be
 // paid or designing (purchases_one_run_per_letter_idx).
 import { vi } from "vitest"
-import type { MarkPaidResult, NewPurchase, Payment, Purchase, PurchaseStatus, WrapperLetter } from "@/lib/billing/purchases"
+import type { WrapperLetter } from "@/lib/billing/my-purchases"
+import type { MarkPaidResult, NewPurchase, Payment, Purchase, PurchaseStatus } from "@/lib/billing/purchases"
 
 export type StoredPurchase = Purchase & { consentText: string; failureReason: string | null }
 
@@ -114,6 +115,10 @@ export const purchasesModule = {
   markFailed: vi.fn(async (id: string, reason: string) => {
     transition(id, ["pending", "paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason })
   }),
+}
+
+// The owner's reads (lib/billing/my-purchases.ts), through "row-level security".
+export const myPurchasesModule = {
   getMyLetterForWrapper: vi.fn(async (letterId: string) => {
     const l = db.letters.get(letterId)
     if (!l || l.ownerId !== db.currentUser) return null
