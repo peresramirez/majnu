@@ -17,10 +17,12 @@
 //      before failed. Then check the page (lib/daytona/validate.ts) and store
 //      it. Nothing about the result depends on the sandbox still existing.
 //
-// It takes minutes, so it cannot run inside a Worker request: run it from
-// scripts/daytona/redesign.mts, or from a queue consumer (docs/plan.md).
+// It takes a minute or two, so it cannot run inside a Worker request. A paid
+// purchase runs it from the Worker's queue consumer (worker.ts, through
+// lib/billing/fulfil.ts); a developer runs it from scripts/daytona/redesign.mts.
+// Daytona is reached with fetch (lib/daytona/rest.ts), because the SDK does
+// not bundle for Workers.
 import "server-only"
-import { Daytona, type CreateSandboxFromSnapshotParams } from "@daytona/sdk"
 import { getModel } from "@/lib/agents/client"
 import { LetterContent, TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
@@ -40,6 +42,7 @@ import {
   SANDBOX_DOMAIN_ALLOW_LIST,
   SANDBOX_TTL_MINUTES,
 } from "./config"
+import { restSandboxes } from "./rest"
 import { checkDesignHtml } from "./validate"
 
 export class RedesignError extends Error {
@@ -62,8 +65,19 @@ export type SandboxHandle = {
   delete(timeout?: number, wait?: boolean): Promise<void>
 }
 
+// What the job asks Daytona for: a sandbox from our snapshot, with labels to
+// find it by, deleted when it stops and destroyed after ttlMinutes whatever
+// happens, and (on tiers that allow it) a network allow list.
+export type SandboxParams = {
+  snapshot: string
+  labels?: Record<string, string>
+  ephemeral?: boolean
+  ttlMinutes?: number
+  domainAllowList?: string
+}
+
 export type Sandboxes = {
-  create(params: CreateSandboxFromSnapshotParams, options: { timeout: number }): Promise<SandboxHandle>
+  create(params: SandboxParams, options: { timeout: number }): Promise<SandboxHandle>
   // Deletes every sandbox carrying these labels; returns how many. Used when
   // create fails after the sandbox may already exist.
   deleteByLabels(labels: Record<string, string>): Promise<number>
@@ -106,18 +120,7 @@ export function readSettings(env: Record<string, string | undefined> = process.e
 }
 
 export function daytonaSandboxes(settings: Pick<Settings, "daytonaKey" | "apiUrl" | "target">): Sandboxes {
-  const daytona = new Daytona({ apiKey: settings.daytonaKey, apiUrl: settings.apiUrl, target: settings.target })
-  return {
-    create: (params, options) => daytona.create(params, options),
-    async deleteByLabels(labels) {
-      let deleted = 0
-      for await (const sandbox of daytona.list({ labels })) {
-        await sandbox.delete(60, true)
-        deleted++
-      }
-      return deleted
-    },
-  }
+  return restSandboxes(settings)
 }
 
 // ---------- Inputs ----------
@@ -394,7 +397,7 @@ const TIER_NETWORK_POLICY = /network access is restricted and cannot be overridd
 
 async function createSandbox(
   sandboxes: Sandboxes,
-  params: CreateSandboxFromSnapshotParams,
+  params: SandboxParams,
   log: (line: string) => void,
 ): Promise<SandboxHandle> {
   try {

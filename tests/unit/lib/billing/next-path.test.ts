@@ -51,8 +51,8 @@ describe("safeNextPath", () => {
 })
 
 describe("nextPathFromSearch", () => {
-  it("turns ?plan=full-moon into the Plan tab", () => {
-    expect(nextPathFromSearch(new URLSearchParams("plan=full-moon"))).toBe("/dashboard/plan")
+  it("turns an old ?plan=full-moon link into the Purchases tab", () => {
+    expect(nextPathFromSearch(new URLSearchParams("plan=full-moon"))).toBe("/dashboard/purchases")
   })
 
   it("prefers a valid next over the plan", () => {
@@ -60,7 +60,7 @@ describe("nextPathFromSearch", () => {
   })
 
   it("falls back to the plan when next is unsafe, and to null without either", () => {
-    expect(nextPathFromSearch(new URLSearchParams("plan=full-moon&next=//evil.example"))).toBe("/dashboard/plan")
+    expect(nextPathFromSearch(new URLSearchParams("plan=full-moon&next=//evil.example"))).toBe("/dashboard/purchases")
     expect(nextPathFromSearch(new URLSearchParams("next=https://evil.example"))).toBeNull()
     expect(nextPathFromSearch(new URLSearchParams("plan=other"))).toBeNull()
     expect(nextPathFromSearch(new URLSearchParams(""))).toBeNull()

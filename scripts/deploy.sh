@@ -36,5 +36,16 @@ fi
 
 echo "Deploying $(git -C "$root" rev-parse --short "$ref") from a clean copy"
 npm ci --no-audit --no-fund
+
+# The queues the personalised wrapper's design job runs on (wrangler.jsonc,
+# worker.ts). A deploy whose bindings name a missing queue fails, so they are
+# created the first time; afterwards this only reads.
+for queue in majnu-designs majnu-designs-dlq; do
+  if ! npx wrangler queues info "$queue" >/dev/null 2>&1; then
+    echo "Creating the Cloudflare Queue $queue"
+    npx wrangler queues create "$queue"
+  fi
+done
+
 npx opennextjs-cloudflare build
 npx opennextjs-cloudflare deploy

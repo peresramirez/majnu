@@ -16,11 +16,12 @@ Every page follows the same outline:
 |---|---|
 | [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: the compact hero (headline, Majnu's greeting, one-line message box), the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, wrapping the chosen gift into a page with its link, and the preview dialog for example and finished gifts (issue #32) |
 | [gift-finder-api.md](gift-finder-api.md) | The gift finder's server side: the finder agent with its context, research in the visitor's language and country with product photos, personalising, the daily and site-wide search limits, and wrapping the chosen gift into a page (issue #31) |
+| [social-profiles.md](social-profiles.md) | Reading a public Instagram or TikTok profile (Apify) or another public page (Tavily Extract) that the sender pastes into the finder: the `read_profile` tool, 3 to 6 filtered interests that change the next search, one read per session and the `APIFY_DAILY_CAP` (issue #34) |
 | [letters-chat.md](letters-chat.md) | The main agent, the builder and research sub-agents, `POST /api/chat` and its NDJSON events, stored history, model settings |
 | [templates-and-gift-pages.md](templates-and-gift-pages.md) | The letter contract, the ten templates (including the 3D gift box, party pop box and treasure map from the prototype archive, issue #40), the Templates tab with its preview modal, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
 | [sharing-and-tracking.md](sharing-and-tracking.md) | The share panel and QR code, the open beacon, the visitor hash, the statistics and My gifts |
-| [billing.md](billing.md) | Crescent and Full moon, the Stripe subscription, return page, webhook and portal, the `MAJNU_BILLING` switch |
-| [daytona-redesign.md](daytona-redesign.md) | One-off designs made by Claude Code in a Daytona sandbox: snapshot, job, page checker, serving, costs |
+| [billing.md](billing.md) | The personalised wrapper, €2.99 once: the "Make it unique" dialog with its consent, Stripe Checkout in payment mode, the return page and webhook, the `purchases` table, automatic refunds and the Purchases tab (issue #39) |
+| [daytona-redesign.md](daytona-redesign.md) | The personalised wrapper's designer: Claude Code in a Daytona sandbox, reached with `fetch` from a Cloudflare Queue consumer in the same Worker; snapshot, job, page checker, serving, costs |
 | [data-and-security.md](data-and-security.md) | Schema and migrations, row-level security, server-only writes, the spending guard, secrets, deploying |
 | [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |

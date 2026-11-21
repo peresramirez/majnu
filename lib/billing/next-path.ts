@@ -1,6 +1,6 @@
-// Where to send someone after they sign in. The landing page's "Choose Full
-// moon" links to /signin?plan=full-moon, and protected routes can pass
-// ?next=/some/path; both are carried through email and Google sign-in.
+// Where to send someone after they sign in. Protected routes and the
+// "Make it unique" dialog pass ?next=/some/path, which is carried through email
+// and Google sign-in.
 //
 // Only same-site paths are accepted, so a crafted sign-in link can never send
 // someone to another site (an open redirect). This file is pure and has no
@@ -8,7 +8,9 @@
 // OAuth callback and the middleware all use the same check.
 
 const DEFAULT_AFTER_SIGN_IN = "/dashboard"
-const PLAN_PAGE = "/dashboard/plan"
+// Old sign-in links from the retired subscription carried ?plan=full-moon;
+// they now land on the Purchases tab.
+const PURCHASES_PAGE = "/dashboard/purchases"
 const MAX_LENGTH = 512
 
 // Sending a signed-in user back to a sign-in page would only bounce them on.
@@ -41,11 +43,11 @@ export function safeNextPath(value: unknown): string | null {
 type SearchLike = { get(name: string): string | null }
 
 // The destination carried by a sign-in URL's query: a valid `next` wins, then
-// `plan=full-moon` means the Plan tab. Null means "the usual place".
+// an old `plan=full-moon` link means the Purchases tab. Null means "the usual place".
 export function nextPathFromSearch(search: SearchLike): string | null {
   const next = safeNextPath(search.get("next"))
   if (next) return next
-  if (search.get("plan") === "full-moon") return PLAN_PAGE
+  if (search.get("plan") === "full-moon") return PURCHASES_PAGE
   return null
 }
 
@@ -53,7 +55,7 @@ export function afterSignInPath(next: unknown): string {
   return safeNextPath(next) ?? DEFAULT_AFTER_SIGN_IN
 }
 
-// "/signup" or "/signup?next=%2Fdashboard%2Fplan", for links between the
+// "/signup" or "/signup?next=%2Fdashboard%2Fpurchases", for links between the
 // sign-in pages that keep the destination.
 export function withNext(pathname: string, next: string | null): string {
   return next ? `${pathname}?next=${encodeURIComponent(next)}` : pathname

@@ -80,9 +80,11 @@ export default function PrivacyPage() {
       <h3>Public social profiles</h3>
       <p>
         Only if you paste the link to a public Instagram or TikTok profile into the gift finder, we use Apify to read
-        that public profile once and keep only a short summary of the person&apos;s interests, such as &quot;climbing,
-        film photography, ramen&quot;. We never store their posts, photos or followers, and we never read a profile
-        nobody pasted. Other public pages you share are read the same way through Tavily. This serves your legitimate
+        that public profile once: its bio and recent captions and hashtags. Anthropic&apos;s AI model turns them into a
+        short list of the person&apos;s interests, such as &quot;climbing, film photography, ramen&quot;, and only that list
+        is kept, with your finder session. We never store their posts, photos or followers, we leave out anything
+        about health, beliefs, politics or sexuality, and we never read a profile nobody pasted. Other public pages
+        you share are read the same way through Tavily. This serves your legitimate
         interest in finding a gift that suits the person, using only what they made public (Art. 6 (1) (f) GDPR).
         Please only share profiles of people who would be happy with it. If it is your profile and you want the summary
         deleted, email us.
@@ -127,9 +129,16 @@ export default function PrivacyPage() {
 
       <h3>Payments</h3>
       <p>
-        If you choose Full moon, Stripe handles your payment. We never see your full card number. We receive your
-        name, email address, country, the payment status and the subscription dates, and we keep invoices as tax law
-        requires (Art. 6 (1) (b) and (c) GDPR).
+        If you buy a personalised wrapper, Stripe handles your payment and emails your receipt. We never see your card
+        number. We receive your email address, country, the amount and the payment status, and we keep, with the
+        purchase, the design you asked for and the time you agreed that we start at once (Art. 6 (1) (b) and (c)
+        GDPR). We keep payment records as tax law requires.
+      </p>
+      <p>
+        To make the design, the gift&apos;s content and your description of the look are sent to a short-lived
+        sandbox at Daytona in the EU, where our designer (running on Anthropic&apos;s AI model) writes the page. The
+        sandbox is deleted as soon as the page is made, and in any case within 20 minutes. The finished design is
+        stored with your gift and deleted with it (Art. 6 (1) (b) GDPR).
       </p>
 
       <h3>Emails you send us</h3>
@@ -164,7 +173,8 @@ export default function PrivacyPage() {
         <li><strong>Cloudflare</strong>: hosting and delivery of the site, the country and region used by the gift finder, the Turnstile bot check, and forwarding of email sent to {operator.email}.</li>
         <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies and searches the web for gift ideas. Under its commercial terms, Anthropic does not use this data to train its models.</li>
         <li><strong>Google</strong>: sign-in with Google, and the mailbox our email is forwarded to.</li>
-        <li><strong>Stripe</strong>: payments for Full moon.</li>
+        <li><strong>Stripe</strong>: payments for personalised wrappers, and their receipts.</li>
+        <li><strong>Daytona</strong>: the short-lived sandbox in the EU where a personalised wrapper is designed.</li>
         <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them, and the address of a public page you share.</li>
         <li><strong>Apify</strong>: reads a public Instagram or TikTok profile, only when you paste its link into the gift finder.</li>
       </ul>
