@@ -56,9 +56,9 @@ describe("Stripe", () => {
 
 describe.skipIf(!process.env.DAYTONA_API_KEY)("Daytona (optional extra)", () => {
   it("API key is accepted", async () => {
-    const res = await fetch("https://api.daytona.com/sandboxes", {
+    const res = await fetch("https://app.daytona.io/api/api-keys/current", {
       headers: { Authorization: `Bearer ${process.env.DAYTONA_API_KEY}` },
     })
-    expect([401, 403]).not.toContain(res.status)
+    expect(res.status).toBe(200)
   })
 })
