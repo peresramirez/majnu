@@ -4,6 +4,7 @@
 // so templates get a real 375 px viewport.
 import Link from "next/link"
 import { Wordmark } from "@/components/brand/wordmark"
+import { TemplateCard } from "@/components/letters/template-card"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { templates } from "@/lib/letters/templates"
 import { site } from "@/lib/site"
@@ -13,6 +14,39 @@ import { SharePreview } from "./share-preview"
 export const dynamic = "force-dynamic"
 
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-night-rose"
+
+// States the issues ask to check: calendars with 0, 1, 12 and 24 doors open,
+// countdowns of 3, 7 and 24 days, invitations with no event.
+const STATES: { title: string; links: [string, string][] }[] = [
+  {
+    title: "Advent calendar",
+    links: [
+      ["None open", "/dev/templates/advent-classic?today=2026-11-30"],
+      ["1 door open", "/dev/templates/advent-classic?today=2026-12-01"],
+      ["12 doors open", "/dev/templates/advent-classic?today=2026-12-12"],
+      ["24 doors open", "/dev/templates/advent-classic?today=2026-12-24"],
+    ],
+  },
+  {
+    title: "Countdown",
+    links: [
+      ["3 days", "/dev/templates/countdown?days=3"],
+      ["7 days", "/dev/templates/countdown?days=7"],
+      ["24 days", "/dev/templates/countdown?days=24"],
+      ["3 days, 1 open", "/dev/templates/countdown?days=3&today=2027-03-01"],
+      ["24 days, 12 open", "/dev/templates/countdown?days=24&today=2027-03-12"],
+    ],
+  },
+  {
+    title: "Invitations",
+    links: [
+      ["Wedding, no event", "/dev/templates/wedding-invite?event=0"],
+      ["Party, no event", "/dev/templates/party-invite?event=0"],
+      ["Wedding, script", "/dev/templates/wedding-invite?font=script&palette=sage"],
+      ["Party, night", "/dev/templates/party-invite?palette=night&font=serif"],
+    ],
+  },
+]
 
 function themeOf(id: string) {
   const f = (letterFixtures as Record<string, { theme: { palette: string; font: string } }>)[id] ?? (calendarFixtures as Record<string, { theme: { palette: string; font: string } }>)[id]
@@ -96,6 +130,56 @@ export default function DevTemplatesPage() {
             caption="advent-classic · doors locked as of today in Europe/Berlin"
           />
         </div>
+
+        <section className="mt-20" aria-labelledby="cards-title">
+          <h2 id="cards-title" className="font-display text-[28px]">Template cards</h2>
+          <p className="mt-1 text-[14px] text-night-lilac">
+            <code className="text-night-petal">&lt;TemplateCard id /&gt;</code> for every template: a still drawing from its fixture, no script. The last
+            row shows the responsive layout (picture beside the words on phones).
+          </p>
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {templates.map((t) => (
+              <li key={t.id}>
+                <TemplateCard id={t.id} className="h-full" />
+              </li>
+            ))}
+          </ul>
+          <ul className="mt-6 grid max-w-[860px] gap-4 md:grid-cols-3">
+            {(["classic-envelope", "gift-reveal", "advent-classic"] as const).map((id) => (
+              <li key={id}>
+                <TemplateCard id={id} orientation="responsive" className="h-full" />
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mt-20 max-w-[860px]" aria-labelledby="states-title">
+          <h2 id="states-title" className="font-display text-[28px]">States</h2>
+          <p className="mt-1 text-[14px] text-night-lilac">
+            Each link opens one template full screen in a state worth checking at 375 px. <code className="text-night-petal">?today=</code> locks doors as
+            the public page would on that date; <code className="text-night-petal">?days=</code> sets the countdown&apos;s length.
+          </p>
+          <dl className="mt-6 space-y-5">
+            {STATES.map((group) => (
+              <div key={group.title}>
+                <dt className="text-[13px] font-semibold uppercase tracking-[0.16em] text-night-lilac">{group.title}</dt>
+                <dd className="mt-2 flex flex-wrap gap-2">
+                  {group.links.map(([label, href]) => (
+                    <a
+                      key={href}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`rounded-full px-3.5 py-2 text-[13px] font-semibold ring-1 ring-inset ring-night-petal/25 hover:bg-white/5 ${focusRing}`}
+                    >
+                      {label}
+                    </a>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
         <section className="mt-20 max-w-[860px]">
           <h2 className="font-display text-[28px]">Share panel</h2>

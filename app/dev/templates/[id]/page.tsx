@@ -1,10 +1,14 @@
 // One template, full-bleed, from fixture data. /dev/templates frames these in
-// phone-sized boxes. Query: ?live=1 locks calendar doors as of today;
-// ?palette=rose and ?font=script try the other moods.
+// phone-sized boxes. Query:
+//   ?live=1            lock calendar doors as of now
+//   ?today=2026-12-12  lock calendar doors as of that date
+//   ?days=3            countdown with that many doors (1 to 31)
+//   ?event=0           invitation without its event
+//   ?palette=rose, ?font=script  try the other moods
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { LetterRenderer } from "@/components/letters/registry"
-import { fixtureLetter, isTemplateId } from "../fixture-letter"
+import { fixtureLetter, isTemplateId, parseDays, parseToday } from "../fixture-letter"
 
 export const dynamic = "force-dynamic"
 
@@ -14,14 +18,22 @@ export const metadata: Metadata = {
 
 type Props = {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ live?: string; palette?: string; font?: string }>
+  searchParams: Promise<{ live?: string; today?: string; days?: string; event?: string; palette?: string; font?: string }>
 }
 
 export default async function DevTemplatePage({ params, searchParams }: Props) {
   const { id } = await params
   const q = await searchParams
   if (!isTemplateId(id)) notFound()
-  const letter = fixtureLetter(id, { now: new Date(), live: q.live === "1", palette: q.palette, font: q.font })
+  const letter = fixtureLetter(id, {
+    now: new Date(),
+    live: q.live === "1",
+    today: parseToday(q.today),
+    days: parseDays(q.days),
+    noEvent: q.event === "0",
+    palette: q.palette,
+    font: q.font,
+  })
   if (!letter) notFound()
   return <LetterRenderer letter={letter} />
 }
