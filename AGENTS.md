@@ -98,7 +98,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 
 ## Working with the model API
 
-- Use the official `@anthropic-ai/sdk`. Do not add another AI library.
+- Use the official `@anthropic-ai/sdk`. Do not add another AI library. The one exception is speech to text: OpenAI's transcription endpoint, called with plain `fetch` (no OpenAI SDK), only for turning voice into text (see "Voice" in docs/plan.md).
 - The model id comes from `MAJNU_MODEL`, default `claude-opus-5-5`. Do not hardcode a model or change the default.
 - Current models reject `temperature`, a thinking budget and a forced `tool_choice`. Set depth with `output_config: { effort }`.
 - Store conversation history exactly as the API returned it and replay it append-only. Keep the system prompt and tool definitions byte-stable; per-request facts such as today's date go in the user message.
