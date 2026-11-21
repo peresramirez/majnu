@@ -4,6 +4,11 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // esbuild's keep-names adds __name(...) calls inside functions that
+  // next-themes turns into an inline <script>, where __name does not exist
+  // ("ReferenceError: __name is not defined" on every page). OpenNext's fix:
+  // https://opennext.js.org/cloudflare/howtos/keep_names
+  "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
