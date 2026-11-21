@@ -4,7 +4,7 @@
 export const operator = {
   name: "Javier Antonio Peres Ramirez",
   street: "Selma-Lagerlöf-Straße 14",
-  city: "[Postcode and city]",
+  city: "13189 Berlin",
   country: "Germany",
   email: "hello@majnu.app",
   // Leave empty if there is no VAT ID.
