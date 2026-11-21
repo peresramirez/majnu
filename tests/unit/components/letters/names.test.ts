@@ -18,6 +18,9 @@ describe("letterNoun", () => {
   it("names the kind of gift, and treats anything unknown as a letter", () => {
     expect(letterNoun("gift-reveal")).toBe("A gift")
     expect(letterNoun("advent-classic")).toBe("An advent calendar")
+    expect(letterNoun("gift-box-3d")).toBe("A gift")
+    expect(letterNoun("party-box")).toBe("A gift")
+    expect(letterNoun("treasure-map")).toBe("A letter")
     expect(letterNoun("not-a-template")).toBe("A letter")
     expect(letterNoun(null)).toBe("A letter")
   })

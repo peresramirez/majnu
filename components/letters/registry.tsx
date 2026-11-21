@@ -10,9 +10,11 @@ import { Calendar } from "@/components/calendars/calendar"
 import type { PublicLetter } from "@/lib/letters/schema"
 import { LetterProvider } from "./letter-context"
 import { ClassicEnvelope } from "./templates/classic-envelope"
+import { GiftBox3D } from "./templates/gift-box-3d"
 import { GiftReveal } from "./templates/gift-reveal"
 import { Invitation } from "./templates/invitation"
 import { Postcard } from "./templates/postcard"
+import { TreasureMap } from "./templates/treasure-map"
 import { themeStyle } from "./theme"
 
 function Template({ letter }: { letter: PublicLetter }) {
@@ -28,6 +30,12 @@ function Template({ letter }: { letter: PublicLetter }) {
       return <Invitation content={letter.content} mood="playful" slug={letter.slug} />
     case "postcard":
       return <Postcard content={letter.content} />
+    case "gift-box-3d":
+      return <GiftBox3D content={letter.content} mood="gift" />
+    case "party-box":
+      return <GiftBox3D content={letter.content} mood="party" />
+    case "treasure-map":
+      return <TreasureMap content={letter.content} />
     case "classic-envelope":
     default:
       return <ClassicEnvelope content={letter.content} />
