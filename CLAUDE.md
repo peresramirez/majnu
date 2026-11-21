@@ -21,7 +21,7 @@
 | `bfl-api`, `flux-image-best-practices`, `flux-3-*` | Generating images or video for the site with `BFL_API_KEY`. Each generation spends credits, so ask your developer before running more than a few |
 | `claude-api` (built in) | Every call to the Anthropic API |
 
-Site chrome (landing, sign-in, dashboard, create page) keeps the airmail brand recorded in `docs/plan.md`, whatever a design skill suggests. Letter and calendar templates are free to have their own look.
+Site chrome (landing, sign-in, dashboard, create page) follows the Night Post brand in `docs/brand.md`, whatever a design skill suggests: use the logo files in `public/brand/`, never retype the wordmark. Letter and calendar templates are free to have their own look.
 
 **MCP servers** are defined in `.mcp.json`: `supabase` (apply migrations, run SQL, read logs) and `stripe`. Run `/mcp` to sign in. If a server shows as disabled, it is switched off in your personal `.claude/settings.local.json`.
 

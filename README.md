@@ -1,5 +1,10 @@
 # Majnu
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/brand/majnu-wordmark-on-dark.svg">
+  <img src="public/brand/majnu-wordmark-on-light.svg" alt="Majnu" width="280">
+</picture>
+
 A personalized digital gifting platform. You chat with an AI agent, and it wraps a gift code, a letter, an invitation or an advent calendar in a page made for one person, shared as a link.
 
 You sign in, tell the agent who the gift is for and what the occasion is, pick a template, and get a web page with a short link and a QR code. Add a gift code, a party location with a map, or a calendar that opens one door per day. You can see when the recipient opens it.
@@ -46,6 +51,7 @@ npm run dev
 
 - [docs/plan.md](docs/plan.md): what we are building, the architecture, who builds what, and the schedule
 - [docs/setup.md](docs/setup.md): keys, services, tests and coding-agent tooling
+- [docs/brand.md](docs/brand.md): logo, colours, type, motion and voice
 - [AGENTS.md](AGENTS.md): rules for coding agents working in this repository
 
 ## Credits

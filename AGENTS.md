@@ -66,6 +66,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 - Most visitors arrive on a phone from an ad or a chat app. Build every screen phone-first and check it at 375px wide.
 - Public letter pages are full-bleed with no site header or footer.
 - Use Tailwind and the components in `components/ui/`. Do not add a second UI library.
+- Follow `docs/brand.md` for colours, type, logo use, motion and wording. Use the logo files in `public/brand/`; never retype the wordmark in a font.
 
 ## Tests
 

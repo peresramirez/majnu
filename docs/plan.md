@@ -108,14 +108,9 @@ A `redesign_letter` tool queues a job. The job starts a sandbox, runs Claude Cod
 
 ### Brand
 
-The look is an airmail envelope, because the product is mail. It is defined once and reused:
+The brand is **Night Post**: plum night, petal white, a rose-gold crescent, Gilda Display headlines and Hanken Grotesk for everything else. The wordmark is MAJNU in wide capitals with the crescent above the J. Everything (logo files, colours, type, motion, voice) is in [brand.md](brand.md); assets are in `public/brand/`.
 
-- Colours in `tailwind.config.ts` under `airmail`: `blue` (page ground), `red` (the one call to action), `paper`, `ink`, `postmark`, `sun`.
-- Type in `app/fonts.ts`: Bricolage Grotesque for headings and body (`font-sans`), Courier Prime for labels and prices (`font-mono`), Caveat for handwriting (`font-hand`).
-- Two CSS helpers in `app/globals.css`: `.airmail-edge` (the red and blue border) and `.stamp-perf` (perforated stamp edge; width and height must be multiples of 12px).
-- The main action is always worded "Create a gift".
-
-Letter and calendar templates may use their own palettes; the site chrome around them stays in this one.
+The live landing page still uses the earlier airmail look (`airmail` colours in `tailwind.config.ts`, fonts in `app/fonts.ts`). Rebuilding it on Night Post, with the scroll-driven moon hero, replaces those. Letter and calendar templates may use their own palettes; the site chrome around them follows the brand.
 
 ## Who builds what
 
