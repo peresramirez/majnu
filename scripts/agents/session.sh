@@ -89,6 +89,9 @@ start)
   prompt="$(sed -e "s/{{name}}/$name/g" -e "s/{{port}}/$port/g" "$here/brief-header.md")
 $(cat "$brief")"
   herdr agent prompt "$name" "$prompt" >/dev/null
+  # Return only once the session has picked the brief up, so a following
+  # `herdr agent wait` does not see the idle state from before the prompt.
+  herdr agent wait "$name" --until working --timeout 60000 >/dev/null || true
 
   jq -n --arg name "$name" --arg branch "$branch" --arg path "$path" --arg workspace "$ws" --arg pane "$pane" --arg port "$port" \
     '{name: $name, branch: $branch, path: $path, workspace: $workspace, pane: $pane, port: ($port | tonumber)}'
