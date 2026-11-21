@@ -33,7 +33,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 Production values come from two places:
 
 - **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
-- **Secrets** are Worker secrets on Cloudflare, set once per key with `npx wrangler secret put ANTHROPIC_API_KEY` (and the same for `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`). They never go in a file that is committed or deployed.
+- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
 
 ## Services
 
