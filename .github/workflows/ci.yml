@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev-a, dev-b]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Hourly, so a key that is revoked or runs out of quota is noticed
+    # even when nobody is pushing.
+    - cron: "17 * * * *"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Public values: both ship in the browser bundle, so they are not secrets.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://tncihimbvhpodgohnpha.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_zbkt23tVpmCQ-F2fTZqC2A_EMq3uvGq
+  NEXT_PUBLIC_SITE_URL: https://majnu-app.vercel.app
+
+jobs:
+  checks:
+    name: Type check, unit tests, build
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  connections:
+    name: Service connections
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Read-only calls to each service. Supabase and Anthropic are required;
+      # Stripe and Daytona are skipped until their keys are added as secrets.
+      - run: npm run test:smoke
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+          DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}

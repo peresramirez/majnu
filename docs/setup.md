@@ -69,3 +69,18 @@ Both developers get the same setup by cloning.
 | `npm run test:smoke` | `tests/smoke/`: read-only checks that each key in `.env.local` works. Run after changing any key |
 | `npm test` | `tests/unit/`: fast tests with no network |
 | `npm run typecheck` | TypeScript. Production builds ignore type errors, so run this before every push |
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on GitHub Actions for every push to `main`, `dev-a` and `dev-b`, on pull requests, on demand, and once an hour.
+
+- **Type check, unit tests, build:** on pushes and pull requests.
+- **Service connections:** runs `npm run test:smoke` against the real services. Supabase and Anthropic must pass. Stripe and Daytona are skipped until their keys exist. The hourly run is this job only, so a revoked key or an exhausted quota is noticed during launch even when nobody is pushing.
+
+The Supabase URL and publishable key are written in the workflow file, because both are public by design. Every other key comes from the repository's encrypted Actions secrets. After adding or changing a secret key in `.env.local`, copy it to GitHub with:
+
+```bash
+npm run ci:secrets
+```
+
+That uploads only the keys the checks use and skips empty ones. It needs the GitHub CLI signed in with access to the repository. A failed run emails the person who last changed the workflow; everyone can see results under the repository's Actions tab.

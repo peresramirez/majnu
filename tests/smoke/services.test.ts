@@ -40,7 +40,9 @@ describe("Anthropic", () => {
   })
 })
 
-describe("Stripe", () => {
+const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+
+describe.skipIf(!stripeConfigured)("Stripe (skipped until a key is set)", () => {
   it("secret key works", async () => {
     const stripe = new Stripe(required("STRIPE_SECRET_KEY"))
     const balance = await stripe.balance.retrieve()

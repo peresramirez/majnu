@@ -14,7 +14,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit --passWithNoTests",
-    "test:smoke": "vitest run tests/smoke"
+    "test:smoke": "vitest run tests/smoke",
+    "ci:secrets": "grep -E '^(SUPABASE_SERVICE_ROLE_KEY|ANTHROPIC_API_KEY|STRIPE_SECRET_KEY|NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY|DAYTONA_API_KEY)=.+' .env.local | gh secret set -f -"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
