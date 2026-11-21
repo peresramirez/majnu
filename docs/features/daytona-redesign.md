@@ -1,0 +1,165 @@
+# Daytona redesign: "designed for you"
+
+## What it does
+
+A sender can ask for a one-off look for a letter ("a 1950s cinema ticket by the sea") instead of one of the seven templates. Claude Code, running in a Daytona sandbox, writes one self-contained HTML page from the letter's content. We check the page, store it with the letter and delete the sandbox, and from then on `/l/<slug>` shows the design. The result never depends on the sandbox still existing. Letters only: a calendar baked into one static page would carry its locked doors.
+
+Today a developer runs it by hand. It is not yet offered in the chat.
+
+## How it works
+
+```mermaid
+sequenceDiagram
+  participant Dev as Developer laptop
+  participant Job as redesignLetter
+  participant DB as Supabase
+  participant D as Daytona sandbox
+  participant A as Anthropic API
+  Dev->>Job: node scripts/daytona/redesign.mts letterId "request"
+  Job->>DB: load the letter (service role), letters only
+  Job->>D: create an ephemeral sandbox from the snapshot, eu, TTL 20 min
+  Job->>D: upload content.json, request.txt, prompt.md
+  Job->>D: run claude --print with file tools only, $3 and 360 s
+  D->>A: model requests with the run's own key
+  Job->>D: download out/index.html
+  Job->>D: delete the sandbox, also after a failure
+  Job->>Job: checkDesignHtml
+  Job->>DB: insert into letter_designs
+```
+
+```mermaid
+flowchart LR
+  recipient(["Recipient"]) -->|"GET /l/slug"| page["Gift page"]
+  page -->|"getLatestDesignInfo"| db[("letter_designs")]
+  page -->|"iframe sandbox"| design["GET /l/slug/design?v=id"]
+  design -->|"newest design, strict CSP"| db
+```
+
+### The snapshot
+
+Every sandbox starts from the snapshot `majnu-letters-v1`, built in the `eu` region by [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts) (`--print` shows the Dockerfile and builds nothing):
+
+- `node:22-bookworm-slim`, with Claude Code pinned to **2.1.323**, the version npm tagged `stable` when the snapshot was defined, so a CLI release cannot change flags under us. Auto-update, telemetry, error reporting and non-essential traffic are switched off.
+- The project Claude Code works in, [`daytona/sandbox/`](../../daytona/sandbox/), copied to `/home/daytona/letter`: the [`majnu-letter` skill](../../daytona/sandbox/.claude/skills/majnu-letter/SKILL.md) with the page rules, a [`CLAUDE.md`](../../daytona/sandbox/CLAUDE.md), [permissions](../../daytona/sandbox/.claude/settings.json) that allow only the file tools, and one rendered example per template in `daytona/sandbox/reference/rendered/` (made by [`export-references.mts`](../../scripts/daytona/export-references.mts) from the workbench).
+- The template sources, the schema and the fixtures as read-only reference.
+- No keys. The Anthropic key is passed to each run's command only.
+
+Snapshots are immutable by name. After changing the templates, the skill or the CLI version, refresh the rendered examples, build `majnu-letters-v2`, and set `DAYTONA_SNAPSHOT`. Sandboxes already running keep the old one, and a bad build never replaces a working one. The alternative, a plain sandbox with the templates pushed in at every start, would start slower and not pin the CLI, for the same upkeep.
+
+### The job
+
+[`redesignLetter(letterId, request)`](../../lib/daytona/redesign.ts):
+
+1. Checks the letter id is a UUID and cleans the request (line ends normalised, control characters removed, at most 2,000 characters).
+2. Loads the letter with the service-role client. A calendar, or a letter without valid content, is refused.
+3. Starts an **ephemeral** sandbox labelled with a job id, with `ttlMinutes: 20`: it destroys itself 20 minutes after it was created, whatever happens to the job. The network allow list is `api.anthropic.com`. Daytona enforces a per-sandbox list only on Tier 3 and 4; our current tier refuses it, so the job retries without it and the tier's own policy applies (Daytona's essential services: package registries, git hosts and model providers). If the start fails late, sandboxes carrying the job's label are deleted.
+4. Uploads `input/content.json`, `input/request.txt` and `input/prompt.md` as **files**, so no user text is ever part of a shell command.
+5. Runs Claude Code headless ([`buildClaudeCommand()`](../../lib/daytona/redesign.ts)) with `ANTHROPIC_API_KEY` and `MAJNU_MODEL` in that one command's environment only. The key is never written to a file, a label, the sandbox's own environment or a log.
+6. Downloads `out/index.html` (refusing anything over 500 KB before downloading), then **deletes the sandbox**, also when anything before failed. A failed delete is tried once more; after that the TTL removes it.
+7. Checks the page ([`checkDesignHtml()`](../../lib/daytona/validate.ts)) and, only if it passes, inserts it into `letter_designs`.
+
+Every log line and error goes through `redact()`, which removes the Anthropic, Daytona, Supabase service-role and Stripe keys and anything shaped like `sk-ant-…`.
+
+The command, as fixed text:
+
+| Flag | Why |
+|---|---|
+| `timeout --kill-after=15 360` | A 6-minute limit inside the sandbox; the SDK call that waits for it has its own, 60 seconds longer |
+| `claude --print "$(cat input/prompt.md)"` | The prompt comes from a file we wrote |
+| `--model "$MAJNU_MODEL"`, `--effort medium` | The app's model, at more effort than the chat agents: a design benefits from thought and nobody is waiting on each reply |
+| `--max-budget-usd 3` | This CLI version has no turn limit, so the run is bounded by spend and time |
+| `--restricted`, `--tools "Read,Write,Edit,Glob,Grep"`, `--disallowedTools "Bash,WebFetch,WebSearch"` | Only file tools exist in the session, confined to the project folder: no shell and no web |
+| `--settings .claude/settings.json`, `--permission-mode acceptEdits` | Our permissions, passed explicitly because `--restricted` skips project settings files |
+| `--no-session-persistence`, `--output-format json` | Nothing about the run is kept on disk; the last line reports turns, cost and duration |
+
+A run that stopped at its budget after writing the page is still checked; a run that timed out (exit 124) or failed otherwise is not.
+
+### The page checker
+
+[`checkDesignHtml()`](../../lib/daytona/validate.ts) enforces mechanically the page rules in the skill. It is defence in depth, not the boundary: it works on raw text with regular expressions and errs on the side of rejecting. It refuses a page that:
+
+- is over 500 KB, under 200 bytes, or does not start with `<!doctype html>`;
+- contains one of our keys, or anything shaped like an Anthropic key;
+- has a `<form>`, `<iframe>`, `<object>`, `<embed>`, `<base>`, `<link>`, `<meta http-equiv>` or a `<script src>`;
+- uses `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, cookies, any storage API, workers, `window.open`, a location change, `import`, `eval`, `new Function`, CSS `@import` or `image-set()`;
+- loads anything with `src`, `poster`, `background` or CSS `url()` that is not a `data:` URI or a `#fragment`, or has attributes such as `srcset`, `ping`, `action` or `formaction`;
+- links anywhere but the letter's own `https` gift links, or names another URL inside a script;
+- shows a gift code in the markup. Codes may live only inside the script, inserted when the recipient taps a "Reveal your code" button.
+
+### Storage and serving
+
+`letter_designs` ([`0003_letter_designs.sql`](../../supabase/migrations/0003_letter_designs.sql)) holds `letter_id`, the `html` (1 to 512,000 bytes), the `request` (1 to 2,000 characters, kept so a design can be traced back to it) and `created_at`. Row-level security is on; owners can read the designs of their own letters; only the service role writes, because a browser must never be able to put HTML on our domain. Designs are deleted with their letter.
+
+[`GET /l/[slug]/design`](../../app/(public)/l/[slug]/design/route.ts) looks the letter up by exact slug and returns its newest design with these headers ([`designs.ts`](../../lib/daytona/designs.ts)), which are the **security boundary**:
+
+```text
+Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+X-Robots-Tag: noindex, nofollow
+Cache-Control: private, no-store
+```
+
+The `sandbox` directive gives the document an opaque origin: its scripts run but cannot read our cookies or storage or script the page around it, and `default-src 'none'` means the browser makes no request for it, whatever the HTML tries. `allow-popups` exists only so a gift link (`target="_blank"`) opens the shop in a normal tab. Errors are plain text and say nothing about the letter.
+
+`/l/<slug>` checks `getLatestDesignInfo(slug)` for letters and, when a design exists, renders a full-screen `<iframe>` of `/l/<slug>/design?v=<design id>` with the same sandbox attributes and the open beacon outside it. `?v=` makes a new design load fresh. If the lookup fails, the page falls back to its template.
+
+## Pieces
+
+| Piece | Job |
+|---|---|
+| [`lib/daytona/config.ts`](../../lib/daytona/config.ts) | Names and limits shared by the job, the snapshot script and the checker. No imports, no secrets |
+| [`lib/daytona/redesign.ts`](../../lib/daytona/redesign.ts) | The job |
+| [`lib/daytona/validate.ts`](../../lib/daytona/validate.ts) | The page checker |
+| [`lib/daytona/designs.ts`](../../lib/daytona/designs.ts) | Reading stored designs and the headers they are served with; never imports the Daytona SDK |
+| [`app/(public)/l/[slug]/design/route.ts`](../../app/(public)/l/[slug]/design/route.ts) | Serves the newest design |
+| [`scripts/daytona/redesign.mts`](../../scripts/daytona/redesign.mts) | Runs one redesign by hand, loading the job through Vite's module runner so the app's imports resolve |
+| [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts), [`scripts/daytona/export-references.mts`](../../scripts/daytona/export-references.mts) | Build the snapshot and refresh its rendered examples |
+| [`daytona/sandbox/`](../../daytona/sandbox/) | The project Claude Code works in |
+| `letter_designs` table | Stored pages |
+| `DAYTONA_API_KEY` | Daytona access. A Worker secret, though only the laptop script uses it today |
+| `DAYTONA_ANTHROPIC_API_KEY` | Optional key of its own for the sandbox, with a low spend limit; otherwise `ANTHROPIC_API_KEY` is used |
+| `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v1`, `eu`, `https://app.daytona.io/api` |
+
+The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`).
+
+## Data and privacy
+
+- **What leaves our systems:** the letter's content and the sender's request go into a Daytona sandbox in the EU, and from there to Anthropic. The sandbox is deleted as soon as the page is downloaded, and in any case within 20 minutes.
+- **What we keep:** the page and the request, in `letter_designs`, for as long as the letter exists. Only the owner can read them through the API; the public route serves only the HTML, by exact slug.
+- **The request is untrusted.** A stranger wrote it and a model reads it, so it is a file the prompt calls a description of a look, never an instruction. Claude Code has no shell or web tools, the sandbox's network is limited, the key is cheap to lose when `DAYTONA_ANTHROPIC_API_KEY` is used, the checker rejects pages that leak keys, and the browser enforces the CSP whatever the page says.
+- The privacy page does not name Daytona yet. It must before the redesign is offered to senders.
+
+## Limits and costs
+
+| Limit | Value |
+|---|---|
+| Spend per run | $3 (`--max-budget-usd`) |
+| Time per run | 360 s inside the sandbox, plus 15 s before a kill |
+| Sandbox lifetime | 20 minutes from creation, whatever happens |
+| Page size | 500 KB (512,000 bytes), in the job, the checker and the database |
+| Request length | 2,000 characters |
+
+**The first end-to-end run** (21 November, a birthday letter, "a 1950s cinema ticket by the sea", recorded in [docs/plan.md](../plan.md#daytona-redesign-only-if-everything-else-is-done)) took 81 s in all: under 2 s to start the sandbox, 9 Claude Code turns costing $0.26, and a 15 KB page. Daytona's own charge for the sandbox time is not recorded.
+
+## Production plan
+
+81 seconds is too long to run inside a Worker request, so the redesign needs a job runner. The plan, not built yet:
+
+1. A `redesign_letter` tool in the chat checks ownership, the plan and a per-user daily limit, then puts `{ letterId, request }` on a **Cloudflare Queue**.
+2. A consumer Worker has 15 minutes of wall time per message, enough for one run, with `max_retries: 0` (a retry is another paid run) and a dead-letter queue.
+3. The consumer may need the job's few Daytona calls rewritten as `fetch` if the SDK does not bundle for Workers.
+4. A small jobs table would let the chat show progress.
+
+## How it was checked
+
+- **Unit tests** in [`tests/unit/lib/daytona/`](../../tests/unit/lib/daytona/): `redesign.test.ts` runs the job against a fake sandbox (the happy path; never logging a key; deleting the sandbox after every kind of failure; the time limit; a page written before the budget ran out; oversized, rule-breaking, code-showing and key-leaking pages thrown away; the tier fallback; clean-up by label; bad input), `validate.test.ts`, `designs.test.ts` (the headers, exact-slug lookups) and `design-route.test.ts`.
+- **Live:** the first run above, by hand, on 21 November.
+- **Not verified:** the queue path (not built), and the network allow list, which our Daytona tier refuses.
+
+## Open questions
+
+- Build the queue consumer and the chat tool, with a per-user daily limit and the plan check.
+- Name Daytona on the privacy page.
+- Decide whether `DAYTONA_ANTHROPIC_API_KEY` becomes required in production.
+- Issue [#28](https://github.com/peresramirez/majnu/issues/28) is closed for the extra as built; the production path needs an issue of its own.
