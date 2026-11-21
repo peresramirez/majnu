@@ -55,12 +55,12 @@ When the six requests are used up, the turn ends and what was done so far is kep
 
 Defined once at module load in [`tools.ts`](../../lib/agents/tools.ts), with input schemas generated from zod. Their order and wording never change, because tools are part of the cached prefix that thinking blocks are bound to.
 
-| Tool | What it does | Plan gate (only with `MAJNU_BILLING=on`) | Status line |
+| Tool | What it does | Gate | Status line |
 |---|---|---|---|
 | `suggest_templates` | Emits a `templates` event with 1 to 4 template ids; the chat shows cards. Tapping one sends an ordinary message, `Use the "Classic envelope" template.` | None | Picking a few templates… |
-| `research_gifts` | Runs the research sub-agent and emits a `gifts` event with the ideas. The result goes back to the model as JSON, so the cards can be shown again when the chat is reopened | Full moon only | Looking for gift ideas… |
-| `build_letter` | Runs the builder on a full brief, saves the content and emits `preview` | Calendars need Full moon; the first build of an empty letter counts as one of the free plan's 3 gifts a month | Writing your letter… |
-| `edit_letter` | Runs the builder on the current content and the requested change, saves it and emits `preview`. Can move content to another template of the same kind only | Calendars need Full moon | Making your changes… |
+| `research_gifts` | Runs the research sub-agent and emits a `gifts` event with the ideas. The result goes back to the model as JSON, so the cards can be shown again when the chat is reopened | None | Looking for gift ideas… |
+| `build_letter` | Runs the builder on a full brief, saves the content and emits `preview` | Calendars need a real account (a guest is asked to sign up) | Writing your letter… |
+| `edit_letter` | Runs the builder on the current content and the requested change, saves it and emits `preview`. Can move content to another template of the same kind only | Calendars need a real account | Making your changes… |
 
 A tool that hits a plan gate emits a `limit` event and returns "Not done: …" to the model, which tells the sender kindly and carries on. A tool that throws returns an error result, so a `tool_use` never lacks its `tool_result`. A builder or research refusal returns "The writer declined this request".
 
@@ -147,7 +147,7 @@ Requests never send `temperature`, a thinking budget or a forced `tool_choice`: 
 | [`app/(app)/create/[id]/page.tsx`](../../app/(app)/create/[id]/page.tsx) | The same chat for an existing gift, with its display messages |
 | [`app/(app)/create/actions.ts`](../../app/(app)/create/actions.ts) | Server action that gives the chat a new gift's slug and name |
 | `letters.chat`, `letters.content` | The stored conversation (server-written) and the built content |
-| `ANTHROPIC_API_KEY`, `MAJNU_MODEL`, `ANTHROPIC_BASE_URL`, `TAVILY_API_KEY`, `MAJNU_BILLING` | The key, the model, an optional gateway, the optional search key and the plan switch |
+| `ANTHROPIC_API_KEY`, `MAJNU_MODEL`, `ANTHROPIC_BASE_URL`, `TAVILY_API_KEY` | The key, the model, an optional gateway and the optional search key |
 
 ## Data and privacy
 
@@ -169,7 +169,7 @@ Requests never send `temperature`, a thinking budget or a forced `tool_choice`: 
 | Builder calls per build or edit | 2 at most, each up to 16,000 output tokens | `buildContent()` |
 | Research per run | 4 searches and 4 model requests, each up to 16,000 output tokens | `MAX_SEARCHES`, `MAX_REQUESTS` in `research.ts` |
 | Tavily search | 5 results, basic depth, 8-second timeout | `tavily.ts` |
-| Free plan, with `MAJNU_BILLING=on` | 3 gifts a month; no calendars and no gift research | [`lib/plans.ts`](../../lib/plans.ts), `canUseFeature()` |
+| Calendars | A real account; everything else is free for everyone (there are no plans since 21 November) | `canUseFeature()` in [`lib/limits.ts`](../../lib/limits.ts) |
 
 On top of these, a monthly spend limit is set in the Anthropic Console. All counts go through the signed-in user's client, so row-level security limits them to that user's own letters.
 

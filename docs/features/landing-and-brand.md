@@ -16,7 +16,7 @@ flowchart TD
   landing --> faq["Questions"]
   send -->|"open an example"| demo["/l/demo-letter, /l/demo-gift, /l/demo-calendar"]
   hero -->|"Create a gift"| signin["/signin"]
-  pricing -->|"Choose Full moon"| signinPlan["/signin?plan=full-moon"]
+  pricing -->|"Find a gift"| hero
   landing --> footer["Footer: Privacy, Terms, Impressum"]
 ```
 
@@ -26,8 +26,8 @@ The page, top to bottom ([`app/(marketing)/page.tsx`](../../app/(marketing)/page
 2. **Hero:** "Personalized digital gifting", the headline "Give something personal.", a primary **Create a gift** button to `/signin` and "See how it works". Under it: "Free to start. Nothing to install for the person you send it to."
 3. **How it works:** three steps (Tell Majnu who it is for; Make it yours; Send the link), each with a moon phase one step fuller than the last. On desktop the painting is pinned behind the hero and the steps, and the moon travels as they scroll past; on phones it is a framed card between them.
 4. **What you can send:** gift, letter, invitation and advent calendar, with their plan, and three examples drawn with `<TemplateCard>` that open the demo pages. The demo slugs always resolve to the same fixtures as the thumbnails ([templates-and-gift-pages.md](templates-and-gift-pages.md#demo-slugs)).
-5. **Simple pricing:** Crescent and Full moon from [`lib/plans.ts`](../../lib/plans.ts). Full moon's button goes to `/signin?plan=full-moon`, which carries the choice through sign-in to the Plan tab ([billing.md](billing.md#checkout)).
-6. **Questions:** whether the recipient needs an account, who can see a gift, whether Full moon can be cancelled.
+5. **Pricing:** two cards read from [`lib/plans.ts`](../../lib/plans.ts): Free (€0, everything that makes Majnu useful) and the personalised wrapper (€2.99 once, for one gift, bought with "Make it unique" on a wrapped gift; [billing.md](billing.md)). Prices include VAT; nothing renews.
+6. **Questions:** whether you need an account, where the ideas come from, location, whether the recipient needs an account, who can see a gift, what Majnu costs and what happens when you buy a personalised wrapper.
 7. A closing call to action and the site footer ([`site-footer.tsx`](../../components/landing/site-footer.tsx)) with Privacy, Terms and Impressum.
 
 Sections below the fold play in as they scroll into view ([`reveal.tsx`](../../components/landing/reveal.tsx)). Content is hidden only after hydration and only while still below the fold, so with reduced motion, or without JavaScript, everything stays visible.
@@ -88,7 +88,7 @@ flowchart LR
 |---|---|---|
 | `/impressum` | [`app/(marketing)/impressum/page.tsx`](../../app/(marketing)/impressum/page.tsx) | Who runs Majnu, as German law requires |
 | `/privacy` | [`app/(marketing)/privacy/page.tsx`](../../app/(marketing)/privacy/page.tsx) | What is collected and why, cookies, open tracking, gift pages, processors, transfers outside the EU, retention, rights |
-| `/terms` | [`app/(marketing)/terms/page.tsx`](../../app/(marketing)/terms/page.tsx) | The terms of use and of Full moon |
+| `/terms` | [`app/(marketing)/terms/page.tsx`](../../app/(marketing)/terms/page.tsx) | The terms of use, of the personalised wrapper and the right of withdrawal |
 
 - All three read the operator's name, address and email from [`lib/legal.ts`](../../lib/legal.ts), which also holds the date of the last change (`legalUpdated`). The name must match the Stripe account. `npm run deploy` refuses to deploy while `lib/legal.ts` has a bracketed placeholder.
 - They share [`<LegalPage>`](../../components/legal/legal-page.tsx), on the light Petal palette for long reading.
