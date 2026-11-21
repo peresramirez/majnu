@@ -10,7 +10,20 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+  			mono: ['var(--font-typewriter)', 'ui-monospace', 'monospace'],
+  			hand: ['var(--font-hand)', 'cursive']
+  		},
   		colors: {
+  			airmail: {
+  				blue: '#2447B5',
+  				red: '#D62F2A',
+  				paper: '#FAF8F2',
+  				ink: '#131A33',
+  				postmark: '#5B6B9A',
+  				sun: '#F2C94C'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
@@ -83,11 +96,22 @@ const config: Config = {
   				to: {
   					height: '0'
   				}
+  			},
+  			'stamp-press': {
+  				'0%': { opacity: '0', transform: 'scale(1.5) rotate(12deg)' },
+  				'60%': { opacity: '1', transform: 'scale(0.96) rotate(4deg)' },
+  				'100%': { opacity: '1', transform: 'scale(1) rotate(4deg)' }
+  			},
+  			'postmark-in': {
+  				'0%': { opacity: '0' },
+  				'100%': { opacity: '0.8' }
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'stamp-press': 'stamp-press 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.3s both',
+  			'postmark-in': 'postmark-in 0.3s ease-out 0.8s both'
   		}
   	}
   },

@@ -1,29 +1,11 @@
 {
-  "name": "nextjs-supabase-starter",
-  "version": "1.0.0",
+  "name": "majnu",
+  "version": "0.1.0",
   "private": true,
-  "description": "A modern Next.js starter template with Supabase integration, featuring a beautiful UI powered by Radix UI components and Tailwind CSS.",
-  "author": {
-    "name": "ysskrishna",
-    "url": "https://github.com/ysskrishna"
-  },
-  "keywords": [
-    "nextjs",
-    "supabase",
-    "radix-ui",
-    "tailwind-css",
-    "typescript",
-    "dashboard",
-    "authentication",
-    "react-hook-form",
-    "zod",
-    "ysskrishna",
-    "starter",
-    "template"
-  ],
+  "description": "Digital letters, invitations and advent calendars, made by chatting with an AI agent and shared as a link.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ysskrishna/nextjs-supabase-starter"
+    "url": "https://github.com/peresramirez/majnu"
   },
   "scripts": {
     "dev": "next dev",

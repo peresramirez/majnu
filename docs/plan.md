@@ -104,6 +104,17 @@ Not tonight: Claude Managed Agents, where Anthropic hosts the agent loop and a s
 
 A `redesign_letter` tool queues a job. The job starts a sandbox, runs Claude Code on an exported copy of the page with its own low-limit Anthropic key, downloads one self-contained HTML file, stores it with the letter and deletes the sandbox. `/l/[slug]` serves that file in a sandboxed iframe with a `Content-Security-Policy: sandbox allow-scripts` header, because it is user-influenced HTML on our domain.
 
+### Brand
+
+The look is an airmail envelope, because the product is mail. It is defined once and reused:
+
+- Colours in `tailwind.config.ts` under `airmail`: `blue` (page ground), `red` (the one call to action), `paper`, `ink`, `postmark`, `sun`.
+- Type in `app/fonts.ts`: Bricolage Grotesque for headings and body (`font-sans`), Courier Prime for labels and prices (`font-mono`), Caveat for handwriting (`font-hand`).
+- Two CSS helpers in `app/globals.css`: `.airmail-edge` (the red and blue border) and `.stamp-perf` (perforated stamp edge; width and height must be multiples of 12px).
+- The main action is always worded "Write a letter".
+
+Letter and calendar templates may use their own palettes; the site chrome around them stays in this one.
+
 ## Who builds what
 
 After the shared setup, neither developer edits the other's files.
@@ -117,7 +128,7 @@ After the shared setup, neither developer edits the other's files.
 ## Shared setup (first 30 minutes, together)
 
 1. Dev A: write and apply the migration; add `lib/supabase/admin.ts` with `import "server-only"`; rewrite `lib/supabase/middleware.ts` to the official `@supabase/ssr` cookie pattern (the template's version drops refreshed sessions, which would log senders out mid-chat), remove its `console.log`, protect `/create`, and exclude `l/` and `api/open` from the matcher.
-2. Dev B: split `app/layout.tsx` into `(marketing)`, `(app)` and `(public)` route groups, because every page is currently wrapped in a centred container and the template author's footer. Move existing pages into the groups and fix `metadataBase`, which still points at localhost.
+2. Dev B: add the `(public)` route group for `/l/[slug]` and the legal pages. Already done: the root layout is reduced to providers and metadata, the landing page lives in `app/(marketing)/`, and the signed-in pages live in `app/(app)/` with their own container and footer.
 3. Together: write `schema.ts`, `templates.ts`, `fixtures.ts` and the stubbed `getPublicLetter()`. Commit to `main`.
 4. Then work on branches `dev-a` and `dev-b`, merging to `main` at every checkpoint and whenever a handover interface lands. Deploys are manual from one machine (`npx vercel --prod`).
 
