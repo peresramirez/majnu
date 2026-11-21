@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { firstName, letterDescription, letterTitle, monogram, signOffLines } from "@/components/letters/names"
+import { firstName, letterDescription, letterNoun, letterTitle, monogram, signOffLines } from "@/components/letters/names"
 import { letterFixtures } from "@/lib/letters/fixtures"
 
 describe("firstName", () => {
@@ -11,6 +11,15 @@ describe("firstName", () => {
   it("falls back when there is no name", () => {
     expect(firstName("")).toBe("you")
     expect(firstName(null)).toBe("you")
+  })
+})
+
+describe("letterNoun", () => {
+  it("names the kind of gift, and treats anything unknown as a letter", () => {
+    expect(letterNoun("gift-reveal")).toBe("A gift")
+    expect(letterNoun("advent-classic")).toBe("An advent calendar")
+    expect(letterNoun("not-a-template")).toBe("A letter")
+    expect(letterNoun(null)).toBe("A letter")
   })
 })
 

@@ -19,10 +19,14 @@ const nouns: Record<TemplateId, string> = {
   countdown: "A countdown",
 }
 
+// "A letter", "An invitation", "An advent calendar". Unknown ids are letters.
+export function letterNoun(templateId: string | null | undefined): string {
+  return nouns[templateId as TemplateId] ?? "A letter"
+}
+
 // "A letter for Anna", "An invitation for Sophie", "An advent calendar for Lena".
 export function letterTitle(templateId: string, recipientName: string | null | undefined): string {
-  const noun = nouns[templateId as TemplateId] ?? "A letter"
-  return `${noun} for ${firstName(recipientName)}`
+  return `${letterNoun(templateId)} for ${firstName(recipientName)}`
 }
 
 // Generic link-preview text. Never the message, the gift or the place.
