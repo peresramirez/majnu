@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import {
-  firstImage,
   MAX_RESULTS,
+  productImage,
   SEARCH_TIMEOUT_MS,
   searchTavily,
   TAVILY_SEARCH_URL,
@@ -195,32 +195,60 @@ describe("tavilyCountry", () => {
   })
 })
 
-describe("firstImage", () => {
-  it("takes the first https photo, as a string or an object with a url", () => {
-    expect(firstImage(["https://cdn.example/a.jpg"])).toBe("https://cdn.example/a.jpg")
-    expect(firstImage([{ url: "https://cdn.example/b.webp", description: "A mug" }])).toBe("https://cdn.example/b.webp")
+describe("productImage", () => {
+  it("takes an https photo, given as a string or an object with a url", () => {
+    expect(productImage(["https://cdn.example/a.jpg"])).toBe("https://cdn.example/a.jpg")
+    expect(productImage([{ url: "https://cdn.example/b.webp", description: "A mug" }])).toBe("https://cdn.example/b.webp")
   })
 
-  it("skips http, data, svg, logos and icons", () => {
+  it("skips http, data, svg, gif, logos and icons", () => {
     expect(
-      firstImage([
+      productImage([
         "http://cdn.example/a.jpg",
         "data:image/png;base64,AAAA",
         "https://cdn.example/a.svg",
+        "https://cdn.example/spacer.gif",
         "https://cdn.example/brand/logo.png",
         "https://cdn.example/icons/cart.png",
-        "https://cdn.example/products/mug.jpg",
+        "https://cdn.example/mug.jpg",
       ]),
-    ).toBe("https://cdn.example/products/mug.jpg")
+    ).toBe("https://cdn.example/mug.jpg")
   })
 
-  it("does not mistake a word that contains 'icon' for an icon", () => {
-    expect(firstImage(["https://cdn.example/silicone-mould.jpg"])).toBe("https://cdn.example/silicone-mould.jpg")
+  // The first images of real shop pages from the live check on 21 November.
+  it("skips the labels, wordmarks and theme graphics real shop pages start with", () => {
+    expect(
+      productImage([
+        "https://www.fraas.com/cdn/shop/t/121/assets/eu-warranty-label-de.png?v=66203898586436090121794924215",
+        "https://teaser.prod.breuni.de/entd-camp/image/upload/v1761830985/Wortmarke_Gold2024_250px_cszeaj_dxamo7.png",
+        "https://teaser.prod.breuni.de/suchen/image/upload/bilder/suchen_assets/weihnachten/weihnachten-logo.png",
+        "https://shop.example/img/trustbadge.png",
+        "https://shop.example/img/payment_paypal.png",
+        "https://shop.example/img/flag-de.png",
+        "https://shop.example/img/thumb_32x32.jpg",
+        "https://www.fraas.com/cdn/shop/files/kaschmirschal-rose.jpg?v=1",
+      ]),
+    ).toBe("https://www.fraas.com/cdn/shop/files/kaschmirschal-rose.jpg?v=1")
+  })
+
+  it("prefers a photo file on a product path, then the earlier image", () => {
+    expect(productImage(["https://shop.example/hero.png", "https://shop.example/products/schal.jpg"])).toBe("https://shop.example/products/schal.jpg")
+    expect(productImage(["https://shop.example/a.jpg", "https://shop.example/b.jpg"])).toBe("https://shop.example/a.jpg")
+    expect(productImage(["https://shop.example/a.png"])).toBe("https://shop.example/a.png")
+  })
+
+  it("does not mistake a word that contains 'icon' or 'star' for an icon", () => {
+    expect(productImage(["https://cdn.example/silicone-mould.jpg"])).toBe("https://cdn.example/silicone-mould.jpg")
+    expect(productImage(["https://cdn.example/starter-set.jpg"])).toBe("https://cdn.example/starter-set.jpg")
+  })
+
+  it("survives a path it cannot decode", () => {
+    expect(productImage(["https://cdn.example/%E0%A4%A.jpg"])).toBe("https://cdn.example/%E0%A4%A.jpg")
   })
 
   it("returns undefined when there is nothing usable", () => {
-    expect(firstImage(undefined)).toBeUndefined()
-    expect(firstImage([])).toBeUndefined()
-    expect(firstImage([42, null, { src: "https://cdn.example/a.jpg" }])).toBeUndefined()
+    expect(productImage(undefined)).toBeUndefined()
+    expect(productImage([])).toBeUndefined()
+    expect(productImage([42, null, { src: "https://cdn.example/a.jpg" }])).toBeUndefined()
   })
 })

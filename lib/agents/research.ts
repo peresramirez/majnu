@@ -89,9 +89,11 @@ const MAX_IDEAS = 5
 // ideas) is in the user message.
 
 const WRITING_RULES = `- Write every title, description, reason and why in the language the brief names, or in the language of the brief when it names none. Never switch to the language of the search results: translate what you read. Keep brand and product names as they are.
-- Give prices in the currency the brief names, written the way people there write prices, as in the brief's example. If a shop shows only another currency, give its price as shown rather than converting it.`
+- Write to the sender as a friend would. In languages with a formal and an informal you, use the informal one (in German du, never Sie).
+- Give prices in the currency the brief names, written the way people there write prices, as in the brief's example. Use the price the search result shows; when it shows none, give a typical price marked as approximate (in German "ca. 45 €"). If a shop shows only another currency, give its price as shown rather than converting it.`
 
-const IDEA_RULES = `- Each idea has a short title, one or two sentences describing what it is, one sentence on why it suits this person (use what the brief says about them), a typical price, the shop's name, and an https link to the page where it can be bought or booked.
+const IDEA_RULES = `- Each idea has a short title, one or two sentences describing what it is, one sentence on why it suits this person (use what the brief says about them), a price, the shop's name, and an https link to the page where it can be bought or booked.
+- Link to a shop's page for that thing: a product page, or the shop's own page for that kind of product. Never an article, a blog post or a list of gift ideas; use those only to find shops, then search for the shop's page.
 - Only use links that appeared in your search results. Never guess a URL. Leave the link out if you have none.
 - Stay within the budget when there is one. Mix kinds: something to keep, something to do, something small and personal.
 - Recommend the one idea that fits this person best, and say why in one or two sentences, written to the sender.`
@@ -107,7 +109,7 @@ ${WRITING_RULES}`
 export const TAVILY_RESEARCH_SYSTEM_PROMPT = `You find gift ideas for one person, for Majnu, a site where people make personal gift pages. Search the web with search_web, then call report_gifts once with the number of ideas the brief asks for (3 to 5 if it does not say). That call is your only output: write nothing else.
 
 - You have at most 4 searches. Each returns up to 5 results with a title, a link and a short extract. Keep queries short and specific, in the language of the brief and in the words a shop page there would use, and include the sender's country or city.
-- Look for specific things someone can buy or book online in the sender's country: products, experiences, vouchers, from well-known shops or the maker's own site. Product pages are better than lists of ideas.
+- Look for specific things someone can buy or book online in the sender's country: products, experiences, vouchers, from well-known shops or the maker's own site.
 - Results marked [photo] come with a product photo the sender will see next to the idea. When two results fit equally well, prefer the one with a photo.
 ${IDEA_RULES}
 ${WRITING_RULES}
@@ -129,7 +131,7 @@ const REPORT_TOOL: BetaTool = {
             title: { type: "string", description: "What the gift is, e.g. 'Pottery class for two'" },
             description: { type: "string", description: "One or two sentences on what it is" },
             reason: { type: "string", description: "One sentence on why it suits this person" },
-            price: { type: "string", description: "Typical price in the brief's currency, written as people there write it, e.g. '39,90 €'" },
+            price: { type: "string", description: "The price in the brief's currency, written as people there write it, e.g. '39,90 €', or marked as approximate" },
             shop: { type: "string", description: "The shop or maker selling it, e.g. 'Thalia'" },
             url: { type: "string", description: "https link to buy or book it, taken from a search result" },
           },

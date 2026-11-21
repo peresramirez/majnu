@@ -59,7 +59,7 @@ export const FINDER_SYSTEM_PROMPT = `You are Majnu. You help one person, the vis
 How you talk
 - Like a thoughtful friend: short sentences, plain words, sentence case. One or two sentences at a time.
 - Plain text only: no lists, headings, bold, links or emoji, and no exclamation marks. Never use the words "magic", "AI-powered" or "unlock".
-- Reply in the language the visitor writes in. If you can't tell, use their browser language from the context block.
+- Reply in the language the visitor writes in. If you can't tell, use their browser language from the context block. In languages with a formal and an informal you, use the informal one (in German du, never Sie).
 
 The context block
 - Each visitor message starts with a <context> block from the app: today's date, the visitor's browser language, the country and region their connection comes from, and the local currency. The visitor did not write it and does not see it. Use it, but don't mention it unless they ask how you know where they are.
@@ -67,9 +67,9 @@ The context block
 Finding gifts
 - As soon as you know who the gift is for, call find_gifts. Don't ask questions first: assume what you need and let the visitor correct you. The app shows your assumptions as small chips they can correct.
 - relationship is who the person is to the visitor, in the visitor's own words. kind is the closest of the listed kinds.
-- Give age only when the visitor said or clearly implied it; otherwise the app assumes a range from the relationship. Give senderAge only when the visitor said their own age.
-- Give name, occasion, budget and interests only when the visitor said them. Never invent them.
-- about carries everything you know about the person and the occasion, for the researcher, who sees nothing else.
+- Fill in every field the visitor has told you about, in this message or an earlier one: age, name, occasion, budget, interests, and senderAge for their own age. The chips show only these fields, so a fact you put only in about is one the visitor can't see or correct. "She turns 62" is age 62 to 62; "around 50 euros" is the budget.
+- Use null (for interests, an empty list) when the visitor hasn't said it, and never invent anything. Without an age, the app assumes a range from the relationship.
+- about carries everything you know about the person and the occasion, including what is already in the other fields, for the researcher, who sees nothing else.
 - status is a few words in the visitor's language for the line the app shows while you search, such as "Looking at gifts in Berlin…".
 - The visitor then sees three options and the one you recommend, with why. Don't list or repeat them.
 - If the visitor corrects an assumption ("she's 60, not 45") or adds something that changes the choice, call find_gifts again with everything you now know.
@@ -88,6 +88,12 @@ Rules
 
 // ---------- Tools ----------
 
+// Every field is required, and the ones the visitor may not have given are
+// nullable: with optional fields the model left them out and put everything in
+// `about` (seen live on 21 November), so the chips never showed an age or a
+// budget the visitor had given. A required field makes it decide each one.
+const nullable = (schema: Record<string, unknown>, description: string) => ({ anyOf: [schema, { type: "null" }], description })
+
 const FIND_GIFTS_TOOL: BetaTool = {
   name: "find_gifts",
   description:
@@ -101,18 +107,24 @@ const FIND_GIFTS_TOOL: BetaTool = {
         description: "Who the person is to the visitor, in the visitor's own words and language, e.g. 'Mama', 'girlfriend', 'best friend'",
       },
       kind: { type: "string", enum: [...RELATIONSHIP_KINDS], description: "The closest kind of relationship" },
-      name: { type: "string", description: "The person's name, only if the visitor gave it" },
-      age: {
-        type: "object",
-        description: "Only when the visitor said or clearly implied the person's age. For an exact age, give it as both min and max.",
-        properties: { min: { type: "integer" }, max: { type: "integer" } },
-        required: ["min", "max"],
-        additionalProperties: false,
+      name: nullable({ type: "string" }, "The person's name if the visitor gave it, otherwise null"),
+      age: nullable(
+        {
+          type: "object",
+          properties: { min: { type: "integer" }, max: { type: "integer" } },
+          required: ["min", "max"],
+          additionalProperties: false,
+        },
+        "The person's age if the visitor said or clearly implied it, in this or an earlier message, otherwise null. For an exact age ('she turns 62'), give it as both min and max.",
+      ),
+      senderAge: nullable({ type: "integer" }, "The visitor's own age if they said it, otherwise null"),
+      occasion: nullable({ type: "string" }, "e.g. 'Geburtstag', 'Weihnachten', if the visitor said it, otherwise null"),
+      budget: nullable({ type: "string" }, "The budget as the visitor said it, e.g. 'etwa 50 €', otherwise null"),
+      interests: {
+        type: "array",
+        items: { type: "string" },
+        description: "What the person loves or does, as the visitor said it, a word or two each, e.g. 'Garten', 'Lesen'. Empty if the visitor said nothing about it.",
       },
-      senderAge: { type: "integer", description: "The visitor's own age, only if they said it" },
-      occasion: { type: "string", description: "e.g. 'Birthday', 'Christmas', only if the visitor said it" },
-      budget: { type: "string", description: "As the visitor said it, e.g. 'unter 50 €', only if they gave one" },
-      interests: { type: "array", items: { type: "string" }, description: "What the person loves, only what the visitor said" },
       about: {
         type: "string",
         description: "Everything you know about the person and the occasion, in one or two sentences, for the gift researcher",
@@ -123,7 +135,7 @@ const FIND_GIFTS_TOOL: BetaTool = {
         description: "A few words in the visitor's language for the line shown while searching, e.g. 'Ich schaue nach Geschenken in Berlin…'",
       },
     },
-    required: ["relationship", "kind", "about", "language", "status"],
+    required: ["relationship", "kind", "name", "age", "senderAge", "occasion", "budget", "interests", "about", "language", "status"],
     additionalProperties: false,
   },
 }
@@ -157,6 +169,7 @@ const ASK_QUESTIONS_TOOL: BetaTool = {
 
 // The order and wording never change between requests.
 export const FINDER_TOOLS: BetaTool[] = [FIND_GIFTS_TOOL, ASK_QUESTIONS_TOOL]
+export const FINDER_TOOL_CHOICE = { type: "auto", disable_parallel_tool_use: true } as const
 
 const shortText = (max: number) => z.string().trim().min(1).transform((s) => s.slice(0, max))
 
@@ -178,6 +191,12 @@ export const FindGiftsInput = z.object({
   status: shortText(100).optional().catch(undefined),
 })
 export type FindGiftsInput = z.infer<typeof FindGiftsInput>
+
+// The tool's "not given" is null; the schema's is a missing field.
+function withoutNulls(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null))
+}
 
 const AskQuestionsInput = z.object({
   questions: z
@@ -335,7 +354,7 @@ async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: 
   if (flags.searched) {
     return { result: result(call, "Only one search per visitor message. Wait for the visitor's next message.", true), terminal: true }
   }
-  const parsed = FindGiftsInput.safeParse(call.input)
+  const parsed = FindGiftsInput.safeParse(withoutNulls(call.input))
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
   flags.searched = true
   const input = parsed.data
@@ -468,6 +487,10 @@ export async function runFinderTurn(opts: {
         max_tokens: MAX_TOKENS,
         system: FINDER_SYSTEM_PROMPT,
         tools: FINDER_TOOLS,
+        // At most one tool call per reply: one search per message, and a
+        // search and questions never in the same reply. `auto` is the only
+        // tool_choice current models accept; this flag still works with it.
+        tool_choice: FINDER_TOOL_CHOICE,
         output_config: { effort: AGENT_EFFORT },
         // Caches the prefix for the next request and the next message.
         cache_control: { type: "ephemeral" },

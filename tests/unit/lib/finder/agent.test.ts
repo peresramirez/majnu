@@ -14,6 +14,7 @@ import { ResearchIncomplete, ResearchRefusal, researchGiftReport, type ResearchR
 import {
   contextBlockText,
   FINDER_SYSTEM_PROMPT,
+  FINDER_TOOL_CHOICE,
   FINDER_TOOLS,
   MAX_FINDER_REQUESTS,
   runFinderTurn,
@@ -192,6 +193,25 @@ describe("a first search", () => {
       expect(JSON.stringify(request.tools)).toBe(JSON.stringify(FINDER_TOOLS))
     }
     expect(FINDER_SYSTEM_PROMPT).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+
+  it("asks for at most one tool call per reply, and makes the model decide every field", async () => {
+    const { requests } = scriptModel(reply([findCall()]))
+    await runFinderTurn({ history: [], message: "Mama", state: state() })
+    expect(requests[0].tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true })
+    expect(FINDER_TOOL_CHOICE.type).toBe("auto")
+    const schema = FINDER_TOOLS[0].input_schema as { properties: Record<string, unknown>; required: string[] }
+    expect([...schema.required].sort()).toEqual(Object.keys(schema.properties).sort())
+  })
+
+  it("reads null as not given", async () => {
+    scriptModel(reply([findCall({ ...MOTHER, name: null, age: null, senderAge: null, occasion: null, budget: null, interests: [] })]))
+    await runFinderTurn({ history: [], message: "Mama", state: state() })
+    expect(events[0]).toEqual({
+      type: "context",
+      context: { country: "DE", region: "Berlin", language: "de", currency: "EUR", relationship: "Mama", ageRange: [45, 70] },
+    })
+    expect(researchGiftReport).toHaveBeenCalledWith(expect.objectContaining({ occasion: "not given", budget: undefined }))
   })
 
   it("lets the model fix a call with missing fields, without searching", async () => {

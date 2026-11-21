@@ -5,9 +5,9 @@
 //
 // For the gift finder a search can also be pointed at the visitor's country and
 // language, and ask for images: with include_images, Tavily returns an `images`
-// list inside each result, taken from that page. We keep the first usable one
-// per result, so a product's photo comes with the search that found it and no
-// page is fetched one by one.
+// list inside each result, taken from that page (plain URLs, checked live on
+// 21 November). We keep the one most likely to show the product, so its photo
+// comes with the search that found it and no page is fetched one by one.
 import "server-only"
 import * as z from "zod/v4"
 import { httpsOnly } from "./safe-url"
@@ -108,23 +108,51 @@ function clip(text: string | null | undefined, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
 }
 
-// Logos and icons are not product photos. Matched as whole words in the path,
-// so "silicone-mould.jpg" is still a photo.
-const NOT_A_PHOTO = /(^|[/_.-])(logos?|icons?|favicon|sprites?|placeholder|avatar)([/_.-]|$)/i
+// A page's images include its logo, badges, payment and warranty labels and
+// theme graphics, often before the product. Words are matched whole in the
+// path, so "silicone-mould.jpg" is still a photo.
+const NOT_A_PHOTO =
+  /(^|[/_.-])(logos?|icons?|favicons?|sprites?|placeholders?|avatars?|labels?|badges?|banners?|flags?|payments?|warranty|trust\w*|ratings?|stars?|wortmarke|wordmark|social|newsletter|spinner|loader)([/_.-]|$)/i
+// Shopify serves theme graphics from /cdn/shop/t/<n>/assets/; products live elsewhere.
+const THEME_ASSET = /\/t\/\d+\/assets\//i
+// "32x32", "_50px": too small to be the product.
+const TINY = /(^|[^\d])(\d{1,2})x(\d{1,2})([^\d]|$)|[_-]\d{1,2}px/i
+const PHOTO_FILE = /\.(jpe?g|webp|avif)$/i
+const PRODUCT_PATH = /(^|[/_.-])(products?|produkte?|artikel|items?|files|catalog|media)([/_.-]|$)/i
+// Enough to get past the header graphics of a shop page.
+const MAX_IMAGES_LOOKED_AT = 25
 
-// The first https image of a result that looks like a photo, or undefined.
-export function firstImage(images: unknown): string | undefined {
-  if (!Array.isArray(images)) return undefined
-  for (const image of images) {
-    const raw = typeof image === "string" ? image : image && typeof image === "object" ? (image as { url?: unknown }).url : undefined
-    if (typeof raw !== "string" || raw.length > MAX_IMAGE_URL) continue
-    const url = httpsOnly(raw.trim())
-    if (!url) continue
-    const path = new URL(url).pathname
-    if (/\.svg$/i.test(path) || NOT_A_PHOTO.test(path)) continue
-    return url
+function imageUrlOf(image: unknown): string | undefined {
+  const raw = typeof image === "string" ? image : image && typeof image === "object" ? (image as { url?: unknown }).url : undefined
+  if (typeof raw !== "string" || raw.length > MAX_IMAGE_URL) return undefined
+  return httpsOnly(raw.trim())
+}
+
+function decodedPath(url: string): string {
+  const path = new URL(url).pathname
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
   }
-  return undefined
+}
+
+// The image of a result most likely to show the product: https only, no
+// logos, labels or theme graphics, and among the rest a photo file on a
+// product path first. Ties go to the earlier image. Undefined when none fits:
+// the option then shows without a picture, and no page is fetched to find one.
+export function productImage(images: unknown): string | undefined {
+  if (!Array.isArray(images)) return undefined
+  let best: { url: string; score: number } | undefined
+  for (const image of images.slice(0, MAX_IMAGES_LOOKED_AT)) {
+    const url = imageUrlOf(image)
+    if (!url) continue
+    const path = decodedPath(url)
+    if (/\.(svg|gif|ico)$/i.test(path) || NOT_A_PHOTO.test(path) || THEME_ASSET.test(path) || TINY.test(path)) continue
+    const score = (PHOTO_FILE.test(path) ? 2 : 0) + (PRODUCT_PATH.test(path) ? 2 : 0)
+    if (!best || score > best.score) best = { url, score }
+  }
+  return best?.url
 }
 
 function language(code: string | undefined): string | undefined {
@@ -174,7 +202,7 @@ export async function searchTavily(query: string, apiKey: string, options: Searc
     if (!parsed.success) throw new TavilySearchError("returned an unexpected response")
 
     return parsed.data.results.slice(0, MAX_RESULTS).map((result) => {
-      const imageUrl = options.images ? firstImage(result.images) : undefined
+      const imageUrl = options.images ? productImage(result.images) : undefined
       return {
         title: clip(result.title, MAX_TITLE),
         url: result.url,
