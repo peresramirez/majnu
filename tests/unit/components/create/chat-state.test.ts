@@ -1,0 +1,141 @@
+import { describe, expect, it } from "vitest"
+import {
+  CUT_OFF,
+  DEFAULT_ERROR,
+  chatReducer,
+  composeMessage,
+  initialChatState,
+  templateMessage,
+  type ChatAction,
+  type ChatState,
+} from "@/components/create/chat-state"
+import type { ChatEvent } from "@/lib/agents/events"
+
+const run = (state: ChatState, ...actions: ChatAction[]) => actions.reduce(chatReducer, state)
+const ev = (event: ChatEvent): ChatAction => ({ type: "event", event })
+
+describe("composeMessage", () => {
+  it("sends the template sentence before what was typed", () => {
+    expect(composeMessage("Classic envelope", "  For my sister  ")).toBe('Use the "Classic envelope" template. For my sister')
+  })
+
+  it("sends just the template sentence when nothing was typed", () => {
+    expect(composeMessage("Postcard", "   ")).toBe(templateMessage("Postcard"))
+    expect(templateMessage("Postcard")).toBe('Use the "Postcard" template.')
+  })
+
+  it("sends the typed text alone without a template", () => {
+    expect(composeMessage(null, " Hello ")).toBe("Hello")
+  })
+})
+
+describe("chatReducer", () => {
+  it("streams text into one assistant message and ends on done", () => {
+    const state = run(
+      initialChatState(),
+      { type: "send", text: "A letter for Anna" },
+      ev({ type: "letter", letterId: "l1" }),
+      ev({ type: "text", delta: "Lovely. " }),
+      ev({ type: "text", delta: "What is the occasion?" }),
+      ev({ type: "done" }),
+    )
+    expect(state.letterId).toBe("l1")
+    expect(state.streaming).toBe(false)
+    expect(state.items.map((i) => [i.role, "text" in i ? i.text : ""])).toEqual([
+      ["user", "A letter for Anna"],
+      ["assistant", "Lovely. What is the occasion?"],
+    ])
+  })
+
+  it("shows the tool label while it runs and starts a new paragraph after it", () => {
+    let state = run(
+      initialChatState(),
+      { type: "send", text: "Find a gift" },
+      ev({ type: "text", delta: "Let me look." }),
+      ev({ type: "tool", name: "research_gifts", status: "start", label: "Looking for gift ideas…" }),
+    )
+    expect(state.status).toBe("Looking for gift ideas…")
+    state = run(state, ev({ type: "tool", name: "research_gifts", status: "done", label: "Found 3 ideas" }), ev({ type: "text", delta: "Here they are." }))
+    expect(state.status).toBeNull()
+    expect(state.items[1]).toMatchObject({ role: "assistant", text: "Let me look.\n\nHere they are." })
+  })
+
+  it("attaches template and gift cards to the reply, and puts later text below them", () => {
+    const state = run(
+      initialChatState(),
+      { type: "send", text: "Ideas?" },
+      ev({ type: "text", delta: "Three designs:" }),
+      ev({ type: "templates", ids: ["classic-envelope", "postcard"] }),
+      ev({ type: "text", delta: "Which one?" }),
+      ev({ type: "gifts", ideas: [{ title: "Spa day", reason: "Relaxing" }] }),
+      ev({ type: "done" }),
+    )
+    expect(state.items).toMatchObject([
+      { role: "user" },
+      { role: "assistant", text: "Three designs:", templates: ["classic-envelope", "postcard"] },
+      { role: "assistant", text: "Which one?", gifts: [{ title: "Spa day", reason: "Relaxing" }] },
+    ])
+  })
+
+  it("creates an assistant item for cards that arrive before any text", () => {
+    const state = run(initialChatState(), { type: "send", text: "Show me" }, ev({ type: "templates", ids: ["postcard"] }))
+    expect(state.items[1]).toMatchObject({ role: "assistant", text: "", templates: ["postcard"] })
+  })
+
+  it("counts previews so the iframe reloads, and records the template", () => {
+    const state = run(
+      initialChatState({ letterId: "l1" }),
+      { type: "send", text: "Build it" },
+      ev({ type: "preview", letterId: "l1", kind: "letter", templateId: "gift-reveal" }),
+      ev({ type: "preview", letterId: "l1", kind: "letter", templateId: "gift-reveal" }),
+    )
+    expect(state).toMatchObject({ previewVersion: 2, hasContent: true, kind: "letter", templateId: "gift-reveal" })
+  })
+
+  it("adds notices for limits, refusals and errors", () => {
+    const state = run(
+      initialChatState(),
+      { type: "send", text: "Calendar please" },
+      ev({ type: "limit", reason: "full_moon_only", message: "Advent calendars are part of Full moon." }),
+      ev({ type: "refusal", message: "" }),
+      ev({ type: "error", message: "" }),
+    )
+    expect(state.items.slice(1)).toMatchObject([
+      { role: "notice", tone: "limit", reason: "full_moon_only", message: "Advent calendars are part of Full moon." },
+      { role: "notice", tone: "refusal" },
+      { role: "notice", tone: "error", message: DEFAULT_ERROR },
+    ])
+  })
+
+  it("says the reply was cut off when the stream ends without done", () => {
+    const cut = run(initialChatState(), { type: "send", text: "Hi" }, ev({ type: "text", delta: "Hel" }), { type: "closed" })
+    expect(cut.streaming).toBe(false)
+    expect(cut.items.at(-1)).toMatchObject({ role: "notice", tone: "error", message: CUT_OFF })
+
+    const finished = run(initialChatState(), { type: "send", text: "Hi" }, ev({ type: "done" }), { type: "closed" })
+    expect(finished.items).toHaveLength(1)
+  })
+
+  it("starts a new assistant message for the next reply", () => {
+    const state = run(
+      initialChatState({
+        letterId: "l1",
+        hasContent: true,
+        messages: [
+          { role: "user", text: "Hi" },
+          { role: "assistant", text: "Hello" },
+        ],
+      }),
+      { type: "send", text: "Change the headline" },
+      ev({ type: "text", delta: "Done." }),
+    )
+    expect(state.items.map((i) => i.role)).toEqual(["user", "assistant", "user", "assistant"])
+    expect(new Set(state.items.map((i) => i.id)).size).toBe(4)
+  })
+
+  it("records a failed request as an error notice", () => {
+    const state = run(initialChatState(), { type: "send", text: "Hi" }, { type: "failed", message: "You're offline." })
+    expect(state.streaming).toBe(false)
+    expect(state.items.at(-1)).toMatchObject({ role: "notice", tone: "error", message: "You're offline." })
+  })
+})
