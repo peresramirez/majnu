@@ -15,6 +15,31 @@ function underPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
 }
 
+// Guests are Supabase anonymous users (the gift finder signs visitors in
+// without asking, docs/plan.md "Gift finder"). Their `is_anonymous` flag comes
+// from getUser(), which asks Supabase Auth, so it is current even right after
+// an upgrade, when the old token still says anonymous.
+type AuthUser = { id: string; is_anonymous?: boolean }
+
+export function isGuest(user: AuthUser | null | undefined): boolean {
+  return user?.is_anonymous === true
+}
+
+export type RouteAccess = "pass" | "sign_in" | "leave_auth_page"
+
+// What the middleware does with one request:
+// - signed-out visitors on /dashboard or /create go to /signin;
+// - guests count as signed in there (they own the gifts they wrapped), and may
+//   also open /signin and /signup, so they can turn the guest account into a
+//   real one;
+// - real users skip the sign-in pages.
+// Everything else passes.
+export function routeAccess(pathname: string, user: AuthUser | null): RouteAccess {
+  if (!user && PROTECTED_PREFIXES.some((prefix) => underPrefix(pathname, prefix))) return "sign_in"
+  if (user && !isGuest(user) && AUTH_PAGES.some((page) => underPrefix(pathname, page))) return "leave_auth_page"
+  return "pass"
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
   let cacheHeaders: Record<string, string> = {}
@@ -44,16 +69,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+  const access = routeAccess(request.nextUrl.pathname, user)
 
-  if (!user && PROTECTED_PREFIXES.some((prefix) => underPrefix(pathname, prefix))) {
+  if (access === "sign_in") {
     return redirectKeepingSession(request, "/signin", response, cacheHeaders)
   }
 
-  // Signed-in users skip the sign-in pages. The landing page stays open to them.
+  // Real users skip the sign-in pages. The landing page stays open to them.
   // A same-site ?next=... or ?plan=full-moon on the sign-in page still decides
   // where they land, so "Choose Full moon" reaches the Plan tab either way.
-  if (user && AUTH_PAGES.some((page) => underPrefix(pathname, page))) {
+  if (access === "leave_auth_page") {
     const next = nextPathFromSearch(request.nextUrl.searchParams) ?? "/dashboard"
     return redirectKeepingSession(request, next, response, cacheHeaders)
   }

@@ -56,6 +56,10 @@ const ResearchGiftsInput = z.object({
   occasion: z.string().min(1).describe("e.g. 'Birthday', 'Christmas', 'Thank you'"),
   budget: z.string().optional().describe("e.g. 'about €50'"),
   country: z.string().optional().describe("Where the gift will be bought or used, e.g. 'Berlin, Germany'"),
+  language: z
+    .string()
+    .optional()
+    .describe("The language the sender writes in, as an ISO 639-1 code such as 'de' or 'en'. The ideas are written in it."),
 })
 
 const BuildLetterInput = z.object({

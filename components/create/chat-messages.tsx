@@ -159,6 +159,23 @@ function Notice({ tone, message, reason }: { tone: "limit" | "refusal" | "error"
       </div>
     )
   }
+  if (tone === "limit" && reason === "signin_required") {
+    // A guest asked for something that needs a real account (an advent calendar).
+    // Signing up keeps the guest's gifts: the account is upgraded in place.
+    return (
+      <div className="rounded-2xl p-4 ring-1 ring-inset ring-night-petal/15">
+        <p className="leading-relaxed text-night-petal">{message}</p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Link href="/signup?next=%2Fdashboard" className={`${primaryButton} px-5 py-2.5`}>
+            Create a free account
+          </Link>
+          <Link href="/signin?next=%2Fdashboard" className={`inline-flex items-center rounded text-sm font-semibold text-night-rose underline-offset-4 hover:underline ${focusRing}`}>
+            I have an account
+          </Link>
+        </div>
+      </div>
+    )
+  }
   if (tone === "limit") {
     return (
       <div className="rounded-2xl p-4 ring-1 ring-inset ring-night-petal/15">

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useTransition } from "react"
-import { Loader2, LogOut, Mail } from "lucide-react"
+import { Loader2, LogIn, LogOut, Mail, UserPlus } from "lucide-react"
 import { signOut } from "@/app/auth/actions"
 import {
   DropdownMenu,
@@ -20,7 +20,8 @@ const legal = "cursor-pointer rounded-lg px-3 py-1.5 text-sm text-night-lilac fo
 
 export function AccountMenu({ user }: { user: SessionUser }) {
   const [pending, startTransition] = useTransition()
-  const initial = (user.name ?? user.email ?? "?").trim().charAt(0).toUpperCase() || "?"
+  // Guests have no name or email yet; "G" marks the guest account.
+  const initial = user.isGuest ? "G" : (user.name ?? user.email ?? "?").trim().charAt(0).toUpperCase() || "?"
 
   return (
     <DropdownMenu>
@@ -32,11 +33,35 @@ export function AccountMenu({ user }: { user: SessionUser }) {
       </DropdownMenuTrigger>
       {/* Menus render outside the shell, so they bring the night palette with them. */}
       <DropdownMenuContent align="end" sideOffset={8} className="dark w-64 rounded-2xl border-night-petal/10 bg-night-velvet p-1.5 text-night-petal shadow-xl shadow-black/40">
-        <DropdownMenuLabel className="px-3 py-2.5 font-normal">
-          {user.name && <span className="block truncate text-[15px] font-medium text-night-petal">{user.name}</span>}
-          <span className="block truncate text-sm text-night-lilac">{user.email ?? "Signed in"}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-night-petal/10" />
+        {user.isGuest ? (
+          <>
+            <DropdownMenuLabel className="px-3 py-2.5 font-normal">
+              <span className="block text-[15px] font-medium text-night-petal">Guest</span>
+              <span className="block text-sm leading-snug text-night-lilac">Your gifts live in this browser until you create an account.</span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-night-petal/10" />
+            <DropdownMenuItem asChild className={item}>
+              <Link href="/signup">
+                <UserPlus aria-hidden="true" />
+                Create an account
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className={item}>
+              <Link href="/signin">
+                <LogIn aria-hidden="true" />
+                Sign in
+              </Link>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuLabel className="px-3 py-2.5 font-normal">
+              {user.name && <span className="block truncate text-[15px] font-medium text-night-petal">{user.name}</span>}
+              <span className="block truncate text-sm text-night-lilac">{user.email ?? "Signed in"}</span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-night-petal/10" />
+          </>
+        )}
         <DropdownMenuItem asChild className={item}>
           <a href="mailto:hello@majnu.app">
             <Mail aria-hidden="true" />
