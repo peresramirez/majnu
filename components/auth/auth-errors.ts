@@ -18,7 +18,8 @@ const byCode: Record<string, string> = {
   manual_linking_disabled:
     "Adding Google to a guest account isn't switched on yet. Create your account with email instead: everything you made comes with you.",
   // The Google account already belongs to another Majnu account.
-  identity_already_exists: `This Google account already has a Majnu account. You can sign in to it instead. ${NO_MERGE}`,
+  // GoogleAnyway, shown with it, says that the guest account stays behind.
+  identity_already_exists: "This Google account already has a Majnu account. You can sign in to it instead.",
   // An email link that was already used or is too old.
   otp_expired: "That link has expired or was already used. Sign in, or sign up again to get a new link.",
   // The link worked, but this browser could not finish (for example, the email

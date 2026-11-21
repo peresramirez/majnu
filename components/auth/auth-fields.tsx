@@ -51,7 +51,9 @@ export function GoogleAnyway(props: Omit<GoogleButtonProps, "label">) {
   return (
     <div className="space-y-2">
       <GoogleButton {...props} label="Sign in with Google anyway" />
-      <p className="text-center text-xs text-night-lilac/80">What you made as a guest stays with the guest account.</p>
+      <p className="text-center text-xs leading-relaxed text-night-lilac/80">
+        What you made as a guest stays with the guest account: we can&apos;t merge two accounts yet.
+      </p>
     </div>
   )
 }

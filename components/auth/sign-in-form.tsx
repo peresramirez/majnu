@@ -136,8 +136,8 @@ export default function SignInForm() {
           <Input id="password" type="password" autoComplete="current-password" disabled={busy} className={inputClass} {...register("password")} />
           {errors.password && <p className="text-sm text-[#F2A7A7]">{errors.password.message}</p>}
         </div>
-        {/* Cloudflare Turnstile, invisible: nothing shows here. */}
-        <div ref={turnstile.containerRef} />
+        {/* Cloudflare Turnstile, invisible: nothing shows here, and it takes no room. */}
+        <div ref={turnstile.containerRef} className="!mt-0" />
         <Button type="submit" className={submitClass} disabled={busy}>
           {isEmailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           Sign in

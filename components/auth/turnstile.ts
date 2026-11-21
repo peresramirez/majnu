@@ -65,6 +65,9 @@ export function useTurnstile(action: string) {
   const widgetId = useRef<string | null>(null)
   const token = useRef<string | null>(null)
   const unavailable = useRef(false)
+  // The last check failed (Turnstile retries on its own). Until one passes,
+  // getToken() answers at once instead of keeping the visitor waiting.
+  const failed = useRef(false)
   const waiting = useRef<Array<(value: string | undefined) => void>>([])
 
   const settle = useCallback((value: string | undefined) => {
@@ -80,6 +83,7 @@ export function useTurnstile(action: string) {
     if (!siteKey || !container) return
     let cancelled = false
     unavailable.current = false
+    failed.current = false
 
     loadTurnstile()
       .then((turnstile) => {
@@ -92,6 +96,7 @@ export function useTurnstile(action: string) {
             "refresh-expired": "auto",
             callback: (value: string) => {
               token.current = value
+              failed.current = false
               settle(value)
             },
             "expired-callback": () => {
@@ -99,10 +104,12 @@ export function useTurnstile(action: string) {
             },
             "error-callback": () => {
               token.current = null
+              failed.current = true
               settle(undefined)
             },
             "timeout-callback": () => {
               token.current = null
+              failed.current = true
               settle(undefined)
             },
           }) ?? null
@@ -122,7 +129,7 @@ export function useTurnstile(action: string) {
   }, [siteKey, action, settle])
 
   const getToken = useCallback((): Promise<string | undefined> => {
-    if (!siteKey || unavailable.current) return Promise.resolve(undefined)
+    if (!siteKey || unavailable.current || failed.current) return Promise.resolve(undefined)
     const id = widgetId.current
     if (token.current && id && !window.turnstile?.isExpired(id)) return Promise.resolve(token.current)
     return new Promise((resolve) => {

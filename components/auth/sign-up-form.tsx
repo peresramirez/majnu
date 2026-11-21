@@ -164,8 +164,8 @@ export default function SignUpForm() {
             <p className="text-sm text-night-lilac/80">At least 6 characters.</p>
           )}
         </div>
-        {/* Cloudflare Turnstile, invisible: nothing shows here. */}
-        <div ref={turnstile.containerRef} />
+        {/* Cloudflare Turnstile, invisible: nothing shows here, and it takes no room. */}
+        <div ref={turnstile.containerRef} className="!mt-0" />
         <Button type="submit" className={submitClass} disabled={busy}>
           {isEmailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           Create account
