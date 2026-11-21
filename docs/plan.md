@@ -40,6 +40,10 @@ The product now leads with one job: **help someone find the right gift for a per
 
 `lib/finder/events.ts` defines the request, the streamed events and the wrap call. Issues: #31 finder agent and API, #32 landing page finder, #33 anonymous visitors, app tabs and privacy, #34 social profile reading.
 
+## Gift list on invitations (decided 21 November)
+
+Wedding and birthday invitations (`wedding-invite`, `party-invite`) can carry a **gift list**. In the Letters & invitations chat, the host asks Majnu to research gifts they would like, picks some, and they are added to the invitation (an optional, additive `wishlist` on `LetterContent`, each item with a stable id). On the invitation page, guests see the list at the end and tap "I'll bring this" to claim an item, optionally leaving a first name for the host. A claimed item shows as taken for everyone else and cannot be claimed twice (a unique claim per letter and item). Claims need no account and store nothing on the guest's device; they go through a server route that limits claims per visitor hash. The host sees who claimed what in My gifts and can release a claim. Issue #35.
+
 ## Architecture
 
 ### Routes
