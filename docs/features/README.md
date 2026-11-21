@@ -26,3 +26,4 @@ Every page follows the same outline:
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |
 | [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |
 | [voice-input.md](voice-input.md) | Voice input: the microphone button in the finder and the Letters & invitations chat, `POST /api/transcribe` with OpenAI's `gpt-transcribe`, and the daily limits in `voice_transcriptions` (issue #37) |
+| [gift-list.md](gift-list.md) | Gift lists on wedding and birthday invitations: Majnu researches and adds gifts, guests claim one each with `POST /api/claim` (no account, one claim per gift, a per-visitor limit), and the host sees who is bringing what on My gifts and can release a claim (issue #35) |
