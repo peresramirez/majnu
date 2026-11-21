@@ -1,9 +1,16 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "majnu",
-  "main": ".open-next/worker.js",
+  // Wraps the fetch handler OpenNext generates (.open-next/worker.js) and adds
+  // the queue consumer for personalised wrappers. See worker.ts.
+  "main": "./worker.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // The job's modules import "server-only", which throws outside a React
+  // Server Components build. In the Worker bundle it is an empty module.
+  "alias": {
+    "server-only": "./node_modules/server-only/empty.js"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -14,6 +21,28 @@
       "service": "majnu"
     }
   ],
+  "queues": {
+    "producers": [{ "binding": "DESIGN_QUEUE", "queue": "majnu-designs" }],
+    "consumers": [
+      {
+        // One paid design per invocation. No retries: a retry is another
+        // paid run, and the job refunds the failures it sees.
+        "queue": "majnu-designs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 0,
+        "dead_letter_queue": "majnu-designs-dlq",
+        "max_concurrency": 3
+      },
+      {
+        // Messages whose consumer died mid-run: refund the purchase.
+        "queue": "majnu-designs-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5
+      }
+    ]
+  },
   "workers_dev": true,
   "routes": [
     { "pattern": "majnu.app", "custom_domain": true },
