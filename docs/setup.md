@@ -23,20 +23,23 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API keys | Sign-in and the signed-in user's own data |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page, the secret key | Server-only reads of public letters and open tracking. Bypasses row-level security, so it never goes in client code |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` locally, `https://majnu-app.vercel.app` in production | Google sign-in redirect, share links |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` locally; production uses `https://majnu.app` from `.env.production` | Google sign-in redirect, share links |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | The agents. Server only |
 | `MAJNU_MODEL` | Optional | Defaults to `claude-opus-5-5` |
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
 | `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
 
-Production values live in the Vercel project `majnu` (Settings → Environment Variables, or `npx vercel env add`).
+Production values come from two places:
+
+- **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
+- **Secrets** are Worker secrets on Cloudflare, set once per key with `npx wrangler secret put ANTHROPIC_API_KEY` (and the same for `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`). They never go in a file that is committed or deployed.
 
 ## Services
 
 **Supabase** (project `layla-hack`, region eu-central-1)
 
-- Authentication → URL Configuration: Site URL `https://majnu-app.vercel.app`; redirect URLs `https://majnu-app.vercel.app/**` and `http://localhost:3000/**`. Without these, Google sign-in on the live site returns people to localhost.
+- Authentication → URL Configuration: Site URL `https://majnu.app`; redirect URLs `https://majnu.app/**` and `http://localhost:3000/**`. Without these, Google sign-in on the live site returns people to localhost.
 - Authentication → Providers → Google is enabled with our Google Cloud OAuth client. In Google Cloud, the authorised redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
 - Database changes go in `supabase/migrations/` and are applied through the Supabase MCP server or the SQL editor.
 
@@ -49,9 +52,14 @@ Production values live in the Vercel project `majnu` (Settings → Environment V
 
 - The account must be activated to take live payments. Until then everything runs on test keys.
 
-**Vercel**
+**Cloudflare** (hosting, domain and email)
 
-- Project `majnu`, production domain https://majnu-app.vercel.app. Deploys are manual: `npx vercel --prod` from the repository owner's machine.
+- The app runs as the Worker `majnu`, built with the OpenNext adapter, at https://majnu.app and https://www.majnu.app. Configuration is in `wrangler.jsonc` and `open-next.config.ts`.
+- Deploy with `npm run deploy`, which needs `npx wrangler login` once. It deploys the last commit, not your working directory.
+- Never run `opennextjs-cloudflare deploy` or `wrangler deploy` directly. The adapter copies every `.env` file into the Worker at build time, so a build in a working directory uploads the secrets in `.env.local` and bakes `http://localhost:3000` into the pages. `scripts/deploy.sh` avoids this by building a clean copy of the committed code.
+- `npm run preview` runs the Worker locally. Its build output in `.open-next/` contains your local secrets; it is ignored by git and must not be deployed.
+- Plan limits matter here. On Workers Free a request may use 10 ms of CPU. Cached pages measured 1 to 3 ms, but a cold request measured 50 ms, and server-rendered pages typically need 10 to 20 ms. Expect intermittent "Worker exceeded resource limits" errors (1102) on dynamic pages under real traffic unless the account is on Workers Paid.
+- Email: `hello@majnu.app` is forwarded to the owner's inbox by Cloudflare Email Routing. Manage addresses with `npx wrangler email routing rules list majnu.app`. A rule can forward to one inbox only; forwarding one address to several people needs an Email Worker. Sending email from the app is not set up.
 
 ## Coding-agent tooling in this repo
 
@@ -77,7 +85,7 @@ Both developers get the same setup by cloning.
 - **Type check, unit tests, build:** on pushes and pull requests.
 - **Service connections:** runs `npm run test:smoke` against the real services. Supabase and Anthropic must pass. Stripe and Daytona are skipped until their keys exist. The hourly run is this job only, so a revoked key or an exhausted quota is noticed during launch even when nobody is pushing.
 
-The Supabase URL and publishable key are written in the workflow file, because both are public by design. Every other key comes from the repository's encrypted Actions secrets. After adding or changing a secret key in `.env.local`, copy it to GitHub with:
+Public values come from the committed `.env.production`. Every other key comes from the repository's encrypted Actions secrets. After adding or changing a secret key in `.env.local`, copy it to GitHub with:
 
 ```bash
 npm run ci:secrets

@@ -29,7 +29,8 @@ npm run build
 - Work on your developer's branch (`dev-a` or `dev-b`). Rebase on `main` before merging, and merge at each checkpoint in the plan.
 - Commit only when your developer asks. Keep commits small with a plain, imperative subject and a short body saying why.
 - **No AI attribution anywhere.** Do not add `Co-Authored-By` lines for an AI tool, "Generated with" footers, or similar text to commits, pull requests, code comments or docs.
-- Do not push, deploy, or change settings on Vercel, Supabase or Stripe unless your developer asks. Deploys are manual from one machine.
+- Do not push, deploy, or change settings on Cloudflare, Supabase or Stripe unless your developer asks.
+- Deploy only with `npm run deploy`. Never run `opennextjs-cloudflare deploy` or `wrangler deploy` yourself: the adapter copies every `.env` file into the Worker, so a build in a working directory would upload the secrets in `.env.local`. The script builds a clean copy of the committed code instead.
 
 ## Secrets
 

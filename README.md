@@ -4,7 +4,7 @@ Digital letters, invitations and advent calendars, made by chatting with an AI a
 
 You sign in, tell the agent who the letter is for and what the occasion is, pick a template, and get a web page with a short link and a QR code. Add a gift code, a party location with a map, or a calendar that opens one door per day. You can see when the recipient opens it.
 
-Live at https://majnu-app.vercel.app
+Live at https://majnu.app
 
 ## Status
 
@@ -17,7 +17,7 @@ Built during a weekend hackathon. Sign-in, the dashboard shell and deployment wo
 - Supabase for sign-in (Google) and the database
 - Anthropic API for the agents, through the official TypeScript SDK
 - Stripe for checkout
-- Vercel for hosting
+- Cloudflare Workers for hosting (through the OpenNext adapter), domain and email
 
 ## Getting started
 
@@ -39,6 +39,8 @@ npm run dev
 | `npm run typecheck` | TypeScript check (the build does not fail on type errors) |
 | `npm test` | Unit tests in `tests/unit/` |
 | `npm run test:smoke` | Read-only checks that each key in `.env.local` works |
+| `npm run deploy` | Deploy the last commit to Cloudflare from a clean copy |
+| `npm run preview` | Run the production build locally in the Workers runtime |
 
 ## Documentation
 

@@ -4,7 +4,7 @@ Majnu lets someone sign in, chat with an AI agent, and get a digital letter, inv
 
 It has to be live within about 8 hours of starting, so ads can run the same night. Two developers build it in parallel, each with their own coding agent, on `peresramirez/majnu`.
 
-Starting point: the Next.js 15 + Supabase starter is deployed at https://majnu-app.vercel.app with Google sign-in working. There is no database schema, no AI code and no payments yet. Keys and services are described in [setup.md](setup.md).
+Starting point: the Next.js 15 + Supabase starter runs on Cloudflare Workers at https://majnu.app with Google sign-in set up. There is no database schema, no AI code and no payments yet. Keys and services are described in [setup.md](setup.md).
 
 ## Decisions
 
@@ -30,7 +30,7 @@ Starting point: the Next.js 15 + Supabase starter is deployed at https://majnu-a
 | `POST /api/open` | public | Records `open`, `door_open`, `gift_click` |
 | `POST /api/checkout`, `GET /paid` | owner | Start Stripe checkout; verify payment on return |
 
-Short link: `majnu-app.vercel.app/l/<slug>`, where the slug is 10 random characters from `crypto.randomBytes`. A shorter link needs a bought domain (cut list).
+Short link: `majnu.app/l/<slug>`, where the slug is 10 random characters from `crypto.randomBytes`.
 
 `/l/[slug]` is `noindex`, sends no referrer, is always rendered on request, and loads no third-party scripts. Its link-preview text stays generic ("A letter for Anna"), never the message or a gift code.
 
@@ -87,7 +87,7 @@ Rules the current models impose:
 - Keep the system prompt and tool list byte-stable: no dates or per-user text in `system`. Set `thinking.block_binding.prefix_mismatch_behavior` to `drop_block` (beta `thinking-binding-controls-2026-08-01`), so a prompt fix during the night cannot break chats already in progress.
 - Set effort with `output_config: { effort: "low" }`. Do not send `temperature`, a thinking budget, or a forced `tool_choice`; all three are rejected.
 - Check `stop_reason` for `"refusal"` and show a friendly "try again". Turn on `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`).
-- Set `maxDuration = 300` on the chat route.
+- The chat route streams for as long as the model takes. On Cloudflare, time spent waiting on the model does not count against the CPU limit, but the work around it does: see the plan limits in [setup.md](setup.md).
 
 Smoke-test before building the UI on top (not yet verified against the live API): that `block_binding`, `fallbacks` and `output_config` pass through `toolRunner`; that `effort` and `format` can share one `output_config`; and that `runner.params.messages` includes the final assistant turn.
 
@@ -130,7 +130,7 @@ After the shared setup, neither developer edits the other's files.
 1. Dev A: write and apply the migration; add `lib/supabase/admin.ts` with `import "server-only"`; rewrite `lib/supabase/middleware.ts` to the official `@supabase/ssr` cookie pattern (the template's version drops refreshed sessions, which would log senders out mid-chat), remove its `console.log`, protect `/create`, and exclude `l/` and `api/open` from the matcher.
 2. Dev B: add the `(public)` route group for `/l/[slug]` and the legal pages. Already done: the root layout is reduced to providers and metadata, the landing page lives in `app/(marketing)/`, and the signed-in pages live in `app/(app)/` with their own container and footer.
 3. Together: write `schema.ts`, `templates.ts`, `fixtures.ts` and the stubbed `getPublicLetter()`. Commit to `main`.
-4. Then work on branches `dev-a` and `dev-b`, merging to `main` at every checkpoint and whenever a handover interface lands. Deploys are manual from one machine (`npx vercel --prod`).
+4. Then work on branches `dev-a` and `dev-b`, merging to `main` at every checkpoint and whenever a handover interface lands. Deploy with `npm run deploy`, which publishes the last commit on the current branch.
 
 ## Schedule
 
@@ -158,4 +158,4 @@ Never cut: the middleware fix, row-level security, the spend limit, the legal pa
 - With only the public anon key, `select` on `letters` returns no rows, and an owner cannot set `paid` from the browser console.
 - Unpaid calendar: share panel locked for the owner, "not activated" for others. Pay with a Stripe test card, return, share panel unlocks. Repeat once with a real card after going live.
 - Phone-width pass on every template and the create page, then on two real phones.
-- After the final deploy, repeat sign-in → letter → open on https://majnu-app.vercel.app.
+- After the final deploy, repeat sign-in → letter → open on https://majnu.app.
