@@ -14,10 +14,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env
-.env.*
-.env.local
+# env files (only the empty template is tracked)
+.env*
+!.env.sample
 
 # vercel
 .vercel
@@ -37,4 +36,3 @@ next-env.d.ts
 
 # media files
 *.mp4
-.env*
