@@ -17,7 +17,9 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
 }
 
-// The signed-in app: Create, My gifts and Plan (docs/plan.md).
+// The signed-in app: Find a gift, Letters & invitations, My gifts and Plan
+// (docs/plan.md). Guests (anonymous accounts from the gift finder) count as
+// signed in: they own the gifts they made, and the shell asks them to sign up.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getSignedInUser()
   if (!user) redirect("/signin")

@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: "What Majnu stores, why, who helps us run it, and how to have your data exported or deleted.",
 }
 
+const turnstileAddendum = "https://www.cloudflare.com/turnstile-privacy-policy/"
+
 // Keep this page true to the code. If what we store or who processes it changes
 // (docs/plan.md, Data and Agents sections), change this page in the same commit.
 export default function PrivacyPage() {
@@ -20,6 +22,8 @@ export default function PrivacyPage() {
         <ShortVersion
           items={[
             "We keep what it takes to make and send your gifts: your account, what you write, and when your gifts are opened.",
+            "You can use the gift finder without signing up: you get a guest account, and creating an account later keeps everything in it.",
+            "To suggest gifts you can buy nearby, the finder uses your country and region. Never your exact location or address.",
             "We don't sell data, show ads or use advertising or analytics cookies.",
             "Your chat with Majnu is processed by Anthropic, the company behind the AI model, to write the replies.",
             "Anyone with a gift's link can open it. Gift pages are hidden from search engines.",
@@ -41,11 +45,57 @@ export default function PrivacyPage() {
         account (Art. 6 (1) (b) GDPR).
       </p>
 
+      <h3>Guest accounts</h3>
+      <p>
+        If you use the gift finder or start a gift without signing up, we give you a guest account: a random account
+        number with no name, email address or password, kept in a sign-in cookie in your browser. It holds the same
+        things as a full account: your finder searches, your conversations with Majnu and your gifts. We need it to
+        keep what you make yours and to apply the daily limits (Art. 6 (1) (b) GDPR).
+      </p>
+      <p>
+        When you create an account with email or Google, we add that to your guest account, so everything in it stays
+        with you. If you clear your browser data or sign out before then, you can no longer reach the guest account.
+        To have a guest account deleted, email us the link to one of its gifts, or create an account and ask us to
+        delete it.
+      </p>
+
       <h3>What you make</h3>
       <p>
         Your conversation with Majnu and everything you put into a gift: messages, names, gift codes, links, dates,
         places and calendar doors. We store it to build, show and change your gifts (Art. 6 (1) (b) GDPR). Please only
         include what the gift needs, especially about other people.
+      </p>
+
+      <h3>The gift finder</h3>
+      <p>
+        When you ask the gift finder for ideas, we store your conversation with it, what Majnu assumed about the person
+        (for example &quot;mother, about 45 to 70&quot;), the gift ideas it found and the one you chose. To show gifts you can buy
+        where you live, in your currency and language, we also use the <strong>country and region</strong> (for example
+        &quot;Germany, Berlin&quot;) that our hosting provider Cloudflare derives from your network address, and the language
+        and time zone your browser sends. We never ask for your location, never determine your exact location or
+        address, and do not store the network address itself. The country and region are stored with your finder
+        session, so the ideas it shows can be explained (Art. 6 (1) (b) GDPR).
+      </p>
+
+      <h3>Public social profiles</h3>
+      <p>
+        Only if you paste the link to a public Instagram or TikTok profile into the gift finder, we use Apify to read
+        that public profile once and keep only a short summary of the person&apos;s interests, such as &quot;climbing,
+        film photography, ramen&quot;. We never store their posts, photos or followers, and we never read a profile
+        nobody pasted. Other public pages you share are read the same way through Tavily. This serves your legitimate
+        interest in finding a gift that suits the person, using only what they made public (Art. 6 (1) (f) GDPR).
+        Please only share profiles of people who would be happy with it. If it is your profile and you want the summary
+        deleted, email us.
+      </p>
+
+      <h3>Bot check (Cloudflare Turnstile)</h3>
+      <p>
+        Before we create a guest account, and when you sign in or sign up with email, Cloudflare Turnstile checks in the
+        background that a person, not a program, is using the page. You don&apos;t see or click anything. For this check,
+        Cloudflare processes your network address and technical information about your browser and device, and gives us
+        only a pass or fail, which our sign-in provider Supabase verifies. This protects accounts and keeps automated
+        sign-ups from using up the service (Art. 6 (1) (f) GDPR). How Cloudflare handles this data is described in its{" "}
+        <a href={turnstileAddendum} rel="noopener noreferrer" target="_blank">Turnstile Privacy Addendum</a>.
       </p>
 
       <h3>When a gift is opened</h3>
@@ -76,9 +126,11 @@ export default function PrivacyPage() {
 
       <h2>Cookies</h2>
       <p>
-        We only use what the site needs to work: a cookie that keeps you signed in, and your light or dark display
-        setting, saved in your browser. Both are strictly necessary (§ 25 (2) TDDDG), so there is no cookie banner. We
-        use no analytics, advertising or tracking cookies, and gift pages set none.
+        We only use what the site needs to work: a cookie that keeps you signed in (also as a guest), and your light or
+        dark display setting, saved in your browser. On the sign-in pages and before a guest account is created, the
+        Cloudflare Turnstile check reads technical information from your browser to tell people from programs. All of
+        this is strictly necessary for the service you asked for (§ 25 (2) TDDDG), so there is no cookie banner. We use
+        no analytics, advertising or tracking cookies, and gift pages set none.
       </p>
 
       <h2>Gift pages and the people who receive them</h2>
@@ -92,16 +144,17 @@ export default function PrivacyPage() {
       <p>These providers process data on our behalf, under data processing agreements (Art. 28 GDPR):</p>
       <ul>
         <li><strong>Supabase</strong>: database and sign-in. Servers in Frankfurt, Germany.</li>
-        <li><strong>Cloudflare</strong>: hosting and delivery of the site, and forwarding of email sent to {operator.email}.</li>
+        <li><strong>Cloudflare</strong>: hosting and delivery of the site, the country and region used by the gift finder, the Turnstile bot check, and forwarding of email sent to {operator.email}.</li>
         <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies and searches the web for gift ideas. Under its commercial terms, Anthropic does not use this data to train its models.</li>
         <li><strong>Google</strong>: sign-in with Google, and the mailbox our email is forwarded to.</li>
         <li><strong>Stripe</strong>: payments for Full moon.</li>
-        <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them.</li>
+        <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them, and the address of a public page you share.</li>
+        <li><strong>Apify</strong>: reads a public Instagram or TikTok profile, only when you paste its link into the gift finder.</li>
       </ul>
 
       <h2>Transfers outside the EU</h2>
       <p>
-        Anthropic, Cloudflare, Google, Stripe and Tavily may process data in the United States. Where a provider is certified
+        Anthropic, Apify, Cloudflare, Google, Stripe and Tavily may process data in the United States. Where a provider is certified
         under the EU–US Data Privacy Framework, the transfer is based on that adequacy decision; otherwise it is
         covered by the European Commission&apos;s standard contractual clauses (Art. 46 GDPR).
       </p>
@@ -109,6 +162,8 @@ export default function PrivacyPage() {
       <h2>How long we keep it</h2>
       <ul>
         <li>Your account, gifts and conversations: until you delete them or ask us to delete your account.</li>
+        <li>Guest accounts: the same; once you create an account, they are your account.</li>
+        <li>Finder sessions, with their country and region and any summary of a public profile: as long as the account they belong to.</li>
         <li>Records of when a gift was opened: for as long as the gift exists.</li>
         <li>Invoices and payment records: as long as German tax and commercial law requires, up to ten years.</li>
         <li>Technical logs: up to seven days.</li>
