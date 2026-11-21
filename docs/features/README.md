@@ -14,7 +14,7 @@ Every page follows the same outline:
 
 | Page | Feature |
 |---|---|
-| [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: Majnu's greeting and message box in the hero, the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, and wrapping the chosen gift into a page with its link (issue #32) |
+| [gift-finder-ui.md](gift-finder-ui.md) | The gift finder on the landing page: the compact hero (headline, Majnu's greeting, one-line message box), the finder dialog with three gifts and personalising questions, invisible anonymous sign-in, wrapping the chosen gift into a page with its link, and the preview dialog for example and finished gifts (issue #32) |
 | [gift-finder-api.md](gift-finder-api.md) | The gift finder's server side: the finder agent with its context, research in the visitor's language and country with product photos, personalising, the daily and site-wide search limits, and wrapping the chosen gift into a page (issue #31) |
 | [letters-chat.md](letters-chat.md) | The main agent, the builder and research sub-agents, `POST /api/chat` and its NDJSON events, stored history, model settings |
 | [templates-and-gift-pages.md](templates-and-gift-pages.md) | The letter contract, the ten templates (including the 3D gift box, party pop box and treasure map from the prototype archive, issue #40), the Templates tab with its preview modal, `/l/[slug]`, door locking, the link-preview image, demo slugs, the template workbench |
@@ -25,3 +25,5 @@ Every page follows the same outline:
 | [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |
 | [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |
+| [voice-input.md](voice-input.md) | Voice input: the microphone button in the finder and the Letters & invitations chat, `POST /api/transcribe` with OpenAI's `gpt-transcribe`, and the daily limits in `voice_transcriptions` (issue #37) |
+| [gift-list.md](gift-list.md) | Gift lists on wedding and birthday invitations: Majnu researches and adds gifts, guests claim one each with `POST /api/claim` (no account, one claim per gift, a per-visitor limit), and the host sees who is bringing what on My gifts and can release a claim (issue #35) |

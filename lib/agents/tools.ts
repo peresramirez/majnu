@@ -4,6 +4,7 @@
 import "server-only"
 import type { BetaTool, BetaToolResultBlockParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta"
 import * as z from "zod/v4"
+import { changeGiftList, MAX_GIFT_LIST_ITEMS, takesGiftList } from "@/lib/claims/rules"
 import { saveLetterContent } from "@/lib/letters/store"
 import { TemplateId, type CalendarContent, type LetterContent, type LetterKind } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
@@ -13,7 +14,7 @@ import type { ChatEvent } from "./events"
 import { describeError } from "./errors"
 import { ResearchRefusal, researchGifts } from "./research"
 
-export type ToolName = "suggest_templates" | "research_gifts" | "build_letter" | "edit_letter"
+export type ToolName = "suggest_templates" | "research_gifts" | "build_letter" | "edit_letter" | "update_gift_list"
 
 // What one turn of the chat knows and changes. `letter` is updated after a build
 // or an edit, so a later tool call in the same turn sees the new content.
@@ -36,6 +37,7 @@ export const TOOL_LABELS: Record<ToolName, { start: string; error: string }> = {
   research_gifts: { start: "Looking for gift ideas…", error: "Something went wrong looking for gift ideas." },
   build_letter: { start: "Writing your letter…", error: "Something went wrong writing the letter." },
   edit_letter: { start: "Making your changes…", error: "Something went wrong making the changes." },
+  update_gift_list: { start: "Updating the gift list…", error: "Something went wrong updating the gift list." },
 }
 
 export function isToolName(name: string): name is ToolName {
@@ -82,6 +84,22 @@ const EditLetterInput = z.object({
   templateId: TemplateId.optional().describe("Only to move the same content to another template of the same kind"),
 })
 
+const GiftListItemInput = z.object({
+  title: z.string().min(1).describe("What the gift is, as research_gifts or the sender named it"),
+  description: z.string().optional().describe("One short sentence about it"),
+  price: z.string().optional().describe("Display price with currency, copied exactly"),
+  url: z.string().optional().describe("Shop link, copied exactly, https only"),
+})
+
+const UpdateGiftListInput = z.object({
+  add: z.array(GiftListItemInput).max(MAX_GIFT_LIST_ITEMS).optional().describe("Gifts the sender chose to add"),
+  removeIds: z
+    .array(z.string())
+    .max(MAX_GIFT_LIST_ITEMS)
+    .optional()
+    .describe("Ids of gifts to take off the list, from an earlier update_gift_list result"),
+})
+
 function definition(name: ToolName, description: string, schema: z.ZodObject): BetaTool {
   const { $schema, ...inputSchema } = z.toJSONSchema(schema) as Record<string, unknown>
   void $schema
@@ -110,6 +128,11 @@ export const MAIN_TOOLS: BetaTool[] = [
     "edit_letter",
     "Change the letter or calendar that is already built: wording, details, gifts, colours, or moving it to another template of the same kind.",
     EditLetterInput,
+  ),
+  definition(
+    "update_gift_list",
+    `Add gifts to the gift list at the end of a wedding or party invitation, or take them off by id. Guests tap "I'll bring this" to claim one, and a claimed gift is taken for everyone else. Only for an invitation that is already built. At most ${MAX_GIFT_LIST_ITEMS} gifts.`,
+    UpdateGiftListInput,
   ),
 ]
 
@@ -183,7 +206,15 @@ async function runResearch(toolUse: BetaToolUseBlock, state: TurnState): Promise
   return result(toolUse, JSON.stringify({ ideas, note: "The sender sees these as cards. Do not list them again." }))
 }
 
-async function saveBuilt(state: TurnState, templateId: TemplateId, built: BuiltContent): Promise<void> {
+// The builder never sees the gift list (see builder.ts), so a rebuilt or edited
+// letter keeps the one it had: its ids are what guests' claims refer to.
+export function keepGiftList(previous: TurnState["letter"]["content"], built: BuiltContent): BuiltContent {
+  if (built.kind !== "letter" || !previous || !("wishlist" in previous) || !previous.wishlist?.length) return built
+  return { kind: "letter", content: { ...built.content, wishlist: previous.wishlist } }
+}
+
+async function saveBuilt(state: TurnState, templateId: TemplateId, fresh: BuiltContent): Promise<void> {
+  const built = keepGiftList(state.letter.content, fresh)
   await saveLetterContent(state.letterId, {
     kind: built.kind,
     templateId,
@@ -251,11 +282,52 @@ async function editLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise<
   return result(toolUse, describeBuilt(built, template.name, state.shareUrl))
 }
 
+function describeGiftList(list: NonNullable<LetterContent["wishlist"]>): string {
+  if (list.length === 0) return "The gift list is empty, so the invitation shows none."
+  const lines = list.map((item) => `- ${item.id}: "${item.title}"${item.price ? ` (${item.price})` : ""}`)
+  return `The gift list now has ${list.length} gift${list.length > 1 ? "s" : ""}, at the end of the invitation:\n${lines.join("\n")}`
+}
+
+async function updateGiftList(toolUse: BetaToolUseBlock, state: TurnState): Promise<BetaToolResultBlockParam> {
+  const input = UpdateGiftListInput.safeParse(toolUse.input)
+  if (!input.success) return result(toolUse, `Invalid input: ${input.error.message}`, true)
+  if (!input.data.add?.length && !input.data.removeIds?.length) {
+    return result(toolUse, "Give gifts to add or ids to remove.", true)
+  }
+
+  const { content, templateId, kind } = state.letter
+  if (kind !== "letter" || !content || !templateId || !takesGiftList(templateId) || !("body" in content)) {
+    return result(
+      toolUse,
+      "A gift list goes on a wedding or party invitation that is already built. Build the invitation first, or tell the sender it is only for invitations.",
+      true,
+    )
+  }
+
+  const change = changeGiftList(content.wishlist, input.data)
+  const updated: LetterContent = { ...content, wishlist: change.list }
+  await saveLetterContent(state.letterId, {
+    kind: "letter",
+    templateId,
+    title: titleFor(templateId, content.recipientName),
+    content: updated,
+  })
+  state.letter = { kind: "letter", templateId, content: updated }
+  state.emit({ type: "preview", letterId: state.letterId, kind: "letter", templateId })
+
+  const notes = [describeGiftList(change.list)]
+  if (change.unknownIds.length) notes.push(`Not on the list, so nothing was removed for: ${change.unknownIds.join(", ")}.`)
+  if (change.overLimit.length) notes.push(`The list is full (${MAX_GIFT_LIST_ITEMS} gifts), so these were not added: ${change.overLimit.join("; ")}.`)
+  notes.push("It is in the preview now. The sender sees who claimed what in My gifts and can release a claim there.")
+  return result(toolUse, notes.join("\n"))
+}
+
 const HANDLERS: Record<ToolName, (toolUse: BetaToolUseBlock, state: TurnState) => Promise<BetaToolResultBlockParam>> = {
   suggest_templates: suggestTemplates,
   research_gifts: runResearch,
   build_letter: buildLetter,
   edit_letter: editLetter,
+  update_gift_list: updateGiftList,
 }
 
 // Runs one tool call and always returns a result: a tool_use without its

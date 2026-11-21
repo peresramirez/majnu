@@ -50,6 +50,11 @@ export const letterFixtures: Record<LetterTemplateId, LetterContent> = {
       locationName: "Gut Sarnow",
       address: "Dorfstraße 1, 17398 Sarnow, Germany",
     },
+    wishlist: [
+      { id: "fxwed01", title: "Cast-iron casserole", description: "The deep round one, in cream.", price: "€180" },
+      { id: "fxwed02", title: "Linen bedding", description: "Double size, in sage or white.", price: "€140" },
+      { id: "fxwed03", title: "A night in Lisbon", description: "Towards our honeymoon hotel.", price: "€120" },
+    ],
   },
   "party-invite": {
     recipientName: "Everyone",
@@ -66,6 +71,11 @@ export const letterFixtures: Record<LetterTemplateId, LetterContent> = {
       locationName: "Mia's flat",
       address: "Oranienstraße 25, 10999 Berlin, Germany",
     },
+    wishlist: [
+      { id: "fxpty01", title: "Polaroid film", description: "Two packs for the party camera.", price: "€30" },
+      { id: "fxpty02", title: "A vinyl for the record player", description: "Anything you would dance to.", price: "about €25" },
+      { id: "fxpty03", title: "Pasta-making class", description: "One evening for two, in Kreuzberg.", price: "€65" },
+    ],
   },
   postcard: {
     recipientName: "Grandma",

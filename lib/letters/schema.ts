@@ -54,6 +54,18 @@ export const LetterEvent = z.object({
 })
 export type LetterEvent = z.infer<typeof LetterEvent>
 
+// One gift on an invitation's gift list (issue #35). Guests claim an item by its
+// id, so the server sets the id when the item is added and it never changes.
+// No image: gift pages load nothing from other sites.
+export const WishlistItem = z.object({
+  id: z.string().describe("Stable id, set by the server when the item is added"),
+  title: z.string().describe("What the gift is, e.g. 'Cast-iron casserole'"),
+  description: z.string().optional().describe("One short sentence about it"),
+  price: z.string().optional().describe("Display price with currency, e.g. '€25'"),
+  url: z.string().optional().describe("Link to the shop, https only"),
+})
+export type WishlistItem = z.infer<typeof WishlistItem>
+
 export const LetterContent = z.object({
   recipientName: z.string().describe("First name or nickname of the person it is for"),
   senderName: z.string().describe("How the sender signs, e.g. 'Javier' or 'Mum'"),
@@ -64,6 +76,11 @@ export const LetterContent = z.object({
   theme: Theme,
   gifts: z.array(Gift).describe("Gifts inside the letter; empty if none"),
   event: LetterEvent.optional().describe("Only for invitations"),
+  // Added for issue #35. Optional, so every letter stored before it still parses.
+  wishlist: z
+    .array(WishlistItem)
+    .optional()
+    .describe("Only for wedding and party invitations: the gift list guests claim from. Written by the server, never by the builder"),
 })
 export type LetterContent = z.infer<typeof LetterContent>
 

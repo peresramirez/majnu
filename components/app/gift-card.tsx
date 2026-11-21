@@ -1,6 +1,8 @@
 import Link from "next/link"
 import { ArrowUpRight, CalendarDays, Mail } from "lucide-react"
+import { ReleaseClaim } from "@/app/(app)/dashboard/gifts/release-claim"
 import { TemplateIcon } from "@/components/create/template-bits"
+import type { HostGiftList } from "@/lib/claims/owner"
 import type { LetterSummary } from "@/lib/letters/store"
 import { getTemplate } from "@/lib/letters/templates"
 import { site } from "@/lib/site"
@@ -8,9 +10,9 @@ import { CopyLinkButton } from "./copy-link-button"
 import { plural, shortDate, timeAgo } from "./format"
 import { eyebrow, smallButton } from "./styles"
 
-// One gift on the My gifts tab: who it is for, the design, and whether it has
-// been opened.
-export function GiftCard({ letter, now }: { letter: LetterSummary; now: Date }) {
+// One gift on the My gifts tab: who it is for, the design, whether it has
+// been opened, and on an invitation with a gift list, who is bringing what.
+export function GiftCard({ letter, giftList, now }: { letter: LetterSummary; giftList?: HostGiftList; now: Date }) {
   const template = letter.templateId ? getTemplate(letter.templateId) : undefined
   const name = letter.recipientName ? `For ${letter.recipientName}` : letter.title ?? "A gift in progress"
   const { stats } = letter
@@ -53,6 +55,8 @@ export function GiftCard({ letter, now }: { letter: LetterSummary; now: Date }) 
         )}
       </div>
 
+      {giftList?.items.length ? <GiftListClaims list={giftList} now={now} /> : null}
+
       <div className="mt-6 flex flex-wrap gap-2">
         <Link href={`/create/${letter.id}`} className={`${smallButton} bg-night-petal/5`}>
           Continue
@@ -68,5 +72,36 @@ export function GiftCard({ letter, now }: { letter: LetterSummary; now: Date }) 
         )}
       </div>
     </article>
+  )
+}
+
+// Who claimed what on an invitation's gift list. Only the host sees the names;
+// a guest who left none shows as "A guest". Release frees the gift again.
+function GiftListClaims({ list, now }: { list: HostGiftList; now: Date }) {
+  const claimed = list.items.filter((item) => item.claim).length
+  return (
+    <section aria-label="Gift list" className="mt-5 border-t border-night-petal/10 pt-4">
+      <p className={eyebrow}>
+        Gift list · {claimed} of {list.items.length} claimed
+      </p>
+      <ul className="mt-3 space-y-3">
+        {list.items.map((item) => (
+          <li key={item.id} className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[15px] font-medium leading-snug text-night-petal">
+                {item.title}
+                {item.price ? <span className="font-normal text-night-lilac"> · {item.price}</span> : null}
+              </p>
+              <p className="mt-0.5 text-sm text-night-lilac">
+                {item.claim
+                  ? `${item.claim.guestName ?? "A guest"} is bringing it · ${timeAgo(item.claim.claimedAt, now)}`
+                  : "Not claimed yet"}
+              </p>
+            </div>
+            {item.claim ? <ReleaseClaim letterId={list.letterId} itemId={item.id} title={item.title} /> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

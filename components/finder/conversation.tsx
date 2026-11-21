@@ -6,7 +6,7 @@ import type { GiftOption } from "@/lib/finder/events"
 import { PERSONALISE_MESSAGE, latestOptionsIndex, type FinderItem, type FinderState } from "./finder-state"
 import { GiftOptionCard } from "./gift-option-card"
 import { RichText } from "./rich-text"
-import { chip, secondaryButton, smallButton, textLink } from "./styles"
+import { chip, smallButton, smallPrimary } from "./styles"
 
 type Props = {
   state: FinderState
@@ -16,18 +16,18 @@ type Props = {
 
 function MajnuMark() {
   return (
-    <span aria-hidden="true" className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-night-velvet ring-1 ring-inset ring-night-petal/10">
+    <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-night-velvet ring-1 ring-inset ring-night-petal/10">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/majnu-mark.svg" alt="" width={18} height={18} className="h-[18px] w-[18px]" />
+      <img src="/brand/majnu-mark.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" />
     </span>
   )
 }
 
 function Said({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-2.5">
       <MajnuMark />
-      <div className="min-w-0 flex-1 text-[16px] leading-relaxed text-night-petal/95">{children}</div>
+      <div className="min-w-0 flex-1 pt-0.5 text-[15px] leading-relaxed text-night-petal/95">{children}</div>
     </div>
   )
 }
@@ -37,18 +37,18 @@ function Notice({ item, last, busy, onSend }: { item: Extract<FinderItem, { role
   return (
     <div
       role={item.tone === "error" ? "alert" : "status"}
-      className="ml-11 rounded-2xl bg-night-velvet/70 px-4 py-3.5 text-[15px] leading-relaxed text-night-petal ring-1 ring-inset ring-night-petal/10"
+      className="ml-[38px] rounded-2xl bg-night-velvet/70 px-4 py-3 text-[15px] leading-relaxed text-night-petal ring-1 ring-inset ring-night-petal/10"
     >
       <p>{item.message}</p>
       {(signin || (item.retry && last)) && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {signin && (
             <>
-              <Link href="/signup" className={textLink}>
+              <Link href="/signup" className={smallPrimary}>
                 Sign up
               </Link>
-              <Link href="/signin" className={`text-sm ${textLink} text-night-lilac decoration-night-lilac/40`}>
-                I have an account
+              <Link href="/signin" className={smallButton}>
+                Sign in
               </Link>
             </>
           )}
@@ -75,14 +75,14 @@ export function Conversation({ state, onSend, onChoose }: Props) {
   // Between sending and the first words: what Majnu is doing, beside its mark.
   const waiting = streaming && items[items.length - 1]?.role === "user"
   return (
-    <ol className="space-y-6" aria-label="Conversation with Majnu">
+    <ol className="space-y-5" aria-label="Conversation with Majnu">
       {items.map((item, i) => {
         const last = i === items.length - 1
         switch (item.role) {
           case "user":
             return (
               <li key={item.id} className="flex justify-end">
-                <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-night-petal/10 px-4 py-2.5 text-[15px] leading-relaxed text-night-petal">
+                <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-night-petal/10 px-3.5 py-2 text-[15px] leading-relaxed text-night-petal">
                   <span className="sr-only">You: </span>
                   {item.text}
                 </p>
@@ -103,7 +103,7 @@ export function Conversation({ state, onSend, onChoose }: Props) {
             return (
               <li key={item.id} data-options className="scroll-mt-4">
                 <h2 className="sr-only">{item.options.length === 1 ? "One gift idea" : `${item.options.length} gift ideas`}</h2>
-                <ul className="grid gap-3 md:grid-cols-3 md:gap-4">
+                <ul className="grid gap-3 md:grid-cols-3">
                   {item.options.map((option) => (
                     <li key={option.id}>
                       <GiftOptionCard option={option} recommended={option.id === item.recommendedId} onChoose={onChoose} />
@@ -111,17 +111,17 @@ export function Conversation({ state, onSend, onChoose }: Props) {
                   ))}
                 </ul>
                 {recommended && item.why && (
-                  <p className="mt-4 text-[15px] leading-relaxed text-night-lilac">
+                  <p className="mt-3 text-sm leading-relaxed text-night-lilac">
                     <span className="font-semibold text-night-petal">Why Majnu recommends the {recommended.title}: </span>
                     {item.why}
                   </p>
                 )}
                 {showPersonalise && (
-                  <div className="mt-5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
-                    <button type="button" className={secondaryButton} onClick={() => onSend(PERSONALISE_MESSAGE)}>
+                  <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <button type="button" className={smallButton} onClick={() => onSend(PERSONALISE_MESSAGE)}>
                       {PERSONALISE_MESSAGE}
                     </button>
-                    <span className="text-sm text-night-lilac">None quite right? Tell Majnu more about them.</span>
+                    <span className="text-[13px] text-night-lilac">None quite right? Tell Majnu more about them.</span>
                   </div>
                 )}
               </li>
@@ -137,7 +137,7 @@ export function Conversation({ state, onSend, onChoose }: Props) {
                   <RichText text={item.text} />
                 </Said>
                 {item.suggestions.length > 0 && open && (
-                  <div className="ml-11 mt-3 flex flex-wrap gap-2" role="group" aria-label="Suggested answers">
+                  <div className="ml-[38px] mt-2.5 flex flex-wrap gap-2" role="group" aria-label="Suggested answers">
                     {item.suggestions.map((s) => (
                       <button key={s} type="button" className={chip} disabled={streaming} onClick={() => onSend(s)}>
                         {s}
@@ -159,7 +159,7 @@ export function Conversation({ state, onSend, onChoose }: Props) {
       {waiting && (
         <li aria-hidden="true">
           <Said>
-            <span className="block pt-1 text-[15px] text-night-lilac motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]">
+            <span className="block text-[15px] text-night-lilac motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]">
               {state.status ?? "Reading your message…"}
             </span>
           </Said>

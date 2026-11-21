@@ -75,8 +75,22 @@ Editing
 
 const MAX_TOKENS = 16000
 
+// The gift list on an invitation (issue #35) is written only by the
+// update_gift_list tool, which gives each gift a stable id that guests' claims
+// refer to. The builder neither sees nor writes it, so it cannot drop, rename
+// or invent gifts; the main agent's tools carry it over after a build or an edit.
+export const BuilderLetterContent = LetterContent.omit({ wishlist: true })
+
 function schemaFor(kind: LetterKind) {
-  return kind === "calendar" ? CalendarContent : LetterContent
+  return kind === "calendar" ? CalendarContent : BuilderLetterContent
+}
+
+// What the builder is shown of the current content when editing: everything but the gift list.
+export function contentForBuilder(content: LetterContent | CalendarContent): LetterContent | CalendarContent {
+  if (!("wishlist" in content)) return content
+  const { wishlist, ...rest } = content
+  void wishlist
+  return rest
 }
 
 function userPrompt(input: BuildInput, problems: string[] | null): string {
@@ -92,7 +106,7 @@ function userPrompt(input: BuildInput, problems: string[] | null): string {
     lines.push(
       "Current content:",
       "<current>",
-      JSON.stringify(input.current),
+      JSON.stringify(contentForBuilder(input.current)),
       "</current>",
       "",
       "The change the sender asked for:",

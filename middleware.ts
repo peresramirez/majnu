@@ -13,9 +13,10 @@ export const config = {
      * - auth: the OAuth callback, which sets the session itself
      * - l/: public letter pages, which never read the session
      * - api/open: the open-tracking beacon, which needs no session
+     * - api/claim: guests claiming a gift on an invitation, which needs no session
      * - dev/: the template workbench, built from fixtures
      * - static files and images by extension
      */
-    "/((?!_next/static|_next/image|favicon.ico|auth|l/|api/open|dev/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth|l/|api/open|api/claim|dev/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
   ],
 }
