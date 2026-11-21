@@ -8,10 +8,14 @@ import { getClient } from "@/lib/agents/client"
 import {
   MAX_REQUESTS,
   MAX_SEARCHES,
+  priceExample,
   RESEARCH_SYSTEM_PROMPT,
   ResearchIncomplete,
   ResearchRefusal,
+  researchGiftReport,
   researchGifts,
+  researchPrompt,
+  searchResultsText,
   TAVILY_RESEARCH_SYSTEM_PROMPT,
   toGiftIdeas,
 } from "@/lib/agents/research"
@@ -200,7 +204,7 @@ describe("researchGifts with TAVILY_API_KEY", () => {
     // The last request carries the results and the request to report.
     expect(lastUserContent(requests[MAX_REQUESTS - 1]).at(-1)).toEqual({
       type: "text",
-      text: "Call report_gifts now with the best 3 to 5 ideas you found.",
+      text: "Call report_gifts now with the best ideas you found.",
     })
     expect(lastUserContent(requests[1]).every((block) => block.type === "tool_result")).toBe(true)
   })
@@ -228,7 +232,10 @@ describe("researchGifts with TAVILY_API_KEY", () => {
 
     const run = researchGifts(input)
     await vi.advanceTimersByTimeAsync(SEARCH_TIMEOUT_MS)
-    await expect(run).resolves.toEqual([IDEA])
+    // No search came back, so the link cannot have come from one: it is dropped.
+    const { url: _url, ...withoutLink } = IDEA
+    void _url
+    await expect(run).resolves.toEqual([withoutLink])
 
     const [result] = lastUserContent(requests[1])
     expect(result).toMatchObject({ type: "tool_result", tool_use_id: "s1", is_error: true })
@@ -259,5 +266,132 @@ describe("toGiftIdeas", () => {
   it("returns null for an input that does not fit", () => {
     expect(toGiftIdeas({ ideas: [] })).toBeNull()
     expect(toGiftIdeas({})).toBeNull()
+  })
+})
+
+// ---------- The gift finder's research (issue #31) ----------
+
+const finderInput = {
+  recipient: "Mama (the visitor's mother or father), probably about 45 to 70 years old (assumed). Find a gift for my mother.",
+  occasion: "not given",
+  country: "Berlin, Germany",
+  countryCode: "DE",
+  currency: "EUR",
+  language: "de",
+  ideas: 3,
+  images: true,
+  now: new Date("2026-11-21T10:00:00Z"),
+  timezone: "Europe/Berlin",
+}
+
+function finderResults() {
+  const results = [
+    {
+      title: "Kräutergarten-Set",
+      url: "https://www.shop.example/kraeuter?id=7",
+      content: "Anzuchtset mit sechs Kräutern, 34,95 €.",
+      images: [{ url: "https://cdn.shop.example/img/logo.png" }, { url: "https://cdn.shop.example/img/kraeuter.jpg", description: "" }],
+    },
+    { title: "Fotobuch", url: "https://fotobuch.example/a4", content: "Fotobuch A4, ab 29,99 €.", images: ["http://insecure.example/x.jpg"] },
+  ]
+  return new Response(JSON.stringify({ query: "q", images: [], results }), { status: 200, headers: { "Content-Type": "application/json" } })
+}
+
+describe("researchGiftReport for the gift finder", () => {
+  beforeEach(() => {
+    vi.stubEnv("TAVILY_API_KEY", "tvly-test")
+    fetchMock.mockImplementation(async () => finderResults())
+  })
+
+  it("puts the language, currency and number of ideas in the user message, never in the system prompt", async () => {
+    const { requests } = scriptModel(reply([reportCall([IDEA])]))
+    await researchGiftReport(finderInput)
+
+    expect(requests[0].system).toBe(TAVILY_RESEARCH_SYSTEM_PROMPT)
+    const prompt = requests[0].messages[0].content as string
+    expect(prompt).toContain("Language: German (de). Search in German, and write every title, description, reason and why in German.")
+    expect(prompt).toContain("Currency: EUR. Prices there look like this: 39,90")
+    expect(prompt).toContain("Report exactly 3 ideas.")
+    expect(prompt).toContain("Country or city: Berlin, Germany")
+    // Without the finder's fields the brief is what the main agent always sent.
+    expect(researchPrompt(input)).not.toMatch(/Language:|Currency:|Report exactly/)
+  })
+
+  it("tells the researcher never to switch to the language of the search results", () => {
+    for (const prompt of [RESEARCH_SYSTEM_PROMPT, TAVILY_RESEARCH_SYSTEM_PROMPT]) {
+      expect(prompt).toContain("Never switch to the language of the search results")
+    }
+  })
+
+  it("searches Tavily in the visitor's country and language, with images", async () => {
+    scriptModel(reply([searchCall("s1", "Geschenk Mutter Garten")]), reply([reportCall([IDEA])]))
+    await researchGiftReport(finderInput)
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      query: "Geschenk Mutter Garten",
+      topic: "general",
+      country: "germany",
+      language: "de",
+      include_images: true,
+    })
+  })
+
+  it("gives an idea the photo of the page it links to, and drops links the searches never returned", async () => {
+    const ideas = [
+      { title: "Kräutergarten", description: "Ein Set mit sechs Kräutern.", reason: "Sie gärtnert gern.", price: "34,95 €", shop: "Shop", url: "https://shop.example/kraeuter?id=7" },
+      { title: "Fotobuch", description: "Ein Buch voller Fotos.", reason: "Erinnerungen.", price: "29,99 €", shop: "Fotobuch", url: "https://fotobuch.example/a4/" },
+      { title: "Anderes", description: "Etwas anderes.", reason: "Auch schön.", url: "https://shop.example/anderes" },
+      { title: "Erfunden", description: "Gibt es nicht.", reason: "Passt.", url: "https://made-up.example/x" },
+    ]
+    scriptModel(reply([searchCall("s1")]), reply([{ type: "tool_use", id: "r", name: "report_gifts", input: { ideas, recommended: 2, why: "Weil sie Fotos liebt." } }]))
+
+    const report = await researchGiftReport({ ...finderInput, ideas: 5 })
+
+    // Same page (www. and a trailing slash do not matter): its photo, not the logo.
+    expect(report.ideas[0]).toEqual({ ...ideas[0], imageUrl: "https://cdn.shop.example/img/kraeuter.jpg" })
+    // An http image is never used.
+    expect(report.ideas[1]).toEqual(ideas[1])
+    // A page on a shop the search found: kept, without a photo.
+    expect(report.ideas[2]).toEqual(ideas[2])
+    // A shop no search returned: the link goes.
+    expect(report.ideas[3]).toEqual({ title: "Erfunden", description: "Gibt es nicht.", reason: "Passt." })
+    expect(report.recommended).toBe(1)
+    expect(report.why).toBe("Weil sie Fotos liebt.")
+  })
+
+  it("reports no more ideas than asked for, and falls back to the first when the recommendation is out of range", async () => {
+    const ideas = Array.from({ length: 5 }, (_, i) => ({ title: `Idee ${i}`, description: "Beschreibung.", reason: "Grund." }))
+    scriptModel(reply([{ type: "tool_use", id: "r", name: "report_gifts", input: { ideas, recommended: 5, why: "" } }]))
+
+    const report = await researchGiftReport(finderInput)
+    expect(report.ideas).toHaveLength(3)
+    expect(report.recommended).toBe(0)
+    expect(report.why).toBe("")
+  })
+
+  it("marks results with a photo for the researcher", () => {
+    expect(searchResultsText([{ title: "Set", url: "https://shop.example/a", extract: "34,95 €", imageUrl: "https://shop.example/a.jpg" }])).toBe(
+      "1. Set [photo]\nhttps://shop.example/a\n34,95 €",
+    )
+  })
+
+  it("keeps the main agent's ideas short", async () => {
+    const full = { title: "Set", description: "Ein Set.", reason: "Passt.", price: "34,95 €", shop: "Shop", url: "https://shop.example/kraeuter?id=7" }
+    scriptModel(reply([searchCall("s1")]), reply([reportCall([full])]))
+    await expect(researchGifts({ ...input, images: true })).resolves.toEqual([
+      { title: "Set", reason: "Passt.", price: "34,95 €", url: "https://shop.example/kraeuter?id=7" },
+    ])
+  })
+})
+
+describe("priceExample", () => {
+  it("writes a price the way people write it where the visitor is", () => {
+    expect(priceExample("EUR", "de", "DE")).toMatch(/^39,90\s€$/)
+    expect(priceExample("USD", "en", "US")).toBe("$39.90")
+    expect(priceExample("GBP", "en-GB", "GB")).toBe("£39.90")
+  })
+
+  it("gives no example for a currency the runtime does not know", () => {
+    expect(priceExample("NOPE!", "de", "DE")).toBeUndefined()
   })
 })
