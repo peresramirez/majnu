@@ -31,15 +31,16 @@ export function createStripeClient(): Stripe {
   })
 }
 
-// The price of Full moon (€4.99 a month, lib/plans.ts). Its id differs between
-// test and live mode, so it always comes from the environment.
-export function fullMoonPriceId(): string {
-  return required("STRIPE_PRICE_FULL_MOON")
+// The one-time price of a personalised wrapper (€2.99 including VAT,
+// lib/plans.ts). Its id differs between test and live mode, so it always comes
+// from the environment.
+export function wrapperPriceId(): string {
+  return required("STRIPE_PRICE_WRAPPER")
 }
 
 // Tags Checkout Sessions from this flow in the Stripe Dashboard. A fixed label
 // with a random suffix, as Stripe recommends for integration_identifier.
-export const CHECKOUT_INTEGRATION_ID = "majnu_full_moon_qkzrwbtv"
+export const CHECKOUT_INTEGRATION_ID = "majnu_wrapper_hxqmtrpa"
 
 // Verifies the Stripe-Signature header against the raw body and returns the
 // event. Throws Stripe's SignatureVerificationError when the signature is

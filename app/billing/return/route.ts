@@ -1,8 +1,10 @@
 // GET /billing/return?session_id=cs_...: where Stripe Checkout sends the
-// subscriber after paying. Retrieves the session from Stripe, checks it was
-// created for the signed-in user and is complete, sets the plan, and redirects
-// to the Plan tab. Nothing in the URL except the session id is used, and the
-// id itself is only a key to look the session up in Stripe.
+// sender after paying for a personalised wrapper. Retrieves the session from
+// Stripe, checks it was created for the signed-in user and one of their
+// purchases, marks the purchase paid (the webhook does the same; whichever
+// comes first wins, once) so the design starts, and redirects to the
+// purchase's status on the Purchases tab. Nothing in the URL except the
+// session id is used, and the id itself is only a key to look the session up.
 //
 // Not under the middleware's protected prefixes, so the session is checked
 // here: signed out, it goes to sign-in and comes back to this same URL.
@@ -11,6 +13,8 @@ import { confirmCheckout } from "@/lib/billing/service"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
+
+const PURCHASES = "/dashboard/purchases"
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url)
@@ -21,18 +25,21 @@ export async function GET(request: Request): Promise<Response> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    const back = sessionId ? `/billing/return?session_id=${encodeURIComponent(sessionId)}` : "/dashboard/plan"
+    const back = sessionId ? `/billing/return?session_id=${encodeURIComponent(sessionId)}` : PURCHASES
     return seeOther(request, `/signin?next=${encodeURIComponent(back)}`)
   }
 
   try {
-    const outcome = await confirmCheckout({ id: user.id, email: user.email }, sessionId)
-    if (outcome === "pending") return seeOther(request, "/dashboard/plan?billing=pending")
-    if (outcome === "not_found") console.warn("billing return: session not confirmed for this user")
-    return seeOther(request, "/dashboard/plan")
+    const result = await confirmCheckout({ id: user.id }, sessionId)
+    if (result.outcome === "not_found") {
+      console.warn("billing return: session not confirmed for this user")
+      return seeOther(request, PURCHASES)
+    }
+    const notice = result.outcome === "processing" ? "&billing=processing" : ""
+    return seeOther(request, `${PURCHASES}?purchase=${encodeURIComponent(result.purchaseId)}${notice}`)
   } catch (error) {
-    // The webhook still sets the plan; the Plan tab says to check back shortly.
+    // The webhook still marks it paid; the Purchases tab shows it when it does.
     console.error("billing return failed", error instanceof Error ? error.message : error)
-    return seeOther(request, "/dashboard/plan?billing=pending")
+    return seeOther(request, `${PURCHASES}?billing=processing`)
   }
 }
