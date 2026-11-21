@@ -80,9 +80,11 @@ export default function PrivacyPage() {
       <h3>Public social profiles</h3>
       <p>
         Only if you paste the link to a public Instagram or TikTok profile into the gift finder, we use Apify to read
-        that public profile once and keep only a short summary of the person&apos;s interests, such as &quot;climbing,
-        film photography, ramen&quot;. We never store their posts, photos or followers, and we never read a profile
-        nobody pasted. Other public pages you share are read the same way through Tavily. This serves your legitimate
+        that public profile once: its bio and recent captions and hashtags. Anthropic&apos;s AI model turns them into a
+        short list of the person&apos;s interests, such as &quot;climbing, film photography, ramen&quot;, and only that list
+        is kept, with your finder session. We never store their posts, photos or followers, we leave out anything
+        about health, beliefs, politics or sexuality, and we never read a profile nobody pasted. Other public pages
+        you share are read the same way through Tavily. This serves your legitimate
         interest in finding a gift that suits the person, using only what they made public (Art. 6 (1) (f) GDPR).
         Please only share profiles of people who would be happy with it. If it is your profile and you want the summary
         deleted, email us.
