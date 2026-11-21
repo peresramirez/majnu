@@ -28,13 +28,15 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `MAJNU_MODEL` | Optional | Defaults to `claude-opus-5-5` |
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
 | `NEXT_PUBLIC_TIP_URL` | Optional | "Pay what you want" link, shown if Stripe is not live |
+| `MAJNU_BILLING` | Optional, `on` or unset | Unset (the default): everyone gets Full moon features and only the spending guard applies. `on` enforces the plans in `lib/plans.ts` |
+| `OPEN_HASH_SECRET` | Generate one: `openssl rand -hex 32` | Server only. Mixed into the visitor hash in `/api/open` so the stored visitor id cannot be traced back to an IP address. Without it, opens are not recorded. Changing it makes returning visitors count as new |
 | `DAYTONA_API_KEY` | Optional, app.daytona.io → API keys | Only for the Daytona redesign extra |
 | `BFL_API_KEY` | Optional, Black Forest Labs dashboard → API keys | Lets coding agents generate images and video (FLUX) for the site during development. Generation spends credits. The running app does not use it, so it is not uploaded to Cloudflare or CI |
 
 Production values come from two places:
 
 - **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
-- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
+- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `DAYTONA_API_KEY`, `OPEN_HASH_SECRET`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
 
 ## Services
 
@@ -43,6 +45,8 @@ Production values come from two places:
 - Authentication → URL Configuration: Site URL `https://majnu.app`; redirect URLs `https://majnu.app/**` and `http://localhost:3000/**`. Without these, Google sign-in on the live site returns people to localhost.
 - Authentication → Providers → Google is enabled with our Google Cloud OAuth client. In Google Cloud, the authorised redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
 - Database changes go in `supabase/migrations/` and are applied through the Supabase MCP server or the SQL editor.
+- `0001_init.sql` creates `letters`, `profiles` and `letter_events`, the `letter_summaries` view the dashboard reads, and a trigger that gives every new user a free profile. Row-level security is on for all three tables and the `anon` role has no access at all; public pages and `/api/open` read through the service-role client by exact slug. Signed-in users can read their own rows and change only the content columns of their own letters (`kind`, `template_id`, `title`, `content`). The slug, owner, chat and plan are written by server code only.
+- After applying it, check with the anon key alone: `select` on `letters` fails or returns no rows, and a signed-in user cannot change `profiles.plan` or `letters.chat` from the browser console.
 
 **Anthropic**
 
