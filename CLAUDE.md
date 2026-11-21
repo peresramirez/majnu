@@ -40,6 +40,7 @@ herdr agent wait <name> --timeout 1800000    # returns when the session is idle,
 scripts/agents/session.sh status <name>      # its state and latest output
 herdr agent prompt <name> "<follow-up>"      # answer its question or ask for a fix
 gh pr list --state open                          # sessions open a pull request when they are done
+python3 -I scripts/agents/watch-prs.py           # run with the Monitor tool (30 min, re-arm): one line per new pull request, merge-state change or failed check
 gh pr view <n> --json mergeStateStatus,statusCheckRollup   # must be CLEAN with green checks to merge
 herdr agent prompt <name> "Merge origin/main, resolve conflicts, re-verify, push"   # when it is BEHIND or DIRTY
 gh pr merge <n> --merge                          # the orchestrator merges; then pull main, rerun the checks, wait for main's CI, deploy
