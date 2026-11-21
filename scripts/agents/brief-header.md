@@ -8,6 +8,8 @@ Work in this order and do not skip a step:
 4. Commit and push. Small commits, a plain imperative subject and a short body saying why, no AI attribution. Push only your branch: `git push -u origin task/{{name}}`. Never push or merge main, and never deploy.
 5. Report and stop. Reply with the branch, the last commit hash, the GitHub issues your work finishes (and any it only partly covers), what changed, what you verified and how, what you did not verify, and anything the lead must do (contract changes, migrations, secrets). Then stop and wait: the lead closes this session after merging.
 
+This computer runs several sessions at once and has 16 GB of memory, so keep your footprint small: start the dev server only while you check something and stop it afterwards, run `npm run build` once, at the end, keep at most one browser page open and close it when done, and never run two builds or test watchers at the same time.
+
 Keys are in `.env.local`, copied from the main checkout. Never print them, paste them into tracked files or commit them.
 
 The task:

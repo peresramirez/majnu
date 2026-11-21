@@ -53,6 +53,14 @@ start)
   done
   [[ "$port" =~ ^[0-9]{4}$ ]] || die "start needs --port <4-digit port>"
   [ -f "$brief" ] || die "start needs --brief <file>"
+
+  # Each session runs Claude Code, a dev server, a production build and a browser.
+  # Refuse to start one when the machine is already short of memory.
+  min_free="${MAJNU_MIN_FREE_PCT:-30}"
+  free_pct="$(memory_pressure 2>/dev/null | awk -F': ' '/free percentage/ {gsub("%","",$2); print $2}')"
+  if [ -n "$free_pct" ] && [ "$free_pct" -lt "$min_free" ]; then
+    die "only ${free_pct}% memory free (need ${min_free}%). Wait for a session to finish, or set MAJNU_MIN_FREE_PCT."
+  fi
   git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null && die "branch $branch already exists"
   [ -e "$path" ] && die "$path already exists"
 
