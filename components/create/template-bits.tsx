@@ -1,4 +1,4 @@
-import { CalendarDays, Flower2, Gift, Hourglass, Mail, PartyPopper, Stamp, type LucideIcon } from "lucide-react"
+import { Box, CalendarDays, Flower2, Gift, Hourglass, Mail, Map as MapIcon, PartyPopper, Sparkles, Stamp, type LucideIcon } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import type { TemplateId } from "@/lib/letters/schema"
 
@@ -9,6 +9,9 @@ const icons: Record<TemplateId, LucideIcon> = {
   "wedding-invite": Flower2,
   "party-invite": PartyPopper,
   postcard: Stamp,
+  "gift-box-3d": Box,
+  "party-box": Sparkles,
+  "treasure-map": MapIcon,
   "advent-classic": CalendarDays,
   countdown: Hourglass,
 }

@@ -7,14 +7,16 @@ import { focusRing } from "@/components/finder/styles"
 import { fetchTransport, type FinderTransport } from "@/components/finder/transport"
 import { useTypewriter } from "@/components/finder/typewriter"
 import { useFinder } from "@/components/finder/use-finder"
+import { VoiceButton } from "@/components/voice/voice-button"
 
 // Typed out in the message box one after another. Short enough to fit on one
-// line beside the button on a 320px phone, so the box never changes height.
+// line beside the microphone and the button on a 320px phone (158px of text,
+// measured), so the box never changes height.
 export const EXAMPLES = [
   "A gift for my mother",
   "A gift for my girlfriend",
-  "A gift for my best friend",
-  "A gift for my dad who fishes",
+  "A gift for my sister",
+  "A gift for my dad",
 ] as const
 
 export type Suggestion = { label: string; message: string }
@@ -47,6 +49,9 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
   const [value, setValue] = useState("")
   const [open, setOpen] = useState(false)
   const field = useRef<HTMLTextAreaElement>(null)
+  // Where the bot check may show itself if the microphone is the first thing a
+  // visitor uses: recording needs the same guest session as a search.
+  const checkHost = useRef<HTMLDivElement>(null)
   const placeholder = useTypewriter(EXAMPLES, value === "" && !open)
   const hasConversation = finder.state.items.length > 0
 
@@ -105,7 +110,7 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
       </div>
 
       <form id="find" onSubmit={submit} className="mt-3 scroll-mt-28" aria-labelledby="finder-hero-label">
-        <div className="flex items-end gap-2 rounded-[26px] bg-night-plum/85 p-1.5 pl-4 shadow-[0_18px_48px_-20px_rgba(0,0,0,0.75)] ring-1 ring-inset ring-night-petal/20 backdrop-blur-md transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/70">
+        <div className="group/row flex items-end gap-2 rounded-[26px] bg-night-plum/85 p-1.5 pl-4 shadow-[0_18px_48px_-20px_rgba(0,0,0,0.75)] ring-1 ring-inset ring-night-petal/20 backdrop-blur-md transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/70">
           <label id="finder-hero-label" htmlFor="finder-hero-message" className="sr-only">
             Who is the gift for?
           </label>
@@ -119,7 +124,24 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
             enterKeyHint="send"
             maxLength={1000}
             rows={1}
-            className="block h-11 max-h-[116px] min-w-0 flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/75 focus:outline-none"
+            className="block h-11 max-h-[116px] min-w-0 flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/75 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
+          />
+          {/* Speak instead of typing (issue #37). The words land in the box for
+              the visitor to check; nothing is sent until they press the button.
+              While it records, the cancel button and timer take the room the
+              typed example needs, so the example is hidden until it is done. */}
+          <VoiceButton
+            className="mb-0.5"
+            ensureSession={() => finder.transport.ensureSession(() => checkHost.current)}
+            onText={(text) => {
+              setValue((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text).slice(0, 1000))
+              requestAnimationFrame(() => {
+                const el = field.current
+                if (!el) return
+                el.focus()
+                el.setSelectionRange(el.value.length, el.value.length)
+              })
+            }}
           />
           {/* An arrow on phones, so the typed examples keep their line; words from sm up. */}
           <button
@@ -133,6 +155,7 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
             <ArrowRight className="h-[18px] w-[18px]" aria-hidden="true" />
           </button>
         </div>
+        <div ref={checkHost} className="flex justify-start empty:hidden [&:not(:empty)]:mt-3" />
       </form>
 
       {/* The way back to the finder hangs below the chips once there is a

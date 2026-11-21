@@ -17,6 +17,8 @@ import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import type { CalendarContent, LetterContent, TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { displayStyle, paperStyle } from "./chrome"
+import { BoxDrawing } from "./templates/gift-box-3d/drawing"
+import { Compass, ink, parchment } from "./templates/treasure-map/parts"
 import { eventDateParts, formatEventTime, parseEventStart } from "./event-time"
 import { firstName, monogram } from "./names"
 import { paletteOf, themeStyle } from "./theme"
@@ -273,6 +275,63 @@ function PostcardThumb({ c }: { c: LetterContent }) {
   )
 }
 
+// The 3D box as its still drawing: the same picture the gift page shows before
+// three.js arrives, and instead of it with reduced motion.
+function Box3DThumb({ c, mood }: { c: LetterContent; mood: "gift" | "party" }) {
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span style={eyebrow}>{c.occasion || (mood === "party" ? "Surprise" : "A gift")}</span>
+      <span className="mt-[2cqw]" style={{ ...displayStyle, fontSize: cq(8), lineHeight: 1.1 }}>
+        For {firstName(c.recipientName)}
+      </span>
+      <BoxDrawing mood={mood} idPrefix={`thumb-${mood}`} className="mt-[6cqw] block h-auto w-[72cqw]" />
+      <span
+        className="mt-[6cqw] rounded-full px-[5cqw] py-[2.4cqw]"
+        style={{ background: "var(--accent)", color: "var(--accent-ink)", fontSize: cq(3.4), fontWeight: 600 }}
+      >
+        {mood === "party" ? "Pop it open" : "Open your gift"}
+      </span>
+    </span>
+  )
+}
+
+function MapThumb({ c }: { c: LetterContent }) {
+  const initial = Array.from((c.senderName ?? "").trim())[0]?.toUpperCase() ?? "M"
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span
+        className="relative flex w-[64cqw] flex-col items-center px-[5cqw] text-center"
+        style={{ ...parchment, aspectRatio: "0.62", justifyContent: "center", borderRadius: cq(0.8), boxShadow: "0 5cqw 10cqw -5cqw rgba(0,0,0,0.7)" }}
+      >
+        <span className="pointer-events-none absolute inset-[2.4cqw] border opacity-60" style={{ borderColor: ink }} />
+        <span className="pointer-events-none absolute inset-x-1/2 inset-y-0 w-[2cqw] -translate-x-1/2" style={{ background: "linear-gradient(90deg, transparent, rgba(60,35,15,0.22), transparent)" }} />
+        <span className="relative italic opacity-75" style={{ fontSize: cq(3.4), fontFamily: "var(--body)" }}>
+          a map for
+        </span>
+        <span className="relative" style={{ ...displayStyle, fontSize: cq(10), lineHeight: 1.05 }}>
+          {firstName(c.recipientName)}
+        </span>
+        <Compass className="relative mt-[4cqw] block w-[17cqw]" />
+        <span
+          className="relative mt-[5cqw] flex items-center justify-center rounded-full"
+          style={{
+            width: cq(14),
+            height: cq(14),
+            background:
+              "radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--paper-accent) 62%, #fff) 0%, var(--paper-accent) 48%, color-mix(in srgb, var(--paper-accent) 55%, #000) 100%)",
+            boxShadow: "0 1cqw 2cqw rgba(0,0,0,0.4)",
+          }}
+        >
+          <span style={{ ...displayStyle, fontSize: cq(5.6), lineHeight: 1, color: "color-mix(in srgb, var(--paper-accent) 30%, #fff)" }}>{initial}</span>
+        </span>
+      </span>
+      <span className="mt-[6cqw] text-[var(--page-muted)]" style={{ fontSize: cq(3.2) }}>
+        Break the seal to open it
+      </span>
+    </span>
+  )
+}
+
 function AdventThumb({ c }: { c: CalendarContent }) {
   const total = c.doors.length || 24
   // A calendar a few days into December: the first doors open, the rest locked.
@@ -371,6 +430,12 @@ function Drawing({ id }: { id: TemplateId }) {
       return <PartyThumb c={letterFixtures[id]} />
     case "postcard":
       return <PostcardThumb c={letterFixtures[id]} />
+    case "gift-box-3d":
+      return <Box3DThumb c={letterFixtures[id]} mood="gift" />
+    case "party-box":
+      return <Box3DThumb c={letterFixtures[id]} mood="party" />
+    case "treasure-map":
+      return <MapThumb c={letterFixtures[id]} />
     case "advent-classic":
       return <AdventThumb c={calendarFixtures[id]} />
     case "countdown":
