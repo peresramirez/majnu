@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Invitations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { min-height: 100vh; font-family: 'Cormorant Garamond', serif; background: radial-gradient(circle at top, #2a1f3d, #0e0a16); color: #f5ead7; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+    h1 { font-family: 'Great Vibes', cursive; font-size: clamp(48px, 8vw, 88px); font-weight: 400; color: #e8c983; }
+    p.sub { font-size: 20px; opacity: .8; margin-bottom: 48px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; width: min(900px, 100%); }
+    a.card { text-decoration: none; color: inherit; padding: 36px 24px; border-radius: 18px; border: 1px solid rgba(232,201,131,.35); background: rgba(255,255,255,.04); text-align: center; transition: transform .25s, background .25s; }
+    a.card:hover { transform: translateY(-6px); background: rgba(232,201,131,.1); }
+    .icon { font-size: 52px; }
+    .card h2 { font-weight: 600; font-size: 28px; margin: 12px 0 6px; }
+  </style>
+</head>
+<body>
+  <h1>3D Invitations</h1>
+  <p class="sub">Choose a template — tap to open the surprise</p>
+  <div class="grid">
+    <a class="card" href="template.html?t=wedding"><div class="icon">💌</div><h2>Wedding</h2><p>Envelope, wax seal &amp; rose petals</p></a>
+    <a class="card" href="template.html?t=party"><div class="icon">🎉</div><h2>Party</h2><p>Pop box, confetti &amp; balloons</p></a>
+    <a class="card" href="template.html?t=gift"><div class="icon">🎁</div><h2>Gift</h2><p>Ribboned box &amp; sparkles</p></a>
+  </div>
+</body>
+</html>

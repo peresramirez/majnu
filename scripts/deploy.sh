@@ -17,8 +17,13 @@ if [ "$ref" = "HEAD" ] && [ -n "$(git -C "$root" status --porcelain)" ]; then
   echo "Uncommitted changes will not be deployed; only committed code is." >&2
 fi
 
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# Build next to the repository, not in the system temp folder: a build is about
+# 1.5 GB, and the system disk on the developer's machine is nearly full. Copies
+# left behind by an interrupted deploy are removed on the next run.
+parent="${MAJNU_DEPLOY_DIR:-$(dirname "$root")}"
+find "$parent" -maxdepth 1 -name '.majnu-deploy.*' -type d -mmin +30 -exec rm -rf {} + 2>/dev/null || true
+work="$(mktemp -d "$parent/.majnu-deploy.XXXXXX")"
+trap 'rm -rf "$work"' EXIT INT TERM
 
 git -C "$root" archive "$ref" | tar -x -C "$work"
 cd "$work"
