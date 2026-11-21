@@ -7,7 +7,8 @@
 // "Accounts and limits"). Before the stream starts, failures are plain HTTP
 // errors with a JSON body: 401 { "error": "session_required" }, and otherwise
 // { error } with a short message in the visitor's language: 400 bad body,
-// 404 not your session, 500 the session could not be loaded or created.
+// 413 a message over 2,000 characters, 404 not your session, 500 the session
+// could not be loaded or created.
 // Limits reached before any model call (sessions or searches for the day,
 // messages in this session) are a stream of `limit` and `done`.
 import { getCloudflareContext } from "@opennextjs/cloudflare"
@@ -91,7 +92,8 @@ export async function POST(request: Request): Promise<Response> {
     const language = (raw as { locale?: { language?: unknown } } | null)?.locale?.language
     const texts = textsFor(typeof language === "string" ? language : undefined).requests
     const tooLong = body.error.issues.some((issue) => issue.path[0] === "message" && issue.code === "too_big")
-    return json(400, { error: tooLong ? texts.tooLong : texts.noMessage })
+    // 413 for a long message: the finder chat shows its own sentence for it.
+    return tooLong ? json(413, { error: texts.tooLong }) : json(400, { error: texts.noMessage })
   }
 
   const now = new Date()

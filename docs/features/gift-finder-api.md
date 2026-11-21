@@ -1,6 +1,6 @@
 # Gift finder: agent and API
 
-Issue #31. The server side of the main flow in [../plan.md](../plan.md), "Gift finder". The chat on the landing page that uses it is issue #32; anonymous accounts are #33.
+Issue #31. The server side of the main flow in [../plan.md](../plan.md), "Gift finder". The chat on the landing page that uses it is [gift-finder-ui.md](gift-finder-ui.md) (issue #32); anonymous accounts are #33.
 
 ## What it does
 
@@ -40,7 +40,7 @@ One search, in order:
 8. Ideas without a link are left out. The rest become `GiftOption`s with ids that are stable within the session, streamed as `options` with `recommendedId` and `why`. If none is left, or research failed, the search is given back and an `error` event says so.
 9. The turn ends there, without a closing model request: the visitor's next move is to look at the options. The route appends the turn to the stored conversation, saves the context and the options, and streams `done`.
 
-Personalising: when the visitor asks for it or says none fit, the model calls `ask_questions`. The server first checks that a personalised search would still be allowed, then streams up to three `question` events with up to four `suggestions` each, and the turn ends. The visitor's answers are the next message, and the next `find_gifts` call counts as a personalised search: every search after the first in a session does.
+Personalising: when the visitor asks for it (the finder's button sends "Personalise the gift") or says none fit, the model calls `ask_questions`. The server first checks that a personalised search would still be allowed, then streams up to three `question` events with up to four `suggestions` each, and the turn ends. The visitor's answers are the next message, and the next `find_gifts` call counts as a personalised search: every search after the first in a session does.
 
 Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (and optionally the names and a note) loads the session through RLS, finds the option among the last ones shown, checks the daily letter limit and, with billing on, the free plan's monthly gifts, then has the builder sub-agent write the page in the visitor's language. The gift on the page is copied from the stored option after the builder has run, so the model cannot change its link or price. Building comes before `createLetter()`, so a failed build leaves no empty letter. The answer is `{ letterId, slug }`.
 
@@ -92,9 +92,10 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
 - Migration: `0001` + `0002` + `0004` applied in PGlite with stand-ins for Supabase's `auth` schema and roles. Owners read only their own rows, the API roles cannot write either table, and `anon` cannot read them. The lead applied it to the project and checked that the anon key is refused on both tables.
 - Live, with the limits and the letter store mocked so nothing was written to the database:
   - One full flow from a German browser in Berlin, "Finde ein Geschenk für meine Mutter": three German options in euros, two with a photo, one recommended. Then three personalising questions with answers to tap, and a personalised search. Wrapping the recommended gift gave a German gift reveal with the gift copied exactly and no image.
-  - Then two checks of fixes: one direct Tavily search to check the product-image choice, and one finder request (research mocked) to check that the age, budget and interests the visitor gave reach the chips.
+  - Then two checks of the fixes that run showed were needed. One direct Tavily search checked the product-image choice: three of five shop pages got a product photo, the other two a sale card and a site graphic. Finder requests with research mocked checked that the age, budget and interests the visitor gave reach the chips: before the fix the model put them only in `about`; after it, "sie wird 62 … Budget etwa 50 Euro" gave age 62, the budget and two interests, in a single call.
 - With `curl` against `next dev`: both routes answer 401 `{ "error": "session_required" }` without a session, also with a forged cookie, and GET answers 405.
-- Not checked: a signed-in request through the routes against the real database (anonymous sign-in could not be confirmed as switched on, and no test user was created in the live project), the Cloudflare `cf` data on a deployed Worker (in `next dev` there is none), the research prompt's new link and informal-address rules on a fresh live search, and anything in a browser, since #32 builds the chat.
+- Against the finder chat's transport (`components/finder/transport.ts`, merged from #32): errors before a stream are mapped by status, so a message that is too long answers 413; limits and errors during a reply are events; wrap errors carry `error` and, for finder limits, `reason`.
+- Not checked: a signed-in request through the routes against the real database (anonymous sign-in was still switched off on 21 November, see gift-finder-ui.md, and no test user was created in the live project), the Cloudflare `cf` data on a deployed Worker (in `next dev` there is none), the research prompt's new link and informal-address rules on a fresh live search, and anything in a browser, since #32 builds the chat.
 
 ## Open questions
 

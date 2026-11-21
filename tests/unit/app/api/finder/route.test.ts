@@ -95,6 +95,7 @@ describe("POST /api/finder", () => {
     expect(empty.status).toBe(400)
     expect(await empty.json()).toEqual({ error: "Schreib zuerst, für wen das Geschenk ist." })
     const long = await POST(post({ message: "x".repeat(2001), locale: { language: "en-GB" } }))
+    expect(long.status).toBe(413)
     expect(await long.json()).toEqual({ error: "That message is too long. Try a shorter one." })
   })
 
