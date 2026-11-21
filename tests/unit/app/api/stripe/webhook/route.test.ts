@@ -13,8 +13,8 @@ const SECRET = "whsec_test_route_secret"
 const body = JSON.stringify({
   id: "evt_1",
   object: "event",
-  type: "customer.subscription.deleted",
-  data: { object: { id: "sub_1", object: "subscription" } },
+  type: "checkout.session.completed",
+  data: { object: { id: "cs_test_1", object: "checkout.session", mode: "payment", metadata: { purchase_id: "p1" } } },
 })
 
 const sign = (payload: string, secret = SECRET) =>
@@ -29,7 +29,7 @@ function post(payload: string, signature?: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", SECRET)
-  vi.mocked(handleStripeEvent).mockResolvedValue({ outcome: "synced", userId: "user-1", plan: "free" })
+  vi.mocked(handleStripeEvent).mockResolvedValue({ outcome: "applied", status: "paid" })
 })
 
 afterEach(() => vi.unstubAllEnvs())
@@ -38,8 +38,8 @@ describe("POST /api/stripe/webhook", () => {
   it("handles a correctly signed event", async () => {
     const res = await post(body, await sign(body))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ received: true, outcome: "synced" })
-    expect(vi.mocked(handleStripeEvent).mock.calls[0][0]).toMatchObject({ id: "evt_1", type: "customer.subscription.deleted" })
+    expect(await res.json()).toEqual({ received: true, outcome: "applied" })
+    expect(vi.mocked(handleStripeEvent).mock.calls[0][0]).toMatchObject({ id: "evt_1", type: "checkout.session.completed" })
   })
 
   it("answers 400 without a signature", async () => {
@@ -51,7 +51,7 @@ describe("POST /api/stripe/webhook", () => {
   it("answers 400 to a bad signature, a wrong secret or a tampered body", async () => {
     expect((await post(body, "t=1,v1=deadbeef")).status).toBe(400)
     expect((await post(body, await sign(body, "whsec_someone_else"))).status).toBe(400)
-    const tampered = body.replace("customer.subscription.deleted", "customer.subscription.created")
+    const tampered = body.replace("checkout.session.completed", "checkout.session.expired")
     expect((await post(tampered, await sign(body))).status).toBe(400)
     expect(handleStripeEvent).not.toHaveBeenCalled()
   })

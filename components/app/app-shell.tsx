@@ -3,35 +3,22 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Gift, LayoutTemplate, Moon, PenLine, Search, type LucideIcon } from "lucide-react"
+import { Gift, LayoutTemplate, PenLine, Receipt, Search, type LucideIcon } from "lucide-react"
 import { Wordmark } from "@/components/brand/wordmark"
 import { AccountMenu } from "./account-menu"
 import { GuestNotice } from "./guest-notice"
 import type { SessionUser } from "./session"
 import { focusRing } from "./styles"
-import { activeTab, appTabs, type AppTab, type TabId } from "./tabs"
+import { activeTab, appTabs, type TabId } from "./tabs"
 
-// The Templates tab (issue #40) sits after Letters & invitations. It is added
-// here rather than in tabs.ts, which this change does not own; moving it there
-// (with its test) is a follow-up.
-type ShellTabId = TabId | "templates"
-type ShellTab = Omit<AppTab, "id"> & { id: ShellTabId }
-const templatesTab: ShellTab = { id: "templates", href: "/dashboard/templates", label: "Templates", shortLabel: "Templates" }
-const shellTabs: readonly ShellTab[] = appTabs.flatMap((tab): ShellTab[] => (tab.id === "letters" ? [tab, templatesTab] : [tab]))
-
-function shellTab(pathname: string): ShellTabId | null {
-  if (pathname === "/dashboard/templates" || pathname.startsWith("/dashboard/templates/")) return "templates"
-  return activeTab(pathname)
-}
-
-const icons: Record<ShellTabId, LucideIcon> = { find: Search, letters: PenLine, templates: LayoutTemplate, gifts: Gift, plan: Moon }
+const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, templates: LayoutTemplate, gifts: Gift, purchases: Receipt }
 
 // Header with the wordmark, top tabs from md up, and a bottom tab bar on phones.
 // The shell is exactly one screen tall and <main> scrolls, so the create chat
 // can pin its composer above the tab bar. While the composer has focus on a
 // phone, the tab bar steps aside to give the keyboard the room.
 export function AppShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
-  const current = shellTab(usePathname() ?? "")
+  const current = activeTab(usePathname() ?? "")
 
   return (
     <div className="dark group/shell flex h-screen h-dvh flex-col bg-night-plum text-night-petal">
@@ -49,7 +36,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           </Link>
           <nav aria-label="Main" className="hidden md:block">
             <ul className="flex items-center gap-1">
-              {shellTabs.map((tab) => {
+              {appTabs.map((tab) => {
                 const active = tab.id === current
                 return (
                   <li key={tab.id}>
@@ -84,7 +71,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         className="flex-none border-t border-night-petal/10 bg-night-plum pb-[env(safe-area-inset-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
       >
         <ul className="grid grid-cols-5">
-          {shellTabs.map((tab) => {
+          {appTabs.map((tab) => {
             const active = tab.id === current
             const Icon = icons[tab.id]
             return (

@@ -6,6 +6,7 @@ import { ArrowLeft, Maximize2 } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { TemplateCard } from "@/components/letters/template-card"
 import { SharePanel } from "@/components/share/share-panel"
+import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import type { WrapTemplateId } from "@/lib/finder/events"
 import { WRAP_TEMPLATES, type WrapDetails, type WrapState } from "./finder-state"
 import { ProductImage } from "./gift-option-card"
@@ -136,6 +137,8 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
           {/* On phones the link comes first: sending it is the point. */}
           <div className="order-first space-y-4 md:order-none md:col-start-2 md:row-start-1 md:min-h-0 md:overflow-y-auto">
             <SharePanel url={shareUrl(wrap.slug)} />
+            {/* The personalised wrapper: a guest is asked to create a free account first. */}
+            <MakeItUnique letterId={wrap.letterId} />
             <div className="space-y-2 text-sm leading-relaxed text-night-lilac">
               <p>
                 This gift is kept in this browser.{" "}

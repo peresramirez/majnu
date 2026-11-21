@@ -1,22 +1,22 @@
-// Spending guard and plan gating for every route that calls the model.
-// Signatures are shared; the bodies are built with the data work (issue #11).
+// The spending guard for every route that calls the model, and the one rule
+// that is not about money: calendars need a real account.
+//
+// There are no plans to gate on any more (docs/business-plan.md): finding,
+// letters, invitations, gift research and calendars are free. The only paid
+// thing, a personalised wrapper, is bought per gift in Checkout
+// (lib/billing/service.ts) and never unlocks a feature.
 //
 // Counts go through the signed-in user's client, so row-level security limits
 // them to that user's own letters. Without a session the queries fail and the
 // functions throw.
 import "server-only"
 import type { LimitReason } from "@/lib/agents/events"
-import { plans } from "@/lib/plans"
 import { createClient } from "@/lib/supabase/server"
 
 export const LIMITS = {
   lettersPerDay: 5,
   chatTurnsPerLetter: 40,
 } as const
-
-// Until Stripe takes live payments (issue #14), every user gets Full moon
-// features and only the spending guard applies. Set MAJNU_BILLING=on to enforce plans.
-export const billingEnabled = () => process.env.MAJNU_BILLING === "on"
 
 export type LimitResult = { ok: true } | { ok: false; reason: LimitReason; message: string }
 
@@ -44,51 +44,28 @@ export async function canSendChatTurn(letterId: string): Promise<LimitResult> {
   return chatTurnsResult(countChatTurns(Array.isArray(data.chat) ? data.chat : []))
 }
 
-// May the signed-in user use a Full moon feature (advent calendars, gift research),
-// or publish one more gift this month on the free plan?
-// Call "new_gift" before the first build of a letter, not on edits: it counts
-// this month's letters that already have content.
+// May the signed-in user use this feature? The agent's tools ask before a
+// build (lib/agents/tools.ts). Gift research and new gifts are open to
+// everyone; the spending guard above bounds what they cost.
 //
-// Calendars also need a real account, whatever the plan and even while billing
-// is off: a guest (anonymous account) is asked to sign up first, because a
-// calendar is opened over days and a guest account lives in one browser.
+// Calendars need a real account: a guest (anonymous account) is asked to sign
+// up first, because a calendar is opened over days and a guest account lives
+// in one browser.
 export async function canUseFeature(feature: "calendar" | "research" | "new_gift"): Promise<LimitResult> {
-  if (feature === "calendar") {
-    const supabase = await createClient()
-    // getUser() asks Supabase Auth, so a guest who just signed up counts as a
-    // real user even before their token is refreshed.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user || user.is_anonymous === true) return signInRequiredResult()
-  }
-
-  if (!billingEnabled()) return { ok: true }
-
+  if (feature !== "calendar") return { ok: true }
   const supabase = await createClient()
-  const { data: profile, error } = await supabase.from("profiles").select("plan").maybeSingle()
-  if (error) throw new Error(`Could not load the plan: ${error.message}`)
-  if (profile?.plan === plans.fullMoon.id) return { ok: true }
-
-  if (feature !== "new_gift") return fullMoonOnlyResult(feature)
-
-  const { count, error: countError } = await supabase
-    .from("letters")
-    .select("id", { count: "exact", head: true })
-    .not("content", "is", null)
-    .gte("created_at", startOfUtcMonth(new Date()).toISOString())
-  if (countError) throw new Error(`Could not count this month's gifts: ${countError.message}`)
-  return monthlyGiftsResult(count ?? 0)
+  // getUser() asks Supabase Auth, so a guest who just signed up counts as a
+  // real user even before their token is refreshed.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return calendarResult(user ? { isAnonymous: user.is_anonymous === true } : null)
 }
 
 // ---------- Pure helpers (unit-tested) ----------
 
 export function startOfUtcDay(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-}
-
-export function startOfUtcMonth(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
 }
 
 // The number of messages the sender typed in a stored conversation (Anthropic
@@ -125,25 +102,10 @@ export function chatTurnsResult(turns: number): LimitResult {
   }
 }
 
-export function monthlyGiftsResult(giftsThisMonth: number): LimitResult {
-  if (giftsThisMonth < plans.free.giftsPerMonth) return { ok: true }
-  return {
-    ok: false,
-    reason: "monthly_gifts",
-    message: `You have made your ${plans.free.giftsPerMonth} free gifts this month. Choose ${plans.fullMoon.name} for unlimited gifts, or make another next month.`,
-  }
-}
-
-export function fullMoonOnlyResult(feature: "calendar" | "research"): LimitResult {
-  const name = plans.fullMoon.name
-  return {
-    ok: false,
-    reason: "full_moon_only",
-    message:
-      feature === "calendar"
-        ? `Calendars, with one door a day, come with ${name}. Choose ${name} to make one.`
-        : `Gift research comes with ${name}: Majnu searches the web for ideas and current deals. Choose ${name} to use it.`,
-  }
+// Calendars for real accounts only; `null` is a visitor with no session at all.
+export function calendarResult(user: { isAnonymous: boolean } | null): LimitResult {
+  if (!user || user.isAnonymous) return signInRequiredResult()
+  return { ok: true }
 }
 
 export function signInRequiredResult(): LimitResult {

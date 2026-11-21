@@ -149,8 +149,8 @@ describe("middleware redirect for signed-in users on the sign-in pages", () => {
     fakes.middlewareUser = { id: "user-1" }
   })
 
-  it("sends ?plan=full-moon to the Plan tab", async () => {
-    expect(await visit("/signin?plan=full-moon")).toBe("https://majnu.app/dashboard/plan")
+  it("sends an old ?plan=full-moon link to the Purchases tab", async () => {
+    expect(await visit("/signin?plan=full-moon")).toBe("https://majnu.app/dashboard/purchases")
   })
 
   it("honours a same-site next, query included", async () => {

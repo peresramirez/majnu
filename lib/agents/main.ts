@@ -12,7 +12,6 @@
 // is applied before a reply is replayed.
 import "server-only"
 import type { BetaContentBlock, BetaMessageParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta"
-import { plans } from "@/lib/plans"
 import { templates } from "@/lib/letters/templates"
 import { AGENT_EFFORT, agentRequestBase, getClient } from "./client"
 import { contextBlockText } from "./context"
@@ -27,8 +26,9 @@ const MAX_TOKENS = 8192
 
 const TEMPLATE_LIST = templates
   .map((t) => {
-    const plan = t.plan === "full-moon" ? `, ${plans.fullMoon.name} plan only` : ""
-    return `- ${t.id}: "${t.name}" (${t.kind}${plan}). ${t.description} Best for ${t.bestFor.join(", ")}.`
+    // `plan: "full-moon"` in the template list now means "needs a free account" (calendars).
+    const account = t.plan === "full-moon" ? ", needs a free account" : ""
+    return `- ${t.id}: "${t.name}" (${t.kind}${account}). ${t.description} Best for ${t.bestFor.join(", ")}.`
   })
   .join("\n")
 
@@ -61,7 +61,6 @@ Tools
 - build_letter writes the whole letter or calendar from your brief. Use it again only to start over or to switch between a letter and a calendar; otherwise use edit_letter.
 - edit_letter changes what is already built. Describe the change in full. It keeps the gift list as it is.
 - update_gift_list adds gifts to the gift list of a built wedding or party invitation, or takes them off by the ids in its last result. Copy titles, prices and links exactly as research_gifts or the sender gave them. Guests tap "I'll bring this" to claim a gift, and the sender sees who claimed what in My gifts.
-- If a tool says something is not on the sender's plan, tell them kindly in a sentence or two that it comes with ${plans.fullMoon.name} (${plans.fullMoon.price} ${plans.fullMoon.period}, on the Plan tab), and carry on with what they can do.
 - If a tool fails, say so plainly and offer to try again.
 
 Rules

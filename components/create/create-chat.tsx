@@ -31,7 +31,7 @@ export type ExistingGift = {
 // The Create tab. /dashboard renders it empty; /create/[id] renders it with a
 // gift that already exists. The first message of a new gift moves the address
 // to /create/<id> without reloading (see use-letter-chat.ts).
-export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGift; fullMoonLocked?: boolean }) {
+export function CreateChat({ gift }: { gift?: ExistingGift }) {
   const router = useRouter()
   const chat = useLetterChat({
     letterId: gift?.letterId,
@@ -59,7 +59,6 @@ export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGi
   const { letterId, previewVersion, items, streaming, status, hasContent } = chat
   const started = items.length > 0 || letterId !== null
   const templateMeta = chat.templateId ? getTemplate(chat.templateId) : undefined
-  const locked = fullMoonLocked && templateMeta?.plan === "full-moon"
 
   // Coming back here with the browser's Back button can restore this new-gift
   // screen at a /create/<id> address. Load that gift properly instead.
@@ -255,8 +254,6 @@ export function CreateChat({ gift, fullMoonLocked = false }: { gift?: ExistingGi
         hasContent={hasContent}
         version={previewVersion}
         recipientName={link.recipientName}
-        locked={locked}
-        onUnlock={() => router.push("/dashboard/plan")}
         onBack={() => setView("chat")}
       />
 

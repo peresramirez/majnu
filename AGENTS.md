@@ -107,7 +107,7 @@ Letters contain private messages and gift codes, and strangers arriving from ads
 ## Payments and database
 
 - Before changing anything in Postgres (tables, policies, indexes, functions), consult the Supabase guidance in `.claude/skills/`. Schema changes are migration files in `supabase/migrations/`.
-- Before writing Stripe code, consult the Stripe guidance in `.claude/skills/`. Use Stripe-hosted checkout in subscription mode, verify on the server, and keep plan status current with a signature-checked webhook. Prices and limits live in `lib/plans.ts`.
+- Before writing Stripe code, consult the Stripe guidance in `.claude/skills/`. Use Stripe-hosted Checkout in payment mode for the personalised wrapper, verify on the server, and keep plan status current with a signature-checked webhook. Prices and limits live in `lib/plans.ts`.
 
 ## Interface
 

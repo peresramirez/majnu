@@ -10,7 +10,7 @@ import type { GiftIdea, LimitReason } from "@/lib/agents/events"
 import type { TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { templateMessage, type ChatItem } from "./chat-state"
-import { FullMoonBadge, TemplateIcon } from "./template-bits"
+import { TemplateIcon } from "./template-bits"
 
 // Starters for an empty chat. Tapping one sends it as the first message.
 const suggestions = [
@@ -100,7 +100,6 @@ function TemplateSuggestions({ ids, onChoose, disabled }: { ids: TemplateId[]; o
               <span className="text-night-rose">
                 <TemplateIcon id={t.id} />
               </span>
-              {t.plan === "full-moon" && <FullMoonBadge />}
             </span>
             <span className="mt-3 font-display text-lg leading-snug text-night-petal">{t.name}</span>
             <span className="mt-1 line-clamp-2 text-sm leading-relaxed text-night-lilac">{t.description}</span>
@@ -142,23 +141,7 @@ function GiftIdeas({ ideas }: { ideas: GiftIdea[] }) {
   )
 }
 
-const upgradeReasons: LimitReason[] = ["full_moon_only", "monthly_gifts"]
-
 function Notice({ tone, message, reason }: { tone: "limit" | "refusal" | "error"; message: string; reason?: LimitReason }) {
-  if (tone === "limit" && reason && upgradeReasons.includes(reason)) {
-    return (
-      <div className="rounded-3xl bg-night-velvet p-5 ring-1 ring-inset ring-night-rose/35">
-        <div className="flex items-center gap-3 text-night-rose">
-          <MoonPhase lit={1} size={26} />
-          <p className="font-display text-xl text-night-petal">Full moon</p>
-        </div>
-        <p className="mt-3 leading-relaxed text-night-lilac">{message}</p>
-        <Link href="/dashboard/plan" className={`mt-5 ${primaryButton} px-5 py-2.5`}>
-          Choose Full moon
-        </Link>
-      </div>
-    )
-  }
   if (tone === "limit" && reason === "signin_required") {
     // A guest asked for something that needs a real account (an advent calendar).
     // Signing up keeps the guest's gifts: the account is upgraded in place.
@@ -180,9 +163,6 @@ function Notice({ tone, message, reason }: { tone: "limit" | "refusal" | "error"
     return (
       <div className="rounded-2xl p-4 ring-1 ring-inset ring-night-petal/15">
         <p className="leading-relaxed text-night-petal">{message}</p>
-        <Link href="/dashboard/plan" className={`mt-2 inline-block rounded text-sm font-semibold text-night-rose underline-offset-4 hover:underline ${focusRing}`}>
-          See your plan
-        </Link>
       </div>
     )
   }

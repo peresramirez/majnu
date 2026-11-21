@@ -21,7 +21,7 @@
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-1C1C1C?logo=supabase&logoColor=3ECF8E&style=flat-square">
   <img alt="Claude via the Anthropic SDK" src="https://img.shields.io/badge/Claude-Anthropic%20SDK-191919?logo=claude&logoColor=D97757&style=flat-square">
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflareworkers&logoColor=white&style=flat-square">
-  <img alt="Stripe" src="https://img.shields.io/badge/Stripe-subscriptions-635BFF?logo=stripe&logoColor=white&style=flat-square">
+  <img alt="Stripe" src="https://img.shields.io/badge/Stripe-Checkout-635BFF?logo=stripe&logoColor=white&style=flat-square">
   <img alt="Vitest" src="https://img.shields.io/badge/tested%20with-Vitest-1B1226?logo=vitest&logoColor=FCC72B&style=flat-square">
 </p>
 
@@ -33,12 +33,13 @@
 2. **Make it yours.** Majnu writes the page from what you said and shows it next to the chat. Ask for changes until it feels like you. It can also search the web for gift ideas.
 3. **Send the link.** Copy it, send it on WhatsApp or print the QR code. The person you send it to needs no account, and you see when they open it.
 
-| You can send | Templates | Plan |
+| You can send | Templates | Price |
 |---|---|---|
-| A letter | Classic envelope, Postcard | Crescent (free) |
-| A gift code or voucher | Gift reveal | Crescent (free) |
-| An invitation with date, place and map link | Wedding, Party | Crescent (free) |
-| An advent calendar or countdown, one door a day | Advent calendar, Countdown | Full moon (€4.99 a month) |
+| A letter | Classic envelope, Postcard | Free |
+| A gift code or voucher | Gift reveal | Free |
+| An invitation with date, place and map link | Wedding, Party | Free |
+| An advent calendar or countdown, one door a day | Advent calendar, Countdown | Free, with an account |
+| A personalised wrapper: a design made for one gift | Made by Majnu's designer | €2.99 once |
 
 ## Status
 
@@ -51,8 +52,7 @@ Built during a hackathon and live at **[majnu.app](https://majnu.app)**.
 | Seven templates, gift pages at `/l/<slug>`, share panel with QR code | Live |
 | Open tracking (no cookies, nothing stored on the recipient's device) | Live |
 | Spending limits per user | Live |
-| Stripe subscription for Full moon | Being built ([#14](https://github.com/peresramirez/majnu/issues/14)) |
-| Custom designs made in a Daytona sandbox | Being built ([#28](https://github.com/peresramirez/majnu/issues/28)) |
+| Personalised wrapper: €2.99 once in Stripe Checkout, designed in a Daytona sandbox | Being built ([#39](https://github.com/peresramirez/majnu/issues/39)) |
 
 Open work is tracked in the [GitHub issues](https://github.com/peresramirez/majnu/issues).
 

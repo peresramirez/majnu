@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { fullMoonLocked } from "@/components/app/session"
 import { CreateChat } from "@/components/create/create-chat"
 import { toDisplayMessages } from "@/lib/agents/display"
 import { getMyLetter } from "@/lib/letters/store"
@@ -20,7 +19,6 @@ export default async function GiftChatPage({ params }: { params: Promise<{ id: s
   return (
     <CreateChat
       key={letter.id}
-      fullMoonLocked={await fullMoonLocked()}
       gift={{
         letterId: letter.id,
         slug: letter.slug,
