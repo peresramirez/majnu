@@ -6,6 +6,7 @@
 // people out at random, mid-chat.
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { nextPathFromSearch } from "@/lib/billing/next-path"
 
 const PROTECTED_PREFIXES = ["/dashboard", "/create"]
 const AUTH_PAGES = ["/signin", "/signup"]
@@ -50,19 +51,22 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Signed-in users skip the sign-in pages. The landing page stays open to them.
+  // A same-site ?next=... or ?plan=full-moon on the sign-in page still decides
+  // where they land, so "Choose Full moon" reaches the Plan tab either way.
   if (user && AUTH_PAGES.some((page) => underPrefix(pathname, page))) {
-    return redirectKeepingSession(request, "/dashboard", response, cacheHeaders)
+    const next = nextPathFromSearch(request.nextUrl.searchParams) ?? "/dashboard"
+    return redirectKeepingSession(request, next, response, cacheHeaders)
   }
 
   return response
 }
 
 // A redirect that carries the refreshed session cookies (and cache headers)
-// from the response the Supabase client last built.
-function redirectKeepingSession(request: NextRequest, pathname: string, from: NextResponse, cacheHeaders: Record<string, string>) {
-  const url = request.nextUrl.clone()
-  url.pathname = pathname
-  url.search = ""
+// from the response the Supabase client last built. `path` is a same-site path,
+// optionally with a query; resolving it against this request's origin keeps
+// the redirect on this site.
+function redirectKeepingSession(request: NextRequest, path: string, from: NextResponse, cacheHeaders: Record<string, string>) {
+  const url = new URL(path, request.nextUrl.origin)
   const redirect = NextResponse.redirect(url)
   from.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie))
   Object.entries(cacheHeaders).forEach(([key, value]) => redirect.headers.set(key, value))

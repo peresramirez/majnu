@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { safeNextPath } from "@/lib/billing/next-path"
 import { createClient } from "@/lib/supabase/server"
 
 
@@ -26,13 +27,18 @@ export async function signUp(email: string, password: string) {
   return await supabase.auth.signUp(data);
 }
 
-export async function signInWithGoogle() {
+// `next` is where to land after Google sends the user back, for example the
+// Plan tab for "Choose Full moon". It comes from the browser, so it is checked
+// here (only same-site paths) and again in the callback.
+export async function signInWithGoogle(next?: string | null) {
   const supabase = await createClient()
 
+  const destination = safeNextPath(next)
+  const callback = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+      redirectTo: destination ? `${callback}?next=${encodeURIComponent(destination)}` : callback,
     },
   })
 
