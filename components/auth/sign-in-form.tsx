@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signIn, signInWithGoogle } from "@/app/auth/actions"
+import { nextPathFromSearch, withNext } from "@/lib/billing/next-path"
 import { signInSchema } from "@/lib/validations"
 import { GoogleButton, OrDivider, friendlyAuthError, inputClass, labelClass, submitClass } from "./auth-fields"
 
@@ -21,6 +22,10 @@ export default function SignInForm() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const busy = isEmailLoading || isGoogleLoading
+  // Where to go after signing in: ?next=... or ?plan=full-moon (the landing
+  // page's "Choose Full moon"). Read after mount, so the page stays static.
+  const [next, setNext] = useState<string | null>(null)
+  useEffect(() => setNext(nextPathFromSearch(new URLSearchParams(window.location.search))), [])
 
   const {
     register,
@@ -37,7 +42,7 @@ export default function SignInForm() {
     try {
       const { error } = await signIn(values.email, values.password)
       if (error) throw error
-      router.push("/dashboard")
+      router.push(next ?? "/dashboard")
       router.refresh()
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't sign you in. Try again."))
@@ -50,7 +55,7 @@ export default function SignInForm() {
     setIsGoogleLoading(true)
     setError(null)
     try {
-      await signInWithGoogle()
+      await signInWithGoogle(next)
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't reach Google. Try again."))
       setIsGoogleLoading(false)
@@ -88,7 +93,7 @@ export default function SignInForm() {
 
       <p className="text-center text-sm text-night-lilac">
         New to Majnu?{" "}
-        <Link href="/signup" className="rounded font-semibold text-night-petal underline-offset-4 hover:underline">
+        <Link href={withNext("/signup", next)} className="rounded font-semibold text-night-petal underline-offset-4 hover:underline">
           Create an account
         </Link>
       </p>

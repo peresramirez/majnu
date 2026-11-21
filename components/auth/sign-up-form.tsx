@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signUp, signInWithGoogle } from "@/app/auth/actions"
+import { nextPathFromSearch, withNext } from "@/lib/billing/next-path"
 import { signUpSchema } from "@/lib/validations"
 import { GoogleButton, OrDivider, friendlyAuthError, inputClass, labelClass, submitClass } from "./auth-fields"
 
@@ -22,6 +23,10 @@ export default function SignUpForm() {
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null)
   const router = useRouter()
   const busy = isEmailLoading || isGoogleLoading
+  // Where to go after signing up: ?next=... or ?plan=full-moon (the landing
+  // page's "Choose Full moon"). Read after mount, so the page stays static.
+  const [next, setNext] = useState<string | null>(null)
+  useEffect(() => setNext(nextPathFromSearch(new URLSearchParams(window.location.search))), [])
 
   const {
     register,
@@ -43,7 +48,7 @@ export default function SignUpForm() {
         setConfirmEmail(values.email)
         return
       }
-      router.push("/dashboard")
+      router.push(next ?? "/dashboard")
       router.refresh()
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't create your account. Try again."))
@@ -56,7 +61,7 @@ export default function SignUpForm() {
     setIsGoogleLoading(true)
     setError(null)
     try {
-      await signInWithGoogle()
+      await signInWithGoogle(next)
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't reach Google. Try again."))
       setIsGoogleLoading(false)
@@ -71,7 +76,7 @@ export default function SignUpForm() {
         <p className="mt-2 leading-relaxed text-night-lilac">
           We sent a link to <span className="text-night-petal">{confirmEmail}</span>. Open it to confirm your account, then sign in.
         </p>
-        <Link href="/signin" className="mt-6 inline-block rounded font-semibold text-night-petal underline-offset-4 hover:underline">
+        <Link href={withNext("/signin", next)} className="mt-6 inline-block rounded font-semibold text-night-petal underline-offset-4 hover:underline">
           Go to sign in
         </Link>
       </div>
@@ -113,7 +118,7 @@ export default function SignUpForm() {
 
       <p className="text-center text-sm text-night-lilac">
         Already have an account?{" "}
-        <Link href="/signin" className="rounded font-semibold text-night-petal underline-offset-4 hover:underline">
+        <Link href={withNext("/signin", next)} className="rounded font-semibold text-night-petal underline-offset-4 hover:underline">
           Sign in
         </Link>
       </p>
