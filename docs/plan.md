@@ -90,7 +90,7 @@ All agent code runs on the server in `lib/agents/`.
   - `research_gifts`: runs the research sub-agent.
   - `build_letter`: runs the builder sub-agent, saves the result, and the preview reloads.
   - `edit_letter`: the builder again, given the current content and the requested change.
-- **Research sub-agent** (`research.ts`): its own tool loop with Anthropic's web search (`web_search_20260209`, at most 4 searches) and a `report_gifts` tool it calls once at the end with 3–5 ideas (title, reason, price, link).
+- **Research sub-agent** (`research.ts`): its own tool loop with Anthropic's web search (`web_search_20260209`, at most 4 searches) and a `report_gifts` tool it calls once at the end with 3–5 ideas (title, reason, price, link). When `TAVILY_API_KEY` is set, the search runs on Tavily instead, through a client tool `search_web` (`lib/agents/tavily.ts`: 5 trimmed results per search, an 8-second timeout, a failed search returned to the model as an error) with the same caps, and Anthropic's web search remains the fallback when the key is empty.
 - **Builder sub-agent** (`builder.ts`): one `client.beta.messages.parse` call with `betaZodOutputFormat` of the content schema (the beta namespace, because `fallbacks` and `block_binding` exist only there), validated again with zod and retried once. Today's date and the sender's timezone (Europe/Berlin when the browser sends none) go in the user message.
 
 Rules the current models impose:

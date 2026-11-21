@@ -96,11 +96,12 @@ export default function PrivacyPage() {
         <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies and searches the web for gift ideas. Under its commercial terms, Anthropic does not use this data to train its models.</li>
         <li><strong>Google</strong>: sign-in with Google, and the mailbox our email is forwarded to.</li>
         <li><strong>Stripe</strong>: payments for Full moon.</li>
+        <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them.</li>
       </ul>
 
       <h2>Transfers outside the EU</h2>
       <p>
-        Anthropic, Cloudflare, Google and Stripe may process data in the United States. Where a provider is certified
+        Anthropic, Cloudflare, Google, Stripe and Tavily may process data in the United States. Where a provider is certified
         under the EU–US Data Privacy Framework, the transfer is based on that adequacy decision; otherwise it is
         covered by the European Commission&apos;s standard contractual clauses (Art. 46 GDPR).
       </p>
