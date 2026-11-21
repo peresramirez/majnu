@@ -5,7 +5,10 @@
 // Playful: big type, a ticket with a tear-off stub, chunky countdown tiles.
 // Both show the date and time as written by the sender (the event's own local
 // time), a link to Google Maps, an .ics file made in the browser, and a live
-// countdown.
+// countdown. An invitation with a gift list shows it at the end (issue #35).
+//
+// This is the client half; ./invitation.tsx renders it on the server with the
+// gift list's claimed ids.
 import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import type { LetterContent } from "@/lib/letters/schema"
 import { displayStyle, focusRing, MadeWith, Ornament, paperStyle, Stars } from "../chrome"
@@ -23,6 +26,7 @@ import {
 } from "../event-time"
 import { GiftList } from "../gift-card"
 import { useLetter, useMounted } from "../letter-context"
+import { Wishlist } from "../wishlist"
 import { Paragraphs, SignOff } from "../letter-text"
 import { firstName, monogram } from "../names"
 import { paletteOf } from "../theme"
@@ -171,7 +175,14 @@ function CountdownView({ countdown, start, mood }: { countdown: Countdown | null
   )
 }
 
-function Elegant({ content, start, countdown }: { content: LetterContent; start: EventStart | null; countdown: Countdown | null }) {
+type ViewProps = { content: LetterContent; start: EventStart | null; countdown: Countdown | null; claimed?: string[] }
+
+function GiftListSection({ content, claimed, mood }: { content: LetterContent; claimed?: string[]; mood: Mood }) {
+  if (!content.wishlist?.length) return null
+  return <Wishlist items={content.wishlist} claimed={claimed} mood={mood} hostName={content.senderName} />
+}
+
+function Elegant({ content, start, countdown, claimed }: ViewProps) {
   const event = content.event
   const dark = paletteOf(content.theme).dark
   const formal: CSSProperties = { fontFamily: "var(--formal)", fontWeight: 500 }
@@ -231,6 +242,7 @@ function Elegant({ content, start, countdown }: { content: LetterContent; start:
         <Actions content={content} start={start} mood="elegant" />
         <CountdownView countdown={countdown} start={start} mood="elegant" />
         <GiftList gifts={content.gifts} />
+        <GiftListSection content={content} claimed={claimed} mood="elegant" />
         <MadeWith />
       </div>
     </main>
@@ -272,7 +284,7 @@ function Confetti() {
   )
 }
 
-function Playful({ content, start, countdown }: { content: LetterContent; start: EventStart | null; countdown: Countdown | null }) {
+function Playful({ content, start, countdown, claimed }: ViewProps) {
   const event = content.event
   const parts = start ? eventDateParts(start) : null
   const display: CSSProperties = { fontFamily: "var(--display)", fontWeight: 700 }
@@ -326,6 +338,7 @@ function Playful({ content, start, countdown }: { content: LetterContent; start:
 
         <SignOff signOff={content.signOff} senderName={content.senderName} className="pop mt-12" />
         <GiftList gifts={content.gifts} />
+        <GiftListSection content={content} claimed={claimed} mood="playful" />
         <MadeWith />
       </div>
       <style>{`
@@ -339,12 +352,18 @@ function Playful({ content, start, countdown }: { content: LetterContent; start:
   )
 }
 
-export function Invitation({ content, mood }: { content: LetterContent; mood: Mood }) {
+// `claimed`: the gift list's claimed item ids, read on the server. Undefined
+// when the server did not read them; the gift list then asks after loading.
+export function InvitationView({ content, mood, claimed }: { content: LetterContent; mood: Mood; claimed?: string[] }) {
   const start = useMemo(() => parseEventStart(content.event?.startsAt), [content.event?.startsAt])
   const countdown = useCountdown(start)
   return (
     <>
-      {mood === "elegant" ? <Elegant content={content} start={start} countdown={countdown} /> : <Playful content={content} start={start} countdown={countdown} />}
+      {mood === "elegant" ? (
+        <Elegant content={content} start={start} countdown={countdown} claimed={claimed} />
+      ) : (
+        <Playful content={content} start={start} countdown={countdown} claimed={claimed} />
+      )}
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           .rise { animation: rise 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
