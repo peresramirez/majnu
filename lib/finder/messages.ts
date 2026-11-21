@@ -19,6 +19,8 @@ type Texts = {
     wrapRefused: string
   }
   status: string
+  // The status line while a public profile is read, when the model gave none.
+  profileStatus: string
 }
 
 const EN: Texts = {
@@ -45,6 +47,7 @@ const EN: Texts = {
     wrapRefused: "I can't write a page for this one. Try changing your message.",
   },
   status: "Looking for gifts…",
+  profileStatus: "Looking at their public profile…",
 }
 
 const DE: Texts = {
@@ -71,6 +74,7 @@ const DE: Texts = {
     wrapRefused: "Für diese Nachricht kann ich keine Seite schreiben. Versuch es mit anderen Worten.",
   },
   status: "Ich suche nach Geschenken…",
+  profileStatus: "Ich schaue mir das öffentliche Profil an…",
 }
 
 export function textsFor(language: string | undefined): Texts {

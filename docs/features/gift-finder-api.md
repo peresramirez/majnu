@@ -40,6 +40,8 @@ One search, in order:
 8. Ideas without a link are left out. The rest become `GiftOption`s with ids that are stable within the session, streamed as `options` with `recommendedId` and `why`. If none is left, or research failed, the search is given back and an `error` event says so.
 9. The turn ends there, without a closing model request: the visitor's next move is to look at the options. The route appends the turn to the stored conversation, saves the context and the options, and streams `done`.
 
+Public profiles: when the visitor pastes a public Instagram or TikTok profile, or another public page about the person, the model calls a third tool, `read_profile`, before `find_gifts`. Its 3 to 6 interests are merged into the next search's context. That is its own page, [social-profiles.md](social-profiles.md) (issue #34).
+
 Personalising: when the visitor asks for it (the finder's button sends "Personalise the gift") or says none fit, the model calls `ask_questions`. The server first checks that a personalised search would still be allowed, then streams up to three `question` events with up to four `suggestions` each, and the turn ends. The visitor's answers are the next message, and the next `find_gifts` call counts as a personalised search: every search after the first in a session does.
 
 Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (and optionally the names and a note) loads the session through RLS, finds the option among the last ones shown, checks the daily letter limit and, with billing on, the free plan's monthly gifts, then has the builder sub-agent write the page in the visitor's language. The gift on the page is copied from the stored option after the builder has run, so the model cannot change its link or price. Building comes before `createLetter()`, so a failed build leaves no empty letter. The answer is `{ letterId, slug }`.
@@ -51,7 +53,7 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
 | `lib/finder/events.ts` | The contract with the finder chat: request, streamed events, wrap call. Frozen; additive changes only. |
 | `app/api/finder/route.ts` | Session check, location and locale, session creation, the per-session message cap, the stream, saving the turn append-only. |
 | `app/api/finder/wrap/route.ts` | Wrapping a chosen option: session, option and letter limits, then `wrapOption()`. |
-| `lib/finder/agent.ts` | The finder loop: system prompt, `find_gifts` and `ask_questions`, default age ranges, turning research into options. |
+| `lib/finder/agent.ts` | The finder loop: system prompt, `find_gifts`, `ask_questions` and `read_profile` ([social-profiles.md](social-profiles.md)), default age ranges, turning research into options. |
 | `lib/finder/context.ts` | Country and region from the request, language, timezone, currency, place names, age-range defaults. |
 | `lib/finder/limits.ts` | Daily search limits, the site-wide cap, sessions per day, messages per session; claiming and releasing searches. |
 | `lib/finder/sessions.ts` | Reading sessions through RLS and writing them with the service role. |
@@ -105,6 +107,6 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
 - Prices come from the search results; when a page shows none, the researcher gives a typical price marked as approximate.
 - The image in a wrapped gift: to show it later without loading anything from the shop, the wrap route could fetch the image once on the server (https only, with a size and type check), store it in Supabase Storage or R2 under the letter, and put our own URL (`/l/<slug>/image/<n>`) in `gifts[].imageUrl`, served with `no-store` and no referrer.
 - The contract has no limit reason for "too many sessions" or "too many messages in this session"; both use `finder_daily`. A `finder_turns` reason could be added to `lib/finder/events.ts` if the chat should say something different.
-- Personalising does not ask for a public social profile yet: reading one is issue #34.
+- Reading a public social profile while personalising is built (issue #34); see [social-profiles.md](social-profiles.md).
 - The main agent's `research_gifts` (in `lib/agents/tools.ts`) does not pass a language to research, so its ideas follow the language of the brief the main agent writes. Passing the sender's language there would fix the same bug in the letters chat.
 - Finder sessions and searches are kept indefinitely; a retention period should be chosen before the privacy page names them (#33).
