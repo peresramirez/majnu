@@ -8,13 +8,14 @@ export const plans = {
     summary: "For a gift now and then.",
     giftsPerMonth: 3,
     features: [
+      "Find a gift: 3 searches a day, no sign-up",
       "3 gifts a month",
       "Letters, invitations and gift pages",
       "Majnu helps you with the words",
       "Share by link, QR code or WhatsApp",
       "See when your gift is opened",
     ],
-    cta: "Create a gift",
+    cta: "Find a gift",
   },
   fullMoon: {
     id: "full-moon",
@@ -26,9 +27,9 @@ export const plans = {
     summary: "For people who give often.",
     giftsPerMonth: null,
     features: [
-      "Unlimited gifts",
+      "Unlimited gifts and gift searches",
       "Advent calendars, one door a day",
-      "Gift research: Majnu searches the web for ideas and current deals",
+      "Gift research in the letters chat, with current deals",
       "Everything in Crescent",
       "Cancel anytime",
     ],
