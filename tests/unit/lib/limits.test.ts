@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as limits from "@/lib/limits"
 import {
   LIMITS,
+  calendarResult,
   canUseFeature,
   chatTurnsResult,
   countChatTurns,
   dailyLettersResult,
-  fullMoonOnlyResult,
-  monthlyGiftsResult,
   signInRequiredResult,
   startOfUtcDay,
-  startOfUtcMonth,
 } from "@/lib/limits"
 
 const { createClient } = vi.hoisted(() => ({
@@ -58,40 +57,40 @@ describe("limit results", () => {
     expect(chatTurnsResult(LIMITS.chatTurnsPerLetter)).toMatchObject({ ok: false, reason: "chat_turns" })
   })
 
-  it("allows 3 gifts a month on the free plan", () => {
-    expect(monthlyGiftsResult(2)).toEqual({ ok: true })
-    expect(monthlyGiftsResult(3)).toMatchObject({ ok: false, reason: "monthly_gifts" })
+  it("lets real accounts make calendars and asks guests and visitors to sign up", () => {
+    expect(calendarResult({ isAnonymous: false })).toEqual({ ok: true })
+    expect(calendarResult({ isAnonymous: true })).toEqual(signInRequiredResult())
+    expect(calendarResult(null)).toEqual(signInRequiredResult())
   })
 
-  it("keeps calendars and research for Full moon", () => {
-    expect(fullMoonOnlyResult("calendar")).toMatchObject({ ok: false, reason: "full_moon_only" })
-    expect(fullMoonOnlyResult("research")).toMatchObject({ ok: false, reason: "full_moon_only" })
-  })
-
-  it("writes messages in the brand voice", () => {
-    const results = [dailyLettersResult(9), chatTurnsResult(99), monthlyGiftsResult(9), fullMoonOnlyResult("calendar"), fullMoonOnlyResult("research")]
+  it("writes messages in the brand voice, without a plan or a price", () => {
+    const results = [dailyLettersResult(9), chatTurnsResult(99), signInRequiredResult()]
     for (const result of results) {
       if (result.ok) throw new Error("expected a limit")
       expect(result.message).not.toMatch(/!|unlock|oops|magic/i)
-      expect(result.message.length).toBeLessThan(160)
+      expect(result.message).not.toMatch(/full moon|subscription|plan|€/i)
+      expect(result.message.length).toBeLessThan(200)
     }
+  })
+
+  it("has no plan gating left: no billing switch and no plan-only results", () => {
+    expect(Object.keys(limits).sort()).toEqual(
+      ["LIMITS", "calendarResult", "canCreateLetter", "canSendChatTurn", "canUseFeature", "chatTurnsResult", "countChatTurns", "dailyLettersResult", "signInRequiredResult", "startOfUtcDay"].sort(),
+    )
   })
 })
 
 describe("UTC boundaries", () => {
-  it("starts the day and the month at UTC midnight", () => {
+  it("starts the day at UTC midnight", () => {
     const now = new Date("2026-11-21T23:59:59.999+05:00") // 18:59 UTC
     expect(startOfUtcDay(now).toISOString()).toBe("2026-11-21T00:00:00.000Z")
-    expect(startOfUtcMonth(now).toISOString()).toBe("2026-11-01T00:00:00.000Z")
   })
 })
 
-// A client whose auth answers with `user` and whose database must not be
-// read unless `plan` is given.
-function fakeClient(user: { id: string; is_anonymous?: boolean } | null, plan?: string) {
+// A client whose auth answers with `user` and whose database must never be read.
+function fakeClient(user: { id: string; is_anonymous?: boolean } | null) {
   const from = vi.fn(() => {
-    if (plan === undefined) throw new Error("the database must not be touched")
-    return { select: () => ({ maybeSingle: async () => ({ data: { plan }, error: null }) }) }
+    throw new Error("the database must not be touched")
   })
   return { auth: { getUser: async () => ({ data: { user } }) }, from }
 }
@@ -104,47 +103,38 @@ describe("canUseFeature", () => {
     })
   })
 
-  it("lets everyone use research and new gifts while billing is off, without a database call", async () => {
-    vi.stubEnv("MAJNU_BILLING", "")
+  it("lets everyone use research and new gifts, without a database or auth call", async () => {
     for (const feature of ["research", "new_gift"] as const) {
       expect(await canUseFeature(feature)).toEqual({ ok: true })
     }
     expect(createClient).not.toHaveBeenCalled()
   })
 
-  it("lets a real user make a calendar while billing is off, reading no table", async () => {
-    vi.stubEnv("MAJNU_BILLING", "")
+  it("ignores the retired MAJNU_BILLING switch: nothing is gated on a plan", async () => {
+    vi.stubEnv("MAJNU_BILLING", "on")
+    for (const feature of ["research", "new_gift"] as const) {
+      expect(await canUseFeature(feature)).toEqual({ ok: true })
+    }
+    const client = fakeClient({ id: "user-1", is_anonymous: false })
+    createClient.mockImplementation((() => client) as never)
+    expect(await canUseFeature("calendar")).toEqual({ ok: true })
+    // No profile or plan is read.
+    expect(client.from).not.toHaveBeenCalled()
+  })
+
+  it("lets a real user make a calendar, reading no table", async () => {
     const client = fakeClient({ id: "user-1", is_anonymous: false })
     createClient.mockImplementation((() => client) as never)
     expect(await canUseFeature("calendar")).toEqual({ ok: true })
     expect(client.from).not.toHaveBeenCalled()
   })
 
-  it("asks a guest to sign up before a calendar, even while billing is off", async () => {
-    vi.stubEnv("MAJNU_BILLING", "")
+  it("asks a guest to sign up before a calendar", async () => {
     createClient.mockImplementation((() => fakeClient({ id: "guest-1", is_anonymous: true })) as never)
     expect(await canUseFeature("calendar")).toEqual(signInRequiredResult())
   })
 
-  it("checks for a guest before the plan when billing is on", async () => {
-    vi.stubEnv("MAJNU_BILLING", "on")
-    // The plan does not matter for a guest: the profile is never read.
-    const client = fakeClient({ id: "guest-1", is_anonymous: true })
-    createClient.mockImplementation((() => client) as never)
-    expect(await canUseFeature("calendar")).toMatchObject({ ok: false, reason: "signin_required" })
-    expect(client.from).not.toHaveBeenCalled()
-  })
-
-  it("still gates calendars on the plan for real users when billing is on", async () => {
-    vi.stubEnv("MAJNU_BILLING", "on")
-    createClient.mockImplementation((() => fakeClient({ id: "user-1" }, "free")) as never)
-    expect(await canUseFeature("calendar")).toEqual(fullMoonOnlyResult("calendar"))
-    createClient.mockImplementation((() => fakeClient({ id: "user-1" }, "full-moon")) as never)
-    expect(await canUseFeature("calendar")).toEqual({ ok: true })
-  })
-
   it("treats a missing session as needing an account", async () => {
-    vi.stubEnv("MAJNU_BILLING", "")
     createClient.mockImplementation((() => fakeClient(null)) as never)
     expect(await canUseFeature("calendar")).toMatchObject({ ok: false, reason: "signin_required" })
   })
