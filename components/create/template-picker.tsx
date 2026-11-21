@@ -4,7 +4,7 @@ import { Check } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { focusRing } from "@/components/app/styles"
 import { templates, type TemplateMeta } from "@/lib/letters/templates"
-import { FullMoonBadge, TemplateIcon } from "./template-bits"
+import { TemplateIcon } from "./template-bits"
 
 const groups = [
   { kind: "letter", label: "Letters, gifts and invitations" },
@@ -61,9 +61,7 @@ export function TemplatePicker({
                         <span className="min-w-0 flex-1">
                           <span className="flex items-start justify-between gap-2">
                             <span className="font-display text-xl leading-snug">{t.name}</span>
-                            {t.plan === "full-moon" ? (
-                              <FullMoonBadge />
-                            ) : selected ? (
+                            {selected ? (
                               <Check className="mt-1 h-5 w-5 flex-none text-night-rose" aria-hidden="true" />
                             ) : null}
                           </span>
