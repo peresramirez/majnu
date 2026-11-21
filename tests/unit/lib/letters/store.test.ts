@@ -43,12 +43,12 @@ beforeEach(() => {
 })
 
 describe("getPublicLetter", () => {
-  it("serves the demo calendar from fixtures with future doors locked", async () => {
+  it("serves the demo calendar from fixtures, started four days ago, with future doors locked", async () => {
     const view = await getPublicLetter("demo-calendar", new Date("2026-12-02T12:00:00Z"))
     expect(view?.kind).toBe("calendar")
     if (view?.kind !== "calendar") return
-    expect(view.content.doors.filter((d) => !d.locked).map((d) => d.day)).toEqual([1, 2])
-    expect(JSON.stringify(view)).not.toContain(calendarFixtures["advent-classic"].doors[2].message)
+    expect(view.content.doors.filter((d) => !d.locked).map((d) => d.day)).toEqual([1, 2, 3, 4, 5])
+    expect(JSON.stringify(view)).not.toContain(calendarFixtures["advent-classic"].doors[5].message)
     expect(fakes.adminClient).not.toHaveBeenCalled()
   })
 

@@ -72,6 +72,14 @@ function parseContent(kind: LetterKind, content: unknown): LetterContent | Calen
   return parsed.success ? parsed.data : null
 }
 
+// The calendar date `days` before `now` in `timeZone`, as YYYY-MM-DD.
+export function daysBefore(now: Date, days: number, timeZone: string): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone }).format(now)
+  const d = new Date(`${today}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
 // ---------- Public side (Dev B's seam) ----------
 
 // The letter behind a public link, render-ready, with locked doors removed.
@@ -79,7 +87,12 @@ function parseContent(kind: LetterKind, content: unknown): LetterContent | Calen
 export async function getPublicLetter(slug: string, now: Date = new Date()): Promise<PublicLetter | null> {
   if (Object.hasOwn(demoSlugs, slug)) {
     const demo = demoSlugs[slug as keyof typeof demoSlugs]
-    const content = demo.kind === "letter" ? letterFixtures[demo.templateId] : calendarFixtures[demo.templateId]
+    // The demo calendar always starts four days ago, so visitors from the landing
+    // page see some doors open and the rest locked, whatever the date.
+    const content =
+      demo.kind === "letter"
+        ? letterFixtures[demo.templateId]
+        : { ...calendarFixtures[demo.templateId], startDate: daysBefore(now, 4, calendarFixtures[demo.templateId].timezone) }
     const record: LetterRecord = {
       id: slug,
       ownerId: "demo",
