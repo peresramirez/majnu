@@ -333,12 +333,17 @@ export type ScoredGift = { gift: CatalogueGift; score: number }
 // Six gifts for the group, the best first: the group's own gifts, then the
 // general ones, then any, scored up for the occasion, the interests the
 // visitor named and a budget they gave.
+const PET_GROUPS: ReadonlySet<CatalogueGroup> = new Set(["cat", "dog", "bird"] as CatalogueGroup[])
+
 export function pickCatalogueGifts(rows: readonly CatalogueGift[], query: CatalogueQuery, count = CATALOGUE_PICKS): ScoredGift[] {
   const occasion = query.occasion ? normalise(query.occasion).replace(/[^a-z]+/g, "_") : null
   const words = query.interests ?? []
   const wanted = interestTags(words)
+  // Pet gifts are only for pets: a cat toy never fills up a girlfriend's six.
+  const forPet = PET_GROUPS.has(query.group)
   const scored = rows
     .filter((gift) => gift.url && /^https:\/\//i.test(gift.url) && gift.title)
+    .filter((gift) => forPet || !(gift.groups ?? []).length || !(gift.groups ?? []).every((group) => PET_GROUPS.has(group as CatalogueGroup)))
     .map((gift) => {
       const groups = tags(gift.groups)
       let score = groups.includes(query.group) ? 10 : groups.includes("general") ? 5 : 0
