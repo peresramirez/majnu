@@ -187,3 +187,13 @@ describe("MAIN_SYSTEM_PROMPT", () => {
     expect(step).toContain("wedding-invite, party-invite, wedding-envelope-3d, party-box")
   })
 })
+
+// The preview grows with every message (issue #30).
+describe("MAIN_SYSTEM_PROMPT and live drafts", () => {
+  it("asks for a first draft as soon as the recipient and occasion are known, and an edit for each new fact", () => {
+    expect(MAIN_SYSTEM_PROMPT).toContain("A first draft, in the same turn you learn both. Call build_letter")
+    expect(MAIN_SYSTEM_PROMPT).toContain("call edit_letter in that same turn, before you reply")
+    expect(MAIN_SYSTEM_PROMPT).toContain("One edit_letter per message")
+    expect(MAIN_SYSTEM_PROMPT).toContain("A message can change the page at most twice")
+  })
+})
