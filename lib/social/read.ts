@@ -1,6 +1,8 @@
 // One public profile or page, read once and turned into a few interests
-// (issue #34). Instagram and TikTok go through Apify (APIFY_API_TOKEN), other
-// public pages through Tavily Extract (TAVILY_API_KEY).
+// (issues #34 and #74). Instagram goes through Apify (APIFY_API_TOKEN) and,
+// when Apify cannot read it, Bright Data (BRIGHTDATA_API_KEY); TikTok through
+// Apify; LinkedIn through Bright Data; other public pages through Tavily
+// Extract (TAVILY_API_KEY).
 //
 // The text that was read lives only inside this call: it goes to the model
 // that names the interests and is then dropped. Only the interests are
@@ -9,14 +11,36 @@
 import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
 import { ProfileReadError, readInstagramProfile, readTikTokProfile, type ProfileText, type ReadFailure } from "./apify"
+import { readInstagramWithBrightData, readLinkedInProfile } from "./brightdata"
 import { extractInterests } from "./interests"
 import type { ProfileSource, ProfileTarget } from "./links"
 import { readWebPage } from "./web"
 
 export type ProfileReadResult = { ok: true; interests: string[] } | { ok: false; reason: ReadFailure }
 
+// The longest one read may take, every route included, before the interest
+// step. Apify answers in seconds and gives up at 70 s (REQUEST_TIMEOUT_MS in
+// apify.ts); LinkedIn through Bright Data answers in seconds. The bound is
+// longer than Apify's because Bright Data's Instagram scraper took about 95 s
+// for one profile when measured on 22 November.
+export const PROFILE_READ_TIMEOUT_MS = 120_000
+
+// Bright Data's Instagram scraper is started as the second route only with at
+// least this much of the read's time left, so it can finish. Apify's usual
+// failures (out of credit, refused, rate limited, an outage) come back within
+// a second or two and leave enough; after Apify's own 70 s timeout there is
+// not enough left, and the read ends as a timeout.
+export const BRIGHTDATA_INSTAGRAM_MIN_MS = 100_000
+
+// Apify failures that say nothing about the profile itself, so another route may read it.
+const SECOND_ROUTE_REASONS: ReadonlySet<ReadFailure> = new Set(["blocked", "failed", "timeout"])
+
 function apifyToken(): string | undefined {
   return process.env.APIFY_API_TOKEN?.trim() || undefined
+}
+
+function brightDataKey(): string | undefined {
+  return process.env.BRIGHTDATA_API_KEY?.trim() || undefined
 }
 
 function tavilyKey(): string | undefined {
@@ -25,23 +49,64 @@ function tavilyKey(): string | undefined {
 
 // Whether this kind of link can be read at all on this deployment.
 export function canReadSource(source: ProfileSource): boolean {
-  return source === "web" ? Boolean(tavilyKey()) : Boolean(apifyToken())
+  switch (source) {
+    case "web":
+      return Boolean(tavilyKey())
+    case "linkedin":
+      return Boolean(brightDataKey())
+    case "instagram":
+      return Boolean(apifyToken() || brightDataKey())
+    case "tiktok":
+      return Boolean(apifyToken())
+  }
 }
 
-async function readText(target: ProfileTarget): Promise<ProfileText> {
-  if (target.source === "web") {
-    const key = tavilyKey()
-    if (!key) throw new ProfileReadError("blocked")
-    return readWebPage(target.url, key)
-  }
+async function readInstagram(username: string, deadline: number): Promise<ProfileText> {
   const token = apifyToken()
-  if (!token) throw new ProfileReadError("blocked")
-  return target.source === "instagram" ? readInstagramProfile(target.username, token) : readTikTokProfile(target.username, token)
+  const key = brightDataKey()
+  if (token) {
+    try {
+      return await readInstagramProfile(username, token, deadline)
+    } catch (error) {
+      const secondRoute =
+        key && error instanceof ProfileReadError && SECOND_ROUTE_REASONS.has(error.reason) && deadline - Date.now() >= BRIGHTDATA_INSTAGRAM_MIN_MS
+      if (!secondRoute) throw error
+      console.warn("[social] Apify could not read the profile, trying Bright Data", {
+        source: "instagram",
+        reason: error.reason,
+        ...(error.status ? { status: error.status } : {}),
+      })
+    }
+  }
+  if (!key) throw new ProfileReadError("blocked")
+  return readInstagramWithBrightData(username, key, deadline)
+}
+
+async function readText(target: ProfileTarget, deadline: number): Promise<ProfileText> {
+  switch (target.source) {
+    case "web": {
+      const key = tavilyKey()
+      if (!key) throw new ProfileReadError("blocked")
+      return readWebPage(target.url, key)
+    }
+    case "linkedin": {
+      const key = brightDataKey()
+      if (!key) throw new ProfileReadError("blocked")
+      return readLinkedInProfile(target.username, key, deadline)
+    }
+    case "instagram":
+      return readInstagram(target.username, deadline)
+    case "tiktok": {
+      const token = apifyToken()
+      if (!token) throw new ProfileReadError("blocked")
+      return readTikTokProfile(target.username, token, deadline)
+    }
+  }
 }
 
 export async function readProfileInterests(target: ProfileTarget, language: string): Promise<ProfileReadResult> {
   try {
-    const text = await readText(target)
+    const text = await readText(target, Date.now() + PROFILE_READ_TIMEOUT_MS)
     const interests = await extractInterests(text, language)
     if (interests.length === 0) return { ok: false, reason: "empty" }
     return { ok: true, interests }
