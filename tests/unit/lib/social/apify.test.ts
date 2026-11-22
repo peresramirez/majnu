@@ -123,6 +123,20 @@ describe("the Apify request", () => {
     await vi.advanceTimersByTimeAsync(71_000)
     await pending
   })
+
+  it("gives up at the read's deadline when that comes first, and does not start after it", async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+    )
+    const pending = expect(readInstagramProfile("natgeo", TOKEN, Date.now() + 10_000)).rejects.toMatchObject({ reason: "timeout" })
+    await vi.advanceTimersByTimeAsync(10_001)
+    await pending
+    fetchMock.mockClear()
+    await expect(readTikTokProfile("natgeo", TOKEN, Date.now() - 1)).rejects.toMatchObject({ reason: "timeout" })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("what is kept of an Instagram profile", () => {
