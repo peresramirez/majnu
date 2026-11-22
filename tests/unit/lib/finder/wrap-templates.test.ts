@@ -69,12 +69,12 @@ describe("isPartyOccasion (issue #59)", () => {
 
 describe("wrapTemplatesFor", () => {
   it("offers the party pop box for a birthday or a party, after the 3D gift box", () => {
-    expect(wrapTemplatesFor({ occasion: "Geburtstag" })).toEqual(["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"])
+    expect(wrapTemplatesFor({ occasion: "Geburtstag" })).toEqual(["gift-reveal", "gift-box-3d", "gift-3d", "treasure-map", "party-box", "classic-envelope", "postcard"])
     expect(wrapTemplatesFor({ occasion: "her birthday party" })).toContain("party-box")
   })
 
   it("offers every other template, the 3D gift box included, for any gift", () => {
-    const plain = ["gift-reveal", "gift-box-3d", "gift-3d", "classic-envelope", "postcard"]
+    const plain = ["gift-reveal", "gift-box-3d", "gift-3d", "treasure-map", "classic-envelope", "postcard"]
     expect(wrapTemplatesFor({ occasion: "Weihnachten" })).toEqual(plain)
     expect(wrapTemplatesFor({})).toEqual(plain)
     expect(wrapTemplatesFor(null)).toEqual(plain)

@@ -14,11 +14,11 @@ import type { FinderContext, WrapTemplateId } from "./events"
 // What POST /api/finder/wrap accepts, and what a wrap-step message to POST
 // /api/finder may name (issue #70). Re-exported by lib/finder/wrap.ts; here so
 // the finder route can check it without loading the builder.
-export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
+export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "gift-3d", "treasure-map", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
 
 // The order they are offered in: the gift templates first, then the letters
 // that carry one. The first is chosen when the wrap step opens.
-export const WRAP_ORDER: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"]
+export const WRAP_ORDER: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "gift-3d", "treasure-map", "party-box", "classic-envelope", "postcard"]
 
 // The model writes the occasion as the visitor said it, usually in their own
 // language ("Geburtstag", "cumpleaños", "her 30th birthday party"). These are
