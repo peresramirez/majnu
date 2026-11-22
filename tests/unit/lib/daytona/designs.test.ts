@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}))
 const fakes = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: fakes.createAdminClient }))
 
-import { DESIGN_CSP, DESIGN_HEADERS, getLatestDesign, getLatestDesignInfo } from "@/lib/daytona/designs"
+import { designCsp, designHeaders, getLatestDesign, getLatestDesignInfo, threeSources } from "@/lib/daytona/designs"
 
 const LETTER_ID = "6e004a41-de61-4a68-addf-7aef8469fc9e"
 
@@ -33,21 +33,38 @@ beforeEach(() => {
 })
 
 describe("the design response headers", () => {
-  it("sandbox the page, allow no requests and keep it out of search engines", () => {
-    expect(DESIGN_CSP).toBe(
+  const THREE = "/vendor/three/0.187.0/three.module.min.js"
+
+  it("sandbox the page, allow no requests but our three.js and keep it out of search engines", () => {
+    const csp = designCsp("https://majnu.app")
+    expect(csp).toBe(
       "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; " +
-        "script-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'",
+        `script-src 'unsafe-inline' https://majnu.app${THREE}; img-src data:; font-src data:; base-uri 'none'; form-action 'none'`,
     )
     // Not allowed: the page sharing our origin, navigating the letter page, or submitting forms.
-    expect(DESIGN_CSP).not.toMatch(/allow-same-origin|allow-top-navigation|allow-forms|allow-modals/)
-    expect(DESIGN_HEADERS).toEqual({
+    expect(csp).not.toMatch(/allow-same-origin|allow-top-navigation|allow-forms|allow-modals/)
+    // No 'self', no host without a path, no folder: one exact file.
+    expect(csp).not.toMatch(/'self'|https:\/\/majnu\.app[ ;]|\/vendor\/three\/[^ ;]*\/[ ;]|\*/)
+    expect(designHeaders("https://majnu.app")).toEqual({
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": DESIGN_CSP,
+      "Content-Security-Policy": csp,
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "X-Robots-Tag": "noindex, nofollow",
       "Cache-Control": "private, no-store",
     })
+  })
+
+  it("names three.js on majnu.app and on the host the request came to", () => {
+    expect(threeSources("http://localhost:3117")).toEqual([`https://majnu.app${THREE}`, `http://localhost:3117${THREE}`])
+    expect(designCsp("https://preview.majnu.app")).toContain(`script-src 'unsafe-inline' https://majnu.app${THREE} https://preview.majnu.app${THREE};`)
+    expect(threeSources()).toEqual([`https://majnu.app${THREE}`])
+  })
+
+  it("ignores an origin that is not a plain http(s) origin", () => {
+    for (const origin of ["null", "https://x.example; script-src *", "javascript:alert(1)", "https://x.example/path", "https://*"]) {
+      expect(threeSources(origin)).toEqual([`https://majnu.app${THREE}`])
+    }
   })
 })
 

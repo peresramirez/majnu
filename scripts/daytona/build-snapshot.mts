@@ -1,6 +1,6 @@
 // Builds the Daytona snapshot that every redesign sandbox starts from.
 //
-//   node scripts/daytona/build-snapshot.mts            # builds DAYTONA_SNAPSHOT or majnu-letters-v1
+//   node scripts/daytona/build-snapshot.mts            # builds DAYTONA_SNAPSHOT or DEFAULT_SNAPSHOT (lib/daytona/config.ts)
 //   node scripts/daytona/build-snapshot.mts --print    # prints the Dockerfile, builds nothing
 //
 // The snapshot holds Node, a pinned Claude Code CLI and the project Claude Code
@@ -9,8 +9,8 @@
 // holds no keys: the Anthropic key is passed to each run's command only.
 //
 // Snapshots are immutable by name. When the templates, the skill or the CLI
-// version change, build a new name (majnu-letters-v2) and point
-// DAYTONA_SNAPSHOT at it. Refresh the rendered examples first with
+// version change, build a new name (DAYTONA_SNAPSHOT=majnu-letters-v3) and move
+// DEFAULT_SNAPSHOT to it. Refresh the rendered examples first with
 // scripts/daytona/export-references.mts. Building takes a few minutes and
 // spends Daytona credit.
 import { existsSync } from "node:fs"
@@ -61,7 +61,7 @@ const daytona = new Daytona({ apiKey, apiUrl: process.env.DAYTONA_API_URL?.trim(
 
 const existing = await daytona.snapshot.get(name).catch(() => null)
 if (existing) {
-  console.error(`Snapshot ${name} already exists (${existing.state}). Build a new name instead: DAYTONA_SNAPSHOT=majnu-letters-v2`)
+  console.error(`Snapshot ${name} already exists (${existing.state}). Build a new name instead: DAYTONA_SNAPSHOT=<next name>`)
   process.exit(1)
 }
 

@@ -4,7 +4,7 @@
 // The HTML was influenced by the sender and is served from our domain, so it
 // always goes out with the sandboxing headers in lib/daytona/designs.ts. Error
 // responses are plain text and say nothing about the letter.
-import { DESIGN_HEADERS, getLatestDesign } from "@/lib/daytona/designs"
+import { designHeaders, getLatestDesign } from "@/lib/daytona/designs"
 
 export const dynamic = "force-dynamic"
 
@@ -19,13 +19,14 @@ const PLAIN_HEADERS = {
   "Cache-Control": "no-store",
 }
 
-export async function GET(_request: Request, { params }: Context) {
+export async function GET(request: Request, { params }: Context) {
   const { slug } = await params
   if (!SLUG.test(slug)) return new Response("Not found", { status: 404, headers: PLAIN_HEADERS })
   try {
     const design = await getLatestDesign(slug)
     if (!design) return new Response("Not found", { status: 404, headers: PLAIN_HEADERS })
-    return new Response(design.html, { status: 200, headers: DESIGN_HEADERS })
+    // The CSP names three.js on the host this request came to (lib/daytona/designs.ts).
+    return new Response(design.html, { status: 200, headers: designHeaders(new URL(request.url).origin) })
   } catch (error) {
     console.error("Could not serve the design", error instanceof Error ? error.message : error)
     return new Response("Something went wrong", { status: 500, headers: PLAIN_HEADERS })

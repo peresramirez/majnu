@@ -18,7 +18,7 @@ The page is served from our domain inside a locked-down sandbox: no network, no 
 ## The page rules (checked automatically)
 
 1. **One self-contained file.** Start with `<!doctype html>`. All CSS goes in `<style>` elements and all JavaScript in inline `<script>` elements in the same file. No `<link>`, no `<script src>`, no `@import`, no `<base>`, no `<meta http-equiv>`.
-2. **No network requests at all.** No external scripts, stylesheets, fonts or images, and no `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator.sendBeacon`, `RTCPeerConnection`, workers, `import`, `eval` or `new Function`. Every `src`, `href` and CSS `url(...)` is either a `data:` URI or a `#fragment` (for example `fill="url(#glow)"` in an SVG), except the gift links in rule 5.
+2. **No network requests at all.** No external scripts, stylesheets, fonts or images, and no `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator.sendBeacon`, `RTCPeerConnection`, workers, `import`, `eval` or `new Function`. Every `src`, `href` and CSS `url(...)` is either a `data:` URI or a `#fragment` (for example `fill="url(#glow)"` in an SVG), except the gift links in rule 5. **The one exception:** a page with a 3D scene may import our hosted copy of three.js, once, exactly as [3d.md](3d.md) says. Read 3d.md before you write any 3D.
 3. **Fonts:** system fonts only, through font stacks. Serif: `"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif`. Sans: `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`. Monospace: `ui-monospace, "SF Mono", Menlo, Consolas, monospace`. Condensed or display feelings come from `font-stretch`, `letter-spacing`, weight, size and case, not from downloaded faces.
 4. **Pictures:** draw them. Inline `<svg>`, CSS gradients, borders, shadows and patterns are the toolbox. A small `data:` image is allowed but rarely needed. `imageUrl` in a gift points to another site and must not be used.
 5. **Links:** the only links are the gifts' own `url` values from `content.json`, copied character for character, written as `<a href="https://..." target="_blank" rel="noopener noreferrer">`. No other links, and no `ping`, `srcset`, `action` or `formaction` attributes.
@@ -40,10 +40,14 @@ The page is served from our domain inside a locked-down sandbox: no network, no 
 - **Gifts:** show each gift's `title`, `price` and `description` when present, its link (rule 5) and its code (rule 7).
 - **Make it feel made for this person.** Take the request seriously and push it: a strong, specific concept beats a generic card. But the letter's words are the point of the page; decoration never hides or crowds them.
 
+## 3D scenes
+
+If the request asks for depth, an object or a scene ("a snow globe", "a spinning record", "make it 3D"), read [3d.md](3d.md): when 3D is worth it, the one import that is allowed, the still fallback every 3D page needs, the performance budget and the accessibility rules. Most requests do not need 3D.
+
 ## Reference material
 
 `reference/README.md` explains what is there: the sources of our templates (`reference/components/`), the content schema and sample content (`reference/lib/letters/`), and one rendered example per template (`reference/rendered/`). Use them to understand what a Majnu letter contains and how our templates treat names, gifts, codes and events. Do not copy their look unless the request asks for it: the sender asked for something different.
 
 ## Before you finish
 
-Read `out/index.html` back from the top and check every page rule above, one by one. In particular, search your file for `http`, `src=`, `href=`, `url(` and each gift code, and fix anything that breaks a rule. Then reply with one sentence describing the design.
+Read `out/index.html` back from the top and check every page rule above, one by one. In particular, search your file for `http`, `src=`, `href=`, `url(`, `import` and each gift code, and fix anything that breaks a rule. Then reply with one sentence describing the design.

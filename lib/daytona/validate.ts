@@ -10,7 +10,7 @@
 // stored at all, and so a mistake by the model is caught before a recipient
 // sees a half-broken page. It works on the raw text with regular expressions,
 // so it errs on the side of rejecting.
-import { MAX_DESIGN_BYTES, MIN_DESIGN_BYTES } from "./config"
+import { MAX_DESIGN_BYTES, MIN_DESIGN_BYTES, THREE_MODULE_PATH, THREE_SPECIFIER } from "./config"
 
 export type DesignCheckInput = {
   // The gift links in the letter's content: the only https links allowed.
@@ -54,7 +54,11 @@ const FORBIDDEN_APIS: [RegExp, string][] = [
   // called location (`const location = event.locationName`).
   [/(?<!\b(?:const|let|var)\s+)(?<![\w$])location\s*=(?!=)/, "a location change"],
   [/\bimport\s*\(/, "a dynamic import"],
-  [/\bimport\s+[\w{*][^;]*?\bfrom\s*["']/, "a module import"],
+  // Static imports are checked on their own (checkModules): three.js is the
+  // only module a page may import.
+  [/\bexport\b[^;]*?\bfrom\s*["'`]/, "a module re-export"],
+  // three.js loaders fetch files (textures, models, fonts); a page draws everything.
+  [/\b[A-Z]\w*Loader\b/, "a three.js loader"],
   [/\beval\s*\(/, "eval()"],
   [/\bnew\s+Function\s*\(/, "new Function()"],
   [/@import\b/, "a CSS @import"],
@@ -122,6 +126,8 @@ export function checkDesignHtml(html: string, input: DesignCheckInput): DesignCh
     if (!isLocalReference(value)) problems.add(`loads ${describe(value)} with CSS url()`)
   }
 
+  checkModules(html, problems)
+
   // Scripts must not carry URLs they could load later, except the gift links.
   for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)) {
     for (const match of script[1].matchAll(SCRIPT_URL)) {
@@ -167,6 +173,62 @@ export function checkDesignHtml(html: string, input: DesignCheckInput): DesignCh
   }
 
   return problems.size === 0 ? { ok: true, bytes } : { ok: false, bytes, problems: [...problems] }
+}
+
+// The one module a page may import is our copy of three.js, at exactly
+// THREE_MODULE_PATH: once, by that path or by the bare name "three" mapped to
+// it in the page's only import map. Every other import, import map or
+// specifier is refused, including other versions, other files in /vendor/,
+// query strings and absolute URLs. The design CSP allows the same single file,
+// so the browser enforces this too.
+const IMPORT_WORD = /(?<![\w$.])import\b(?!\s*\.\s*meta\b)(?!\s*\()/g
+const STATIC_IMPORT = /^import\s*(?:[\w$*{][^;"'`]*?\bfrom\s*)?(["'])([^"'\n]*)\1/
+const SCRIPT_ELEMENT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi
+
+function checkModules(html: string, problems: Set<string>) {
+  const scripts = [...html.matchAll(SCRIPT_ELEMENT)].map(([, attributes, body]) => {
+    const type = attributes.match(/\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    return { importMap: (type?.[1] ?? type?.[2] ?? type?.[3] ?? "").trim().toLowerCase() === "importmap", body }
+  })
+  const importMaps = scripts.filter((script) => script.importMap)
+  if (importMaps.length > 1) problems.add("has more than one import map")
+  for (const map of importMaps) {
+    if (!isThreeImportMap(map.body)) problems.add(`has an import map other than {"imports":{"${THREE_SPECIFIER}":"${THREE_MODULE_PATH}"}}`)
+  }
+
+  let imports = 0
+  for (const script of scripts) {
+    if (script.importMap) continue
+    for (const match of script.body.matchAll(IMPORT_WORD)) {
+      const specifier = script.body.slice(match.index).match(STATIC_IMPORT)?.[2]
+      if (specifier === undefined) {
+        problems.add("uses import in a way the checker cannot read")
+        continue
+      }
+      imports++
+      if (specifier === THREE_MODULE_PATH) continue
+      if (specifier === THREE_SPECIFIER) {
+        if (importMaps.length === 0) problems.add(`imports "${THREE_SPECIFIER}" without an import map`)
+        continue
+      }
+      problems.add(`imports ${describe(specifier)}, which is not ${THREE_MODULE_PATH}`)
+    }
+  }
+  if (imports > 1) problems.add("imports a module more than once")
+}
+
+function isThreeImportMap(body: string): boolean {
+  try {
+    const map = JSON.parse(body) as unknown
+    if (!map || typeof map !== "object" || Array.isArray(map)) return false
+    const keys = Object.keys(map)
+    const imports = (map as { imports?: unknown }).imports
+    if (keys.length !== 1 || keys[0] !== "imports" || !imports || typeof imports !== "object" || Array.isArray(imports)) return false
+    const entries = Object.entries(imports)
+    return entries.length === 1 && entries[0][0] === THREE_SPECIFIER && entries[0][1] === THREE_MODULE_PATH
+  } catch {
+    return false
+  }
 }
 
 // data: URIs and same-document #fragments are the only things a page may load.

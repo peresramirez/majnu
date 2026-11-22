@@ -12,7 +12,7 @@ vi.mock("@/lib/daytona/designs", async (importOriginal) => ({
 }))
 
 import { GET } from "@/app/(public)/l/[slug]/design/route"
-import { DESIGN_CSP } from "@/lib/daytona/designs"
+import { designCsp } from "@/lib/daytona/designs"
 
 const PAGE = "<!doctype html><html><body><p>For Lucia</p></body></html>"
 
@@ -31,7 +31,7 @@ describe("GET /l/[slug]/design", () => {
     expect(res.status).toBe(200)
     expect(await res.text()).toBe(PAGE)
     expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8")
-    expect(res.headers.get("content-security-policy")).toBe(DESIGN_CSP)
+    expect(res.headers.get("content-security-policy")).toBe(designCsp("https://majnu.app"))
     expect(res.headers.get("x-content-type-options")).toBe("nosniff")
     expect(res.headers.get("referrer-policy")).toBe("no-referrer")
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow")

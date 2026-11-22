@@ -1,2 +1,12 @@
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# The pinned three.js for custom designs (lib/daytona/config.ts). Each version
+# lives in its own folder and is never overwritten, so it caches for a year.
+# A design runs in a sandboxed frame with an opaque origin, and a module script
+# from there is a CORS request, so the file allows any origin (it is public).
+/vendor/three/*
+  Cache-Control: public,max-age=31536000,immutable
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+  X-Content-Type-Options: nosniff

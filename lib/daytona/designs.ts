@@ -10,30 +10,54 @@
 //   (target="_blank") open the shop in a normal tab.
 // - `default-src 'none'` with inline styles, inline scripts and data: images
 //   and fonts only: the browser makes no request for the page, whatever the
-//   HTML tries. `base-uri` and `form-action` are not covered by default-src,
-//   so they are closed separately.
+//   HTML tries, with one exception: our pinned copy of three.js, allowed by
+//   its exact URL (one file, not a folder) on our own origin. `base-uri` and
+//   `form-action` are not covered by default-src, so they are closed
+//   separately.
+//
+// The page has an opaque origin, so 'self' would not name our host, and the
+// host differs between majnu.app, previews and a dev server. The policy names
+// the file on majnu.app and on the origin the request came to. three.js is
+// served with `Access-Control-Allow-Origin: *` (public/_headers and
+// next.config.mjs), because a module script from an opaque origin is a CORS
+// request.
 import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { THREE_MODULE_PATH } from "./config"
 
-export const DESIGN_CSP = [
-  "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox",
-  "default-src 'none'",
-  "style-src 'unsafe-inline'",
-  "script-src 'unsafe-inline'",
-  "img-src data:",
-  "font-src data:",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join("; ")
+export const PRODUCTION_ORIGIN = "https://majnu.app"
+const ORIGIN = /^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/i
 
-export const DESIGN_HEADERS: Record<string, string> = {
-  "Content-Type": "text/html; charset=utf-8",
-  "Content-Security-Policy": DESIGN_CSP,
-  "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "no-referrer",
-  "X-Robots-Tag": "noindex, nofollow",
-  // A newer design replaces the old one at the same URL, so nothing caches it.
-  "Cache-Control": "private, no-store",
+// The sources that may serve three.js for a design requested from `origin`.
+export function threeSources(origin?: string): string[] {
+  const origins = new Set([PRODUCTION_ORIGIN])
+  if (origin && ORIGIN.test(origin)) origins.add(origin.toLowerCase())
+  return [...origins].map((o) => `${o}${THREE_MODULE_PATH}`)
+}
+
+export function designCsp(origin?: string): string {
+  return [
+    "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox",
+    "default-src 'none'",
+    "style-src 'unsafe-inline'",
+    `script-src 'unsafe-inline' ${threeSources(origin).join(" ")}`,
+    "img-src data:",
+    "font-src data:",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join("; ")
+}
+
+export function designHeaders(origin?: string): Record<string, string> {
+  return {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": designCsp(origin),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow",
+    // A newer design replaces the old one at the same URL, so nothing caches it.
+    "Cache-Control": "private, no-store",
+  }
 }
 
 const SLUG = /^[A-Za-z0-9_-]{6,64}$/

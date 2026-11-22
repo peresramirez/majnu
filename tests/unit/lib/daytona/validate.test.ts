@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { MAX_DESIGN_BYTES } from "@/lib/daytona/config"
+import { MAX_DESIGN_BYTES, THREE_MODULE_PATH } from "@/lib/daytona/config"
 import { checkDesignHtml, normalizeUrl } from "@/lib/daytona/validate"
 
 const GIFT_URL = "https://shop.example/gift?id=1&ref=2"
@@ -93,7 +93,7 @@ describe("checkDesignHtml", () => {
     ["a location change", withInScript("location.href = shop"), /location change/],
     ["location.assign", withInScript("window.location.assign(shop)"), /location change/],
     ["a dynamic import", withInScript('import("./x.js")'), /dynamic import/],
-    ["a module import", withInScript('import confetti from "https://cdn.example/confetti.js"'), /module import/],
+    ["a module import", withInScript('import confetti from "https://cdn.example/confetti.js"'), /imports "https:\/\/cdn\.example\/confetti\.js"/],
     ["eval", withInScript('eval("1 + 1")'), /eval\(\)/],
     ["new Function", withInScript('new Function("return 1")()'), /new Function/],
     ["a URL hidden in a script", withInScript('const sink = "https://collect.example/x"'), /names "https:\/\/collect\.example\/x" in a script/],
@@ -169,5 +169,72 @@ describe("normalizeUrl", () => {
     expect(normalizeUrl("https://Shop.Example/a b")).toBe("https://shop.example/a%20b")
     expect(normalizeUrl("/relative")).toBeNull()
     expect(normalizeUrl("not a url")).toBeNull()
+  })
+})
+
+// Our pinned three.js is the one module a page may import (3d.md in the skill).
+describe("checkDesignHtml and three.js", () => {
+  const THREE = "/vendor/three/0.187.0/three.module.min.js"
+  const SCENE = 'const renderer = new THREE.WebGLRenderer({ antialias: true });\nrenderer.setAnimationLoop(() => {});'
+  const withModule = (code: string, extra = "") =>
+    GOOD.replace("</body>", `${extra}<script type="module">\n${code}\n${SCENE}\n</script>\n</body>`)
+
+  it("pins the path the skill names", () => {
+    expect(THREE_MODULE_PATH).toBe(THREE)
+  })
+
+  it.each([
+    ["a namespace import", `import * as THREE from "${THREE}";`, ""],
+    ["single quotes", `import * as THREE from '${THREE}'`, ""],
+    ["named imports", `import { Scene, Mesh, WebGLRenderer } from "${THREE}";\nconst THREE = { WebGLRenderer };`, ""],
+    ["an import map entry", 'import * as THREE from "three";', `<script type="importmap">{"imports":{"three":"${THREE}"}}</script>\n`],
+    ["import.meta beside it", `import * as THREE from "${THREE}";\nconsole.log(import.meta.url);`, ""],
+  ])("accepts %s", (_name, code, extra) => {
+    expect(problemsOf(withModule(code, extra))).toEqual([])
+  })
+
+  it.each([
+    ["another version", 'import * as THREE from "/vendor/three/0.186.0/three.module.min.js";', /imports "\/vendor\/three\/0\.186\.0/],
+    ["another file in the folder", 'import * as THREE from "/vendor/three/0.187.0/three.core.js";', /which is not \/vendor\/three\/0\.187\.0\/three\.module\.min\.js/],
+    ["another path", 'import * as THREE from "/vendor/evil.js";', /imports "\/vendor\/evil\.js"/],
+    ["a query string", `import * as THREE from "${THREE}?v=2";`, /imports ".*\?v=2"/],
+    ["a hash", `import * as THREE from "${THREE}#x";`, /imports ".*#x"/],
+    ["a relative path", 'import * as THREE from "./vendor/three/0.187.0/three.module.min.js";', /imports "\.\/vendor/],
+    ["a path that walks up", 'import * as THREE from "/l/x/../../vendor/three/0.187.0/three.module.min.js";', /imports "\/l\/x\/\.\./],
+    ["a protocol-relative URL", 'import * as THREE from "//majnu.app/vendor/three/0.187.0/three.module.min.js";', /imports "\/\/majnu\.app/],
+    ["an absolute URL on our host", 'import * as THREE from "https://majnu.app/vendor/three/0.187.0/three.module.min.js";', /imports "https:\/\/majnu\.app/],
+    ["a CDN", 'import * as THREE from "https://unpkg.com/three@0.187.0/build/three.module.js";', /imports "https:\/\/unpkg\.com/],
+    ["an addon", 'import { OrbitControls } from "three/addons/controls/OrbitControls.js";', /imports "three\/addons/],
+    ["a side-effect import", `import "${THREE}";\nimport "/vendor/x.js";`, /imports "\/vendor\/x\.js"/],
+    ["a second import of three", `import * as THREE from "${THREE}";\nimport { Scene } from "${THREE}";`, /imports a module more than once/],
+    ["the bare name without an import map", 'import * as THREE from "three";', /without an import map/],
+    ["a re-export", `import * as THREE from "${THREE}";\nexport * from "/vendor/x.js";`, /module re-export/],
+    ["a dynamic import", `import * as THREE from "${THREE}";\nawait import("/vendor/x.js");`, /dynamic import/],
+    ["an escaped specifier", 'import * as THREE from "\\u002fvendor/three/0.187.0/three.module.min.js";', /imports /],
+    ["an import hidden behind a comment", `import /* x */ * as THREE from "${THREE}";`, /cannot read/],
+    ["a texture loader", `import * as THREE from "${THREE}";\nnew THREE.TextureLoader().load("/l/x/design");`, /three\.js loader/],
+  ])("refuses %s", (_name, code, problem) => {
+    expect(problemsOf(withModule(code)).join("; ")).toMatch(problem)
+  })
+
+  it.each([
+    ["another module in the map", `{"imports":{"three":"${THREE}","x":"/vendor/x.js"}}`],
+    ["another URL for three", '{"imports":{"three":"/vendor/three/0.186.0/three.module.min.js"}}'],
+    ["scopes", `{"imports":{"three":"${THREE}"},"scopes":{"/":{"three":"/vendor/x.js"}}}`],
+    ["an integrity table", `{"imports":{"three":"${THREE}"},"integrity":{}}`],
+    ["a URL key", '{"imports":{"/vendor/three/0.187.0/three.module.min.js":"/vendor/x.js"}}'],
+    ["text that is not JSON", "imports three"],
+  ])("refuses an import map with %s", (_name, map) => {
+    const html = withModule('import * as THREE from "three";', `<script type="importmap">${map}</script>\n`)
+    expect(problemsOf(html).join("; ")).toMatch(/import map other than/)
+  })
+
+  it("refuses two import maps", () => {
+    const map = `<script type="importmap">{"imports":{"three":"${THREE}"}}</script>\n`
+    expect(problemsOf(withModule('import * as THREE from "three";', map + map))).toContain("has more than one import map")
+  })
+
+  it("still refuses a script src for three.js itself", () => {
+    expect(problemsOf(withInBody(`<script type="module" src="${THREE}"></script>`))).toContain("loads a script with src")
   })
 })

@@ -187,7 +187,7 @@ The recipient needs no account. The page renders on the server on every request,
 | **No cookies on gift pages** | The middleware does not run for `/l/` or `/api/open`. The beacon stores nothing on the device; the visitor id is an HMAC of the letter, IP address and user agent under a server secret, and the IP is never saved. This is why there is no cookie banner (§ 25 TDDDG) |
 | **Generic previews** | Titles and preview images name the kind of gift and the first name ("A letter for Anna"), never the message or a code. Gift pages are `noindex` and send no referrer |
 | **Safe links** | Every link a model writes is kept only if it is `https:`, in the builder, the research agent and again in the public view |
-| **Sandboxed designs** | Daytona pages are served with `Content-Security-Policy: sandbox …; default-src 'none'`, so their scripts get an opaque origin and the browser makes no request for them |
+| **Sandboxed designs** | Daytona pages are served with `Content-Security-Policy: sandbox …; default-src 'none'`, so their scripts get an opaque origin and the browser makes no request for them, except the one pinned three.js file the CSP names by its full URL |
 | **Secrets on the server** | Modules that touch a secret start with `import "server-only"`. Secrets are Worker secrets in production and never in a committed or deployed file |
 | **Spending guard** | Per-user limits on every model route, caps per message, and a monthly spend limit in the Anthropic Console |
 
