@@ -69,8 +69,9 @@ type Props = {
 }
 
 // Empty, it greets with "Who is the gift for?", the suggestions and the
-// message box with its microphone: on phones they sit at the bottom, by the
-// thumb and above the tab bar; from md up they are centred together. Once a
+// message box with its microphone, in that order for every reader: on phones
+// they sit at the bottom, by the thumb and above the tab bar; from md up they
+// are centred together. Once a
 // conversation starts it reads like the finder dialog: a status line with the
 // moon filling as Majnu works, the conversation, and the message box pinned
 // to the bottom (the tab bar steps aside while it has focus on a phone).
@@ -219,7 +220,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
       <div
         ref={scroller}
         tabIndex={-1}
-        className={`min-h-0 overflow-y-auto overscroll-contain outline-none ${empty ? "order-1 flex flex-1 flex-col md:flex-none" : "flex-1"}`}
+        className={`min-h-0 overflow-y-auto overscroll-contain outline-none ${empty ? "flex flex-1 flex-col md:flex-none" : "flex-1"}`}
       >
         {empty ? (
           <div className={`${column} mt-auto pb-5 pt-8 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-700 md:mt-0 md:pb-6`}>
@@ -279,8 +280,8 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
       </div>
 
       {empty && (
-        <div className="order-2 flex-none md:order-3">
-          <ul className={`${column} flex flex-wrap gap-2 pb-4 md:pb-0 md:pt-4`} aria-label="Start with">
+        <div className="flex-none">
+          <ul className={`${column} flex flex-wrap gap-2 pb-4`} aria-label="Start with">
             {suggestions.map((s) => (
               <li key={s.label}>
                 <button type="button" onClick={() => void send(s.message)} className={suggestionChip}>
@@ -305,7 +306,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
         <form
           onSubmit={submit}
           aria-label="Message to Majnu"
-          className={`flex-none bg-night-plum ${empty ? "order-3 border-t border-night-petal/10 md:order-2 md:border-t-0 md:bg-transparent" : "border-t border-night-petal/10"}`}
+          className={`flex-none bg-night-plum ${empty ? "border-t border-night-petal/10 md:border-t-0 md:bg-transparent" : "border-t border-night-petal/10"}`}
         >
           <div className={`${column} pb-3 pt-2.5 ${empty ? "md:py-0" : ""}`}>
             <div

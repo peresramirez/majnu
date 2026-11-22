@@ -108,10 +108,19 @@ export default async function CreatePage() {
           title="All templates"
           thumbnail={
             // Three of the designs, fanned out like cards in a hand.
+            // The thumbnail positions itself (relative), so each sits in its own wrapper.
             <span aria-hidden="true" className="relative block aspect-[4/5]">
-              <TemplateThumbnail id="treasure-map" className="absolute left-0 top-1 w-[78%] -rotate-6 rounded-[14px] ring-1 ring-night-plum" />
-              <TemplateThumbnail id="postcard" className="absolute right-0 top-1 w-[78%] rotate-6 rounded-[14px] ring-1 ring-night-plum" />
-              <TemplateThumbnail id="gift-box-3d" className="absolute left-[11%] top-0 w-[78%] rounded-[14px] ring-1 ring-night-plum" />
+              {(
+                [
+                  ["treasure-map", "left-0 top-[6%] -rotate-[7deg]"],
+                  ["postcard", "right-0 top-[6%] rotate-[7deg]"],
+                  ["gift-box-3d", "left-[13%] top-0"],
+                ] as const
+              ).map(([id, place]) => (
+                <span key={id} className={`absolute block w-[74%] overflow-hidden rounded-[14px] shadow-lg shadow-black/40 ring-1 ring-night-plum ${place}`}>
+                  <TemplateThumbnail id={id} className="w-full" />
+                </span>
+              ))}
             </span>
           }
           actions={
