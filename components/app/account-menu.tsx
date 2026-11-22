@@ -6,6 +6,7 @@ import { useTransition } from "react"
 import { Loader2, LogIn, LogOut, Mail, Receipt, UserPlus } from "lucide-react"
 import { signOut } from "@/app/auth/actions"
 import { safeNextPath, withNext } from "@/lib/billing/next-path"
+import { createClient } from "@/lib/supabase/client"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,6 +90,15 @@ export function AccountMenu({ user }: { user: SessionUser }) {
           onSelect={(e) => {
             e.preventDefault()
             startTransition(async () => {
+              // Sign out in this browser first, so the page's own idea of who
+              // is signed in (useAuth) clears at once. The server action then
+              // revokes the session and moves to /signin without a reload;
+              // before this, the sign-in page still thought a member was
+              // signed in, and its Back link led to a dashboard page that
+              // bounced straight back to /signin.
+              await createClient()
+                .auth.signOut({ scope: "local" })
+                .catch(() => undefined)
               await signOut()
             })
           }}
