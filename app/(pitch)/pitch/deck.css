@@ -1558,8 +1558,12 @@ body:has(.pd-gate) {
 
 .sp-video {
   display: block;
-  height: min(88vh, 900px);
+  /* The whole video and its controls fit any screen: 86% of the height, or
+     less when the screen is too narrow for that at 9:16. */
+  height: min(86vh, 900px, calc(90vw * 16 / 9));
+  width: auto;
   aspect-ratio: 9 / 16;
+  object-fit: contain;
   border-radius: 24px;
   background: #0c0712;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
@@ -1726,4 +1730,93 @@ body:has(.pd-gate) {
 .sp-market .sp-trio,
 .sp-stats {
   margin-top: calc(72 * var(--pd-px)) !important;
+}
+
+/* Slide 2: the €150 as one bar */
+
+.sp-budget-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-budget-head {
+  font-size: calc(30 * var(--pd-px));
+  line-height: 1.35;
+  color: #bca8c4;
+  margin-bottom: calc(22 * var(--pd-px)) !important;
+}
+
+.sp-budget-head strong {
+  color: #f5eaf1;
+  font-weight: 600;
+}
+
+.sp-bar {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: calc(6 * var(--pd-px));
+}
+
+.sp-bar-part {
+  flex-basis: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-bar-fill {
+  display: block;
+  height: calc(26 * var(--pd-px));
+  border-radius: calc(8 * var(--pd-px));
+  background: #cd8dbd;
+  margin-bottom: calc(12 * var(--pd-px));
+}
+
+.sp-bar-part:nth-child(2) .sp-bar-fill { background: #b47fd0; }
+.sp-bar-part:nth-child(3) .sp-bar-fill { background: #8f6bc0; }
+.sp-bar-part:nth-child(4) .sp-bar-fill { background: #6f569e; }
+.sp-bar-part:nth-child(5) .sp-bar-fill { background: #57447e; }
+.sp-bar-part:nth-child(6) .sp-bar-fill { background: #46376a; }
+
+.sp-bar-part--gift .sp-bar-fill {
+  background: repeating-linear-gradient(135deg, rgba(234, 179, 148, 0.85) 0 calc(10 * var(--pd-px)), rgba(234, 179, 148, 0.55) calc(10 * var(--pd-px)) calc(20 * var(--pd-px)));
+}
+
+.sp-bar-name {
+  font-size: calc(20 * var(--pd-px));
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-bar-paid {
+  font-size: calc(20 * var(--pd-px));
+  color: #bca8c4;
+}
+
+.sp-bar-part--gift .sp-bar-name,
+.sp-bar-part--gift .sp-bar-paid {
+  color: #eab394;
+}
+
+.sp-market .sp-budget {
+  align-items: flex-end;
+}
+
+.sp-market .sp-budget-big {
+  text-align: right;
+}
+
+/* Small costs keep a readable label. */
+.sp-bar-part {
+  min-width: calc(118 * var(--pd-px));
+}
+
+.sp-bar-name,
+.sp-bar-paid {
+  overflow: visible;
+  white-space: nowrap;
 }

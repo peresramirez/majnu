@@ -22,6 +22,7 @@ const SNAPSHOT = {
   people: 26,
   accounts: 11,
   searches: 30,
+  researches: 45,
   wrapped: 24,
   opened: 16,
   clicks: 6,
@@ -49,13 +50,13 @@ function Tag({ n, word }: { n: number; word: string }) {
 function Product() {
   const effort = [
     "Type one line, say it, or paste their Instagram",
-    "Six real gifts from shops in your country in 3 seconds",
+    "Six real gifts for your person in 3 seconds",
     "No app, no account to start",
   ]
   const value = [
-    "A few taps build a profile of the person, and Majnu searches gifts for them",
-    "Wrapped in a page with your note, the gift code and your voice",
-    "Sent by link, WhatsApp or QR, and you see when they open it",
+    "Majnu builds their gift persona: who they are and what they love, from a few taps, their socials or photos",
+    "Six gifts researched for that persona in real shops: one picked, and why",
+    "Plus: wrap it in a page made for them, and see when they open it",
   ]
   return (
     <div className="pd-canvas pd-sky">
@@ -63,7 +64,7 @@ function Product() {
         <div className="sp-col">
           <Tag n={1} word="Product" />
           <h2 className="pd-title sp-title pd-in" style={at(1)}>
-            One sentence in. <span className="pd-rose">A gift made for them</span> out.
+            Find <span className="pd-rose">the right gift</span> for one person.
           </h2>
           <div className="sp-ev">
             <div className="pd-in" style={at(2)}>
@@ -87,11 +88,11 @@ function Product() {
         <div className="sp-phones pd-in" style={at(4)}>
           <div className="pd-phone sp-phone">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/pitch/step-2-gifts.webp" alt="Six gift ideas with photos, shops and prices; one is recommended" />
+            <img src="/pitch/step-1-tell.webp" alt="Majnu's message box: a birthday gift for my sister Lena, who climbs every weekend and loves old films" />
           </div>
           <div className="pd-phone sp-phone sp-phone--front">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/pitch/step-3-wrap.webp" alt="The gift page the recipient opens, with the gift and a note" />
+            <img src="/pitch/step-2-gifts.webp" alt="Gift ideas with photos, shops and prices; a bouldering card is recommended" />
           </div>
           <VideoPopup
             src="/pitch/majnu-app-demo.mp4"
@@ -106,10 +107,28 @@ function Product() {
   )
 }
 
+// Where the €150 went, as the developer reported it on 22 November. Dollar
+// amounts are shown as paid and converted at about €0.86 for the bar.
+const BUDGET = [
+  { name: "Ads", paid: "€10", euros: 10 },
+  { name: "Claude API", paid: "$20", euros: 17 },
+  { name: "Bright Data", paid: "$30", euros: 26 },
+  { name: "Daytona", paid: "$20", euros: 17 },
+  { name: "Domain", paid: "$10", euros: 9 },
+  { name: "Cloudflare", paid: "$5", euros: 4 },
+]
+const BUDGET_TOTAL = 150
+const spent = BUDGET.reduce((sum, item) => sum + item.euros, 0)
+const giftPot = BUDGET_TOTAL - spent
+
+function euros(value: number): string {
+  return value.toFixed(2)
+}
+
 function Market() {
   const channels = [
     {
-      name: "Organic social",
+      name: "Social, with €10 of ads",
       detail: "TikTok, Instagram and X from day one: five post designs, three reels and a 6-second ad, made with our own tools.",
     },
     {
@@ -118,7 +137,7 @@ function Market() {
     },
     {
       name: "Built into the product",
-      detail: "Every gift sent is a link. The person who opens it meets Majnu, and wants to send one back.",
+      detail: "Every gift sent is a link. The person who opens it meets Majnu, and can send one back.",
     },
   ]
   return (
@@ -126,7 +145,7 @@ function Market() {
       <div className="pd-pad sp-market">
         <Tag n={2} word="Market" />
         <h2 className="pd-title sp-title pd-in" style={at(1)}>
-          No ads. <span className="pd-rose">Every gift is the ad.</span>
+          €10 of ads. <span className="pd-rose">Every gift is the next ad.</span>
         </h2>
         <ul className="pd-trio sp-trio">
           {channels.map((channel, i) => (
@@ -137,12 +156,28 @@ function Market() {
           ))}
         </ul>
         <div className="sp-budget pd-in" style={at(5)}>
+          <div className="sp-budget-main">
+            <p className="sp-budget-head">
+              Our €150: <strong>≈ €{spent} spent</strong>, ≈ €{giftPot} for one real gift, drawn among our first 100 users
+            </p>
+            <ul className="sp-bar" aria-label="How the €150 is used">
+              {BUDGET.map((item) => (
+                <li key={item.name} className="sp-bar-part" style={{ flexGrow: item.euros }}>
+                  <span className="sp-bar-fill" aria-hidden="true" />
+                  <span className="sp-bar-name">{item.name}</span>
+                  <span className="sp-bar-paid">{item.paid}</span>
+                </li>
+              ))}
+              <li className="sp-bar-part sp-bar-part--gift" style={{ flexGrow: giftPot }}>
+                <span className="sp-bar-fill" aria-hidden="true" />
+                <span className="sp-bar-name">The giveaway gift</span>
+                <span className="sp-bar-paid">≈ €{giftPot}</span>
+              </li>
+            </ul>
+          </div>
           <p className="sp-budget-big">
-            €0 <span>on paid ads</span>
-          </p>
-          <p className="sp-budget-detail">
-            The €150 goes into the product people touch: AI ≈ €{Math.round(SNAPSHOT.aiEuros)} for {SNAPSHOT.aiCalls} model calls, hosting €5, images under €1. The rest
-            buys the launch giveaway: a real gift for one of our first 100 accounts.
+            €{euros(spent / SNAPSHOT.people)}
+            <span>per person, all costs in</span>
           </p>
         </div>
       </div>
@@ -152,9 +187,9 @@ function Market() {
 
 function Fit() {
   const stats = [
-    { value: String(SNAPSHOT.wrapped), label: "gifts wrapped", detail: `from ${SNAPSHOT.searches} searches` },
+    { value: String(SNAPSHOT.searches), label: "gift searches", detail: `${SNAPSHOT.researches} shop researches behind them` },
+    { value: String(SNAPSHOT.wrapped), label: "gifts sent", detail: "each wrapped for one person" },
     { value: `${openRate}%`, label: "opened", detail: `${SNAPSHOT.opened} of ${SNAPSHOT.wrapped} reached their person` },
-    { value: "3 s", label: "to six ideas", detail: "the first answer needs no AI call" },
     { value: `€${costPerGift}`, label: "AI cost per gift", detail: `a personalised wrapper sells for ${wrapper.price}` },
   ]
   return (
@@ -162,7 +197,7 @@ function Fit() {
       <div className="pd-pad sp-fit">
         <Tag n={3} word="Fit" />
         <h2 className="pd-title sp-title pd-in" style={at(1)}>
-          Our daily run: <span className="pd-rose">gifts wrapped and opened.</span>
+          Our daily run: <span className="pd-rose">the right gift found, sent and opened.</span>
         </h2>
         <ul className="sp-stats">
           {stats.map((stat, i) => (
@@ -207,21 +242,21 @@ export function shortPitchSlides(): DeckSlide[] {
       id: "product",
       label: "Product",
       notes:
-        "About 50 seconds. Majnu turns one sentence into a gift that feels made for one person. Effort: you type one line, say it, or paste their Instagram, and in three seconds you see six real gifts from shops in your country, no account needed. Value: tap Personalise, answer a few quick questions, and Majnu builds a profile and searches gifts for that person. You choose one, it is wrapped in a page with your note, the gift code and your voice, you send the link, and you see when they open it. (Click Watch the app if there is time.)",
+        "About 50 seconds. Majnu finds the right gift for one person. Effort: you type one line, say it, or paste their Instagram, and in three seconds you see six real gifts for your person, no account needed. Value: tap Personalise and Majnu builds a gift persona of them, who they are and what they love, from a few taps, their Instagram or LinkedIn, or a photo. Then it researches real shops for that persona and brings back six gifts, with the one it would pick and why. And as a plus, it wraps your gift in a page made for them, with your note and your voice, and you see when they open it. (Click Watch the app if there is time.)",
       content: <Product />,
     },
     {
       id: "market",
       label: "Market",
       notes:
-        "About 50 seconds. We spent nothing on ads. We posted on TikTok, Instagram and X from day one with five designs, three reels and a 6-second ad we made ourselves. Here in the room, the poster's QR code gives the first 100 people a free personalised wrapper with LAYLA100. And the product markets itself: every gift sent is a link, and the person who opens it meets Majnu. The €150 went into the product: about €10 of AI for 270 calls, €5 hosting, under €1 of images, and the rest buys a real gift for one of our first 100 accounts.",
+        "About 50 seconds. We reached people three ways. On TikTok, Instagram and X from day one, with five designs, three reels and a 6-second ad we made ourselves, and only €10 of paid ads. Here in the room, the poster's QR code gives the first 100 people a free personalised wrapper with LAYLA100. And the product markets itself: every gift sent is a link, and the person who opens it meets Majnu. Of our €150 we spent about €83: €10 ads, $20 Claude, $30 Bright Data for reading profiles, $20 Daytona so the first customers get their personalised designs free, $10 domain and $5 Cloudflare. The other €67 buys one real gift, drawn among our first 100 users. That is about €3 per person so far, everything included.",
       content: <Market />,
     },
     {
       id: "fit",
       label: "Fit",
       notes:
-        "About 50 seconds. Our metric is our daily run: gifts wrapped, and gifts opened. In our first 21 hours, 26 people used Majnu, 24 gifts were wrapped and two out of three were opened by the person they were for. The first ideas take three seconds, and the AI behind a gift costs about 42 cents, while a personalised wrapper sells for €2.99. Every opened gift brings someone new to Majnu: that is where product and marketing fit. Scan the code and send your first gift today.",
+        "About 50 seconds. Our metric is our daily run: the right gift found, sent and opened. In our first 21 hours, 26 people started 30 gift searches, with 45 shop researches behind them. 24 gifts were sent, and two out of three were opened by the person they were for. And the AI behind a gift costs about 42 cents, while a personalised wrapper sells for €2.99. Every opened gift brings someone new to Majnu: that is where product and marketing fit. Scan the code and find your next gift today.",
       content: <Fit />,
     },
   ]
