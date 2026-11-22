@@ -1,6 +1,7 @@
 // Wrapping a chosen gift (docs/plan.md, "Gift finder", step 5): the builder
-// writes a gift reveal, classic envelope or postcard around the option the
-// visitor chose, and it is saved as their letter, ready to share at /l/<slug>.
+// writes a gift reveal, 3D gift box, party pop box, classic envelope or
+// postcard around the option the visitor chose, and it is saved as their
+// letter, ready to share at /l/<slug>.
 //
 // The gift on the page is exactly the option that was shown: title,
 // description, link and price are copied from the stored options after the
@@ -14,7 +15,9 @@ import type { LetterContent } from "@/lib/letters/schema"
 import { createLetter, saveLetterContent } from "@/lib/letters/store"
 import type { FinderContext, GiftOption, WrapTemplateId } from "./events"
 
-export const WRAP_TEMPLATE_IDS = ["gift-reveal", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
+// What POST /api/finder/wrap accepts. The finder offers the same ids, in its
+// own order (WRAP_TEMPLATES in components/finder/finder-state.ts).
+export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
 
 export type WrapInput = {
   option: GiftOption
@@ -61,7 +64,10 @@ export function wrapBrief(input: Omit<WrapInput, "now" | "timezone">): string {
     input.senderName
       ? `Sender's name: ${input.senderName}.`
       : "Sender's name: not given. Do not invent one. As senderName, use how the recipient knows the sender when the relationship makes it clear without guessing, such as the word for \"your child\" for a parent; otherwise a short warm phrase such as \"someone who loves you\", in the same language.",
-    "Occasion: not given unless the sender's words name one; otherwise use a gentle general label such as \"Just because\", in the same language.",
+    input.templateId === "party-box"
+      ? "Occasion: not given unless the sender's words name one. They chose the party pop box, made for birthdays and celebrations, so otherwise use a short celebrating label such as \"Celebration\", in the same language."
+      : "Occasion: not given unless the sender's words name one; otherwise use a gentle general label such as \"Just because\", in the same language.",
+    "This is a gift page, not an invitation: leave event out.",
   ]
   if (input.note) {
     lines.push("What the sender wants to say, in their own words (use them):", "<note>", input.note, "</note>")
@@ -79,9 +85,13 @@ export function wrapBrief(input: Omit<WrapInput, "now" | "timezone">): string {
   return lines.join("\n")
 }
 
-// The built content with the chosen gift and nothing else in gifts.
+// The built content with the chosen gift and nothing else in gifts. The finder
+// never learns a date or a place, so any event is one the model made up (a
+// party box would show it as the party): it is dropped.
 export function withChosenGift(content: LetterContent, option: GiftOption): LetterContent {
-  return { ...content, gifts: [giftFromOption(option)] }
+  const { event, ...rest } = content
+  void event
+  return { ...rest, gifts: [giftFromOption(option)] }
 }
 
 // Builds, then creates and saves the letter. The route has already checked the
@@ -95,6 +105,8 @@ export async function wrapOption(input: WrapInput): Promise<{ letterId: string; 
     brief: wrapBrief(input),
     now: input.now,
     timezone: input.timezone,
+    // Every wrapped page is a gift, also on a party box, where one is optional.
+    giftRequired: true,
   })
   if (built.kind !== "letter") throw new Error(`The builder returned a ${built.kind} for ${input.templateId}`)
   const content = withChosenGift(built.content, input.option)

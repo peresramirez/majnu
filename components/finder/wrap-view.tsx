@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { ArrowLeft, Maximize2 } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
@@ -9,7 +9,8 @@ import { SharePanel } from "@/components/share/share-panel"
 import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
 import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import type { WrapTemplateId } from "@/lib/finder/events"
-import { WRAP_TEMPLATES, type WrapDetails, type WrapState } from "./finder-state"
+import { createClient } from "@/lib/supabase/client"
+import { WRAP_TEMPLATES, wrapAccount, type WrapAccount, type WrapDetails, type WrapState } from "./finder-state"
 import { ProductImage } from "./gift-option-card"
 import { PreviewDialog } from "./preview-dialog"
 import { focusRing, primaryButton, quietLink, textLink } from "./styles"
@@ -88,6 +89,68 @@ export function WrapFooter({ wrap }: { wrap: OpenWrap }) {
   )
 }
 
+// Whether the finder's session is a guest (anonymous) account or a signed-up
+// one: the session is the one the finder made or found before the first
+// search (anonymous-session.ts), read from this browser without a request.
+// Only the wording depends on it. Null until it is known, so a member never
+// sees the guest's sentence flash by.
+function useAccount(): WrapAccount | null {
+  const [account, setAccount] = useState<WrapAccount | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    createClient()
+      .auth.getSession()
+      .then(({ data }) => {
+        if (!cancelled) setAccount(wrapAccount(data.session?.user))
+      })
+      .catch(() => {
+        if (!cancelled) setAccount("guest")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return account
+}
+
+// Under the share panel: where the gift is kept, and calendars. A guest's
+// gift lives in this browser until they sign up; a member's is in My gifts.
+function KeepingNote({ account }: { account: WrapAccount | null }) {
+  if (!account) return null
+  if (account === "member") {
+    return (
+      <div className="space-y-2 text-sm leading-relaxed text-night-lilac">
+        <p>
+          This gift is in{" "}
+          <Link href="/dashboard/gifts" className={quietLink}>
+            My gifts
+          </Link>
+          , where you will see when they open it.
+        </p>
+        <p>
+          Want to send an advent calendar instead?{" "}
+          <Link href="/dashboard" className={quietLink}>
+            Make one in Letters &amp; invitations
+          </Link>
+          .
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-night-lilac">
+      <p>
+        This gift is kept in this browser.{" "}
+        <Link href="/signup" className={quietLink}>
+          Sign up to keep your gifts
+        </Link>{" "}
+        on any phone or computer.
+      </p>
+      <p>Want to send an advent calendar instead? Calendars need an account.</p>
+    </div>
+  )
+}
+
 // The page they will open, in a phone-shaped frame. A quiet moon shows until
 // it has loaded, so the frame is never an empty box.
 function PreviewFrame({ src }: { src: string }) {
@@ -118,6 +181,7 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
   const [enlarged, setEnlarged] = useState<string | null>(null)
   // Bumped when the voice note changes, so the preview reloads with it.
   const [noteVersion, setNoteVersion] = useState(0)
+  const account = useAccount()
   const busy = wrap.stage === "wrapping"
 
   function submit(e: FormEvent) {
@@ -145,16 +209,7 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
             <AudioNoteRecorder letterId={wrap.letterId} recipientName={details.recipientName || null} onChange={() => setNoteVersion((v) => v + 1)} />
             {/* The personalised wrapper: a guest is asked to create a free account first. */}
             <MakeItUnique letterId={wrap.letterId} />
-            <div className="space-y-2 text-sm leading-relaxed text-night-lilac">
-              <p>
-                This gift is kept in this browser.{" "}
-                <Link href="/signup" className={quietLink}>
-                  Sign up to keep your gifts
-                </Link>{" "}
-                on any phone or computer.
-              </p>
-              <p>Want to send an advent calendar instead? Calendars need an account.</p>
-            </div>
+            <KeepingNote account={account} />
           </div>
           <div className="flex flex-col md:col-start-1 md:row-start-1 md:min-h-0">
             <PreviewFrame key={src} src={src} />
