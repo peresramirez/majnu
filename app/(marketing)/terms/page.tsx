@@ -3,7 +3,7 @@ import Link from "next/link"
 import { LegalPage, ShortVersion } from "@/components/legal/legal-page"
 import { FINDER_LIMITS as finder } from "@/lib/finder/limits"
 import { operator } from "@/lib/legal"
-import { WRAPPER_CONSENT_TEXT, wrapper } from "@/lib/plans"
+import { TOP_UP_REFUND_TEXT, WRAPPER_CONSENT_TEXT, topUp, wrapper } from "@/lib/plans"
 
 export const metadata: Metadata = {
   title: "Terms",
@@ -127,6 +127,11 @@ export default function TermsPage() {
           If the design cannot be made, for example because the designer stops with an error or the page fails our
           safety checks, we refund your payment in full automatically. If a design we made is broken (it does not show
           your gift properly), email {mail} within 14 days and we refund it in full.
+        </li>
+        <li>
+          You can also buy {topUp.name.toLowerCase()} in advance on the Purchases tab, one to {topUp.maxQuantity} at a time,{" "}
+          {wrapper.price} each, and use one later on any gift instead of paying then. {TOP_UP_REFUND_TEXT} When you use one,
+          you agree as above that we start straight away. If that design cannot be made, the personalisation is given back.
         </li>
       </ul>
 

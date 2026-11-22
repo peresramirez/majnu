@@ -82,6 +82,38 @@ Since issue #72 a purchase can also be paid with a coupon code ([coupons.md](cou
 
 Since issue #85 a purchase can also be one of the day's three free designs ([free-designs.md](free-designs.md)): `POST /api/designs/free` records it as `paid` with `amount_cents = 0` and `free_day`, without consent, coupon or Stripe ids, and hands it to the same queue. A failed run marks it `failed` and gives the free design back (`return_free_design()`), never calling Stripe. The status card and the Purchases tab say "Free design, starting soon", "it didn't count" and "Free".
 
+### Personalisations bought in advance
+
+Since issue #96 a signed-in member can buy one to five personalisations at once on the Purchases tab and use one later on any gift, without going to Stripe again. The developer can also use it to test Stripe straight from the Purchases tab.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser (Purchases tab)
+  participant A as POST /api/credits/checkout
+  participant S as Stripe Checkout
+  participant W as Webhook / return page
+  participant D as Postgres (0013)
+  participant U as POST /api/credits/use
+  B->>A: { quantity: 3 }
+  A->>S: payment mode, STRIPE_PRICE_WRAPPER x 3, metadata {kind: credits, owner, quantity}
+  S-->>B: hosted page, then /dashboard/purchases?topup=cs_...
+  S->>W: checkout.session.completed (paid)
+  W->>S: retrieve session (line_items, charge)
+  W->>D: grant_design_credits(session id unique): once
+  B->>U: "Make it unique": { letterId, request, consent }
+  U->>D: claim_design_credit(): per-owner lock, balance >= 1, purchase paid, amount 0
+  U->>U: enqueueDesign (the same design job)
+  Note over D: a failed run: return_design_credit() marks it failed, the balance counts it again
+```
+
+- **Buying.** `POST /api/credits/checkout` ([`lib/billing/credits.ts`](../../lib/billing/credits.ts)) takes only `quantity`, an integer from 1 to 5; the owner is the session's user, and guests are refused (no email for the receipt). It opens Stripe-hosted Checkout in payment mode with one line item, the wrapper's Price (`STRIPE_PRICE_WRAPPER`) × quantity, and metadata `{kind: "credits", owner, quantity}` written on the server. Nothing is stored before payment.
+- **Granting.** The webhook routes sessions whose metadata says `kind: "credits"` to `applyPaidCreditsSession()`. It reads the session from Stripe with `line_items` expanded and takes the quantity from the one line item: it must be our Price, match the metadata, be 1 to 5, in euros and with a positive amount, and the session's `client_reference_id` must be the owner; otherwise nothing is granted. `grant_design_credits()` inserts one `credit_grants` row keyed by the Checkout Session id (unique, `on conflict do nothing`), so retries, duplicates and the return page grant once. The return URL is `/dashboard/purchases?topup={CHECKOUT_SESSION_ID}`; the page confirms that session on the server (it must be this member's top-up) before reading the balance, so the new personalisations show at once even before the webhook.
+- **The balance** is computed, not stored: bought (`quantity − refunded_quantity`) minus purchases with `paid_with_credit` that did not fail (`design_credits_balance()`).
+- **Using one.** The dialog offers, in order: today's free design, then "Use 1 of your N personalisations" (with its own consent box, `CREDIT_CONSENT_TEXT`), then a code, then paying for one. `POST /api/credits/use` calls `claim_design_credit()`, which takes a per-owner transaction lock (`pg_advisory_xact_lock`), checks the letter and that no design for it is on its way, counts the balance and records the purchase as `paid` with `amount_cents = 0`, `paid_with_credit` and the consent. Two claims at once queue on the lock; the second counts after the first commits.
+- **A failed run** goes through `giveBack()` → `return_design_credit()`: the purchase is marked `failed`, which by itself puts the personalisation back on the balance. Stripe is never called; the top-up's payment stands.
+- **Withdrawal.** Unused personalisations can be refunded within 14 days of buying by writing to hello@majnu.app (`TOP_UP_REFUND_TEXT` in [`lib/plans.ts`](../../lib/plans.ts), shown on the card and in the terms). The refund is done by hand: refund in Stripe, then raise `refunded_quantity` on the grant. Using one, with the consent to start at once, ends the right for that one.
+- **The Purchases tab** opens with a "Personalisations" card (free today on this network, "Yours: N", a stepper and "Buy, €X"), then lists each top-up with its receipt and each design as "Used 1 personalisation", "Free", "Code" or its price.
+
 ### Managed Payments
 
 The Stripe account has **Managed Payments** (Stripe as merchant of record) switched on by default. It refuses `custom_text` and requires a product tax code, and it would make Stripe the seller, with its own fees and VAT handling. The business plan and the terms make Majnu the seller with prices including VAT, so sessions pass `managed_payments: { enabled: false }`. Whether to use Managed Payments instead (it would take over VAT outside Germany) is the developer's decision; switching needs a product tax code on the wrapper product, removing that flag, and rewording the terms.
@@ -93,15 +125,17 @@ The Stripe account has **Managed Payments** (Stripe as merchant of record) switc
 | [`lib/plans.ts`](../../lib/plans.ts) | The free tier and the wrapper: names, €2.99 (`priceCents: 299`, `eur`), features, the consent sentence. The landing page, Purchases tab, dialog and terms read it |
 | [`lib/limits.ts`](../../lib/limits.ts) | The spending guard (100 letters a day, 200 chat turns per letter since 22 November) and "calendars need a real account". No plan gating |
 | [`lib/billing/service.ts`](../../lib/billing/service.ts) | Opening Checkout, the return confirmation, the webhook events |
+| [`lib/billing/credits.ts`](../../lib/billing/credits.ts) | Personalisations bought in advance: the top-up Checkout, granting once per paid session, the return confirmation, the balance, using one |
 | [`lib/billing/purchases.ts`](../../lib/billing/purchases.ts) | Reads and conditional writes of `purchases` |
 | [`lib/billing/refunds.ts`](../../lib/billing/refunds.ts) | The automatic refund |
 | [`lib/billing/queue.ts`](../../lib/billing/queue.ts), [`consumer.ts`](../../lib/billing/consumer.ts), [`fulfil.ts`](../../lib/billing/fulfil.ts) | Handing a paid purchase to the job, the queue consumer, the job |
 | [`lib/billing/view.ts`](../../lib/billing/view.ts) | What the browser is told about a purchase, and the status wording |
 | [`lib/billing/stripe.ts`](../../lib/billing/stripe.ts) | The Stripe client (API `2026-11-18.endive`, fetch HTTP client, 2 retries), the price id, webhook verification |
 | [`lib/billing/http.ts`](../../lib/billing/http.ts), [`next-path.ts`](../../lib/billing/next-path.ts) | Same-origin checks and redirects; the same-site `next` check |
-| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `GET /api/purchases`, `GET /api/purchases/[id]` | The routes |
-| [`components/wrapper/`](../../components/wrapper/) | The button and dialog, the status card |
-| `purchases` table ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql), `coupon_id` since [`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql)) | One row per wrapper, paid by card or with a coupon code |
+| `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `GET /api/purchases`, `GET /api/purchases/[id]`, `POST /api/credits/checkout`, `POST /api/credits/use` | The routes |
+| [`components/wrapper/`](../../components/wrapper/) | The button and dialog, the status card, the Purchases tab's "Personalisations" card |
+| `purchases` table ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql), `coupon_id` since [`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql)) | One row per wrapper, paid by card, with a coupon code, a free design or (`paid_with_credit`, since [`0013_design_credits.sql`](../../supabase/migrations/0013_design_credits.sql)) a personalisation bought in advance |
+| `credit_grants` table ([`0013_design_credits.sql`](../../supabase/migrations/0013_design_credits.sql)) | One row per paid top-up, unique by Checkout Session |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET` | Server-only Worker secrets (`npm run cf:secrets`) |
 | `DESIGN_QUEUE` binding, queues `majnu-designs` and `majnu-designs-dlq` | [`wrangler.jsonc`](../../wrangler.jsonc); `scripts/deploy.sh` creates the queues if missing |
 
@@ -110,13 +144,15 @@ The test-mode product is "Majnu personalised wrapper" (`prod_VfiOBakdbyQU8Z`) wi
 ## Data and privacy
 
 - **`purchases`** holds the owner, the letter (set to null if the letter is deleted, so the record of the payment stays), the request, the consent time and sentence, the amount and currency, the Stripe session, payment intent and refund ids, the receipt URL, the design, the status and its timestamps, and an internal `failure_reason`. Row-level security is on; owners read their own rows through a column grant that leaves `failure_reason` out (so `select *` fails for them); anon has nothing; only the service role writes. Rows are deleted with the user.
-- **Stripe receives** the sender's email and the purchase, letter and user ids as metadata. We never see a card number. Stripe emails the receipt.
+- **`credit_grants`** holds the owner, the quantity and any refunded quantity, the amount, the Stripe session and payment intent ids and the receipt URL. Owners read their own rows through a column grant without the Stripe ids; only the service role writes, through `grant_design_credits()`.
+- **Stripe receives** the sender's email and the purchase, letter and user ids as metadata (for a top-up: the user id and the quantity). We never see a card number. Stripe emails the receipt.
 - The request and the letter go to Daytona and Anthropic to make the design ([daytona-redesign.md](daytona-redesign.md)). The privacy page names Stripe and Daytona.
 
 ## Limits and costs
 
 - €2.99 per wrapper including VAT; Stripe's fee is about €0.29 on a standard EU card; one run costs about $0.26 in model use (capped at $3) plus sandbox time ([business-plan.md](../business-plan.md#unit-economics-estimates-to-be-replaced-by-measured-numbers)).
 - One paid run per letter at a time; Checkout Sessions expire after an hour.
+- A top-up is 1 to 5 personalisations (€2.99 to €14.95); Stripe's fee applies once per top-up, so buying several at once costs less in fees than paying one by one.
 - The design request is at most 500 characters (the job accepts 2,000).
 - **Fallback keys** (issue #67, [provider-fallbacks.md](provider-fallbacks.md)): the design job starts its sandbox with `DAYTONA_API_KEY_FALLBACK` when Daytona refuses the primary for its key, quota or billing. Claude Code gets `ANTHROPIC_API_KEY_FALLBACK` when a free token count shows the primary refused (as on 22 November, when the tier threshold stopped every run). A run on a fallback key reserves $4.50 (Anthropic) and about $0.06 (Daytona) against that key's $150 monthly cap before the sandbox starts, and settles with Claude Code's reported cost and the sandbox's running time. If no key can be used, or a cap is reached, the run fails before any sandbox starts and the purchase is refunded as for any failed run.
 
@@ -129,7 +165,12 @@ The test-mode product is "Majnu personalised wrapper" (`prod_VfiOBakdbyQU8Z`) wi
 - **The other screens:** "Being designed" and "Ready" (with the gift page showing a stored design) were checked with a temporary row and a stand-in design, removed afterwards; the guest dialog with a mocked account state, since a guest session needs Turnstile.
 - **Not verified:** a successful real design run after payment (the Anthropic key is over its usage limit until it is raised); the webhook arriving from Stripe itself at a deployed Worker with the new code; the queue consumer on Cloudflare (it runs only after a deploy); delayed payment methods; live mode.
 
+- **Personalisations bought in advance (issue #96):** [`credits.test.ts`](../../tests/unit/lib/billing/credits.test.ts) (the session's parameters, refused quantities and guests, granting once from the webhook, retries and the return page, refusing a session whose line item, metadata, currency or owner disagree, delayed payments, using one with the server's consent text, none left, in progress, another owner's letter, giving it back when the queue fails and when the design run fails, never calling Stripe) and [`routes.test.ts`](../../tests/unit/app/api/credits/routes.test.ts). Migration `0013` on PGlite (grants and RLS for each role, idempotent grant, balance, claim refusing at 0, give-back once, the constraints, a refund by hand) and on a real Postgres 18 (embedded-postgres) for concurrency: with a balance of 1, a claim held open for a second makes a second claim wait for the lock and get `none_left`; 18 claims at once with a balance of 3 give exactly 3; two identical grants at once grant once. The Purchases card and the dialog were checked in a browser at 375 and 1440 px with stand-in data (see the pull request).
+- **Not verified for #96:** a real top-up through Stripe test mode end to end (the webhook endpoint in test mode points at production); the migration on the Supabase project (the lead applies it).
+
 ## Open questions
+
+- **Refunding unused personalisations** is by hand for now (Stripe refund, then `refunded_quantity`). A button on the Purchases tab could do both once it is needed.
 
 - **Managed Payments** (above): keep it off, or let Stripe be the merchant of record and handle VAT.
 - **The confirmation on a durable medium** that § 356 (5) BGB also asks for: the consent is stored with the purchase, but Stripe's receipt does not repeat it. Options: Checkout's post-payment invoice (`invoice_creation` with the consent in the footer, a small Stripe fee) or our own email.
