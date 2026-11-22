@@ -17,7 +17,7 @@ flowchart TD
   send -->|"open an example"| demo["/l/demo-letter, /l/demo-gift, /l/demo-calendar"]
   hero -->|"Create a gift"| signin["/signin"]
   pricing -->|"Find a gift"| hero
-  landing --> footer["Footer: Privacy, Terms, Impressum"]
+  landing --> footer["Footer: Privacy, Terms, Impressum,<br/>Follow Majnu (TikTok, X, Instagram)"]
 ```
 
 The page, top to bottom ([`app/(marketing)/page.tsx`](../../app/(marketing)/page.tsx)):
@@ -28,7 +28,7 @@ The page, top to bottom ([`app/(marketing)/page.tsx`](../../app/(marketing)/page
 4. **What you can send:** gift, letter, invitation and advent calendar, with their plan, and three examples drawn with `<TemplateCard>` that open the demo pages. The demo slugs always resolve to the same fixtures as the thumbnails ([templates-and-gift-pages.md](templates-and-gift-pages.md#demo-slugs)).
 5. **Pricing:** two cards read from [`lib/plans.ts`](../../lib/plans.ts): Free (€0, everything that makes Majnu useful) and the personalised wrapper (€2.99 once, for one gift, bought with "Make it unique" on a wrapped gift; [billing.md](billing.md)). Prices include VAT; nothing renews.
 6. **Questions:** whether you need an account, how Majnu gets to know the person (what you tell it and share, their public Instagram, TikTok or LinkedIn, a photo or a document, turned into a short profile, then one round of quick questions answered with a tap), where the six ideas come from, location, whether the recipient needs an account, who can see a gift, what Majnu costs and what happens when you buy a personalised wrapper.
-7. A closing call to action and the site footer ([`site-footer.tsx`](../../components/landing/site-footer.tsx)) with Privacy, Terms and Impressum.
+7. A closing call to action and the site footer ([`site-footer.tsx`](../../components/landing/site-footer.tsx)) with Privacy, Terms and Impressum, and a "Follow Majnu" row linking to Majnu's accounts: [TikTok](https://www.tiktok.com/@majnu.app) (@majnu.app), [X](https://x.com/Majnuapp) (@Majnuapp) and [Instagram](https://www.instagram.com/majnu.app) (@majnu.app). The accounts and their icons live in one place, [`components/brand/social-links.tsx`](../../components/brand/social-links.tsx): the platforms' glyphs copied as SVG paths from simple-icons (CC0, not a dependency), drawn in lilac haze and petal white on hover, never the platform colours, each a real link opening in a new tab (`noopener noreferrer`) with a 44 px tap area, a rose-gold focus ring and a name such as "Majnu on TikTok". `tests/unit/components/brand/social-links.test.ts` pins the three addresses. The signed-in app has no footer, so the row is not there.
 
 Sections below the fold play in as they scroll into view ([`reveal.tsx`](../../components/landing/reveal.tsx)). Content is hidden only after hydration and only while still below the fold, so with reduced motion, or without JavaScript, everything stays visible.
 
@@ -135,6 +135,7 @@ flowchart LR
 |---|---|
 | [`app/(marketing)/page.tsx`](../../app/(marketing)/page.tsx) | The landing page |
 | [`components/landing/`](../../components/landing/) | The scroll scene, How it works with its steps, the reveal effect and the site footer |
+| [`components/brand/social-links.tsx`](../../components/brand/social-links.tsx) | Majnu's TikTok, X and Instagram accounts with their icons: the footer's "Follow Majnu" row, and the data the pitch deck's last slide uses |
 | [`components/brand/`](../../components/brand/) | The wordmark and the moon-phase drawing used across the site and the templates |
 | [`app/(auth)/layout.tsx`](../../app/(auth)/layout.tsx), [`app/(auth)/signin/page.tsx`](../../app/(auth)/signin/page.tsx), [`app/(auth)/signup/page.tsx`](../../app/(auth)/signup/page.tsx) | Sign-in and sign-up beside the scene, by email and password or Google |
 | [`app/(marketing)/impressum/page.tsx`](../../app/(marketing)/impressum/page.tsx), [`app/(marketing)/privacy/page.tsx`](../../app/(marketing)/privacy/page.tsx), [`app/(marketing)/terms/page.tsx`](../../app/(marketing)/terms/page.tsx), [`lib/legal.ts`](../../lib/legal.ts) | The legal pages and the operator's details |
@@ -159,6 +160,7 @@ flowchart LR
 ## How it was checked
 
 - How it works as a pinned story (issue #73, 22 November): see [How it was checked: the pinned story](#how-it-was-checked-the-pinned-story) below.
+- Follow Majnu row (22 November): the three addresses are pinned by a unit test; in the isolated browser at 375 and 1440 px wide the three links are 44 × 44 px, open in a new tab with `noopener noreferrer`, are lilac at rest, take the rose-gold ring on Tab, and the page does not scroll sideways. The final pitch slide's handles were checked the same way (see [pitch-deck.md](pitch-deck.md)).
 - Apart from that, no unit tests cover the landing page itself. The `TemplateCard` data has a test, and the demo slugs are tested to point at templates of the right kind ([`fixtures.test.ts`](../../tests/unit/lib/letters/fixtures.test.ts)).
 - Browser checks of the page, the scene and the legal pages (375 px and 1440 px, keyboard, reduced motion) are part of every task's verification, but their results are not recorded in the repository. The screenshots in `media/` come from the starter template and do not show Majnu.
 - Self-hosted fonts (21 November): every font file was compared glyph by glyph with the file Google Fonts serves for the same request. Outlines and advance widths match within 1.3 font units (about 0.02 px at 16 px), the OpenType features are the same, and no character in Google's advertised ranges is missing. In a browser, the landing page, `/signin`, `/l/demo-letter` (opened) and `/dev/templates` laid out identically to majnu.app at 375 px and 1440 px (the same text widths and heights per font; one Cormorant line on the landing page 1 px narrower), and the network panel showed fonts only from our own domain. `npm run build` passed with `fonts.googleapis.com` and `fonts.gstatic.com` unreachable.

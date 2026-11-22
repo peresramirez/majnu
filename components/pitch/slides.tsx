@@ -10,6 +10,7 @@ import "server-only"
 import type { CSSProperties } from "react"
 import { Fingerprint, Layers, Lightbulb } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import { SOCIAL_ACCOUNTS, SocialIcon } from "@/components/brand/social-links"
 // The limits and the price come from the code that applies them, so the
 // slide stays true when they change.
 import { FINDER_LIMITS as finder } from "@/lib/finder/limits"
@@ -340,6 +341,16 @@ function TheName() {
           <div>
             <p className="pd-try-label">Scan to try it</p>
             <p className="pd-try-url">majnu.app</p>
+            <ul className="pd-socials">
+              {SOCIAL_ACCOUNTS.map(({ platform, handle, href, path }) => (
+                <li key={platform}>
+                  <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Majnu on ${platform}, ${handle}`}>
+                    <SocialIcon path={path} className="pd-social-icon" />
+                    <span>{handle}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
         <p className="pd-thanks pd-in" style={after(6000)}>
