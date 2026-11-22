@@ -1,12 +1,14 @@
 // POST /api/finder/wrap: wraps one of the options a finder session showed in a
-// gift reveal, classic envelope or postcard, saved as the visitor's letter.
-// Answers WrapResponse JSON (lib/finder/events.ts): { letterId, slug } on
-// success, the page then lives at /l/<slug>.
+// gift reveal, 3D gift box, party pop box, classic envelope or postcard
+// (WRAP_TEMPLATE_IDS), saved as the visitor's letter. Answers WrapResponse
+// JSON (lib/finder/events.ts): { letterId, slug } on success, the page then
+// lives at /l/<slug>.
 //
 // Errors: 401 { "error": "session_required" }; otherwise { error } with a
-// short message in the visitor's language: 400 bad body, 404 session or option
-// not found, 429 the daily letter limit, 403 the free plan's monthly gifts
-// (only with MAJNU_BILLING=on), 422 the builder declined, 500 anything else.
+// short message in the visitor's language: 400 bad body or another template,
+// 404 session or option not found, 429 the daily letter limit, 403 if the
+// new-gift gate refuses (it never does today: new gifts are free, see
+// lib/limits.ts), 422 the builder declined, 500 anything else.
 import * as z from "zod/v4"
 import { BuilderRefusal } from "@/lib/agents/builder"
 import { describeError } from "@/lib/agents/errors"
@@ -55,7 +57,7 @@ export async function POST(request: Request): Promise<Response> {
     const option = session.lastOptions?.options.find((o) => o.id === body.data.optionId)
     if (!option) return respond(404, { error: texts.requests.optionNotFound })
 
-    // The spending guard for letters, and the free plan's monthly gifts.
+    // The spending guard for letters, then the new-gift gate (open to everyone).
     const letters = await canCreateLetter()
     if (!letters.ok) return respond(429, { error: letters.message })
     const gift = await canUseFeature("new_gift")

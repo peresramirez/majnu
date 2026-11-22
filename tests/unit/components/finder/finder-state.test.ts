@@ -8,6 +8,7 @@ import {
   initialFinderState,
   latestOptionsIndex,
   statusLit,
+  wrapAccount,
   wrapReducer,
   type FinderAction,
   type FinderState,
@@ -148,7 +149,12 @@ describe("wrapReducer", () => {
 
   it("starts on the first gift template", () => {
     expect(chosen).toEqual({ stage: "choose", option: option("a"), templateId: WRAP_TEMPLATES[0] })
-    expect(WRAP_TEMPLATES).toEqual(["gift-reveal", "classic-envelope", "postcard"])
+  })
+
+  it("offers the gift templates first, the 3D gift box and the party box among them, then the letters", () => {
+    expect(WRAP_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"])
+    expect(wrapReducer(chosen, { type: "template", templateId: "gift-box-3d" })).toMatchObject({ stage: "choose", templateId: "gift-box-3d" })
+    expect(wrapReducer(chosen, { type: "template", templateId: "party-box" })).toMatchObject({ stage: "choose", templateId: "party-box" })
   })
 
   it("changes template only while choosing", () => {
@@ -185,5 +191,15 @@ describe("wrapReducer", () => {
 
   it("closes on back", () => {
     expect(wrapReducer(chosen, { type: "back" })).toEqual(closed)
+  })
+})
+
+describe("wrapAccount", () => {
+  it("tells a guest (anonymous account, or no session yet) from a member", () => {
+    expect(wrapAccount({ is_anonymous: true })).toBe("guest")
+    expect(wrapAccount(null)).toBe("guest")
+    expect(wrapAccount(undefined)).toBe("guest")
+    expect(wrapAccount({ is_anonymous: false })).toBe("member")
+    expect(wrapAccount({})).toBe("member")
   })
 })
