@@ -37,6 +37,8 @@ describe("parseChatEvent", () => {
       { type: "templates", ids: ["classic-envelope", "postcard"] },
       { type: "gifts", ideas: [{ title: "Spa day", reason: "She loves saunas", price: "€90" }] },
       { type: "preview", letterId: "abc", kind: "letter", templateId: "classic-envelope" },
+      { type: "draft", letterId: "abc", kind: "letter", templateId: "classic-envelope", content: { headline: "For you", body: ["One"] } },
+      { type: "draft", letterId: "abc", kind: "calendar", templateId: "countdown", content: { doors: [{ title: "Day one" }] } },
       { type: "limit", reason: "full_moon_only", message: "Advent calendars are part of Full moon." },
       { type: "refusal", message: "Try again" },
       { type: "error", message: "Something went wrong" },
@@ -53,6 +55,9 @@ describe("parseChatEvent", () => {
     expect(parseChatEvent('{"type":"letter","letterId":""}')).toBeNull()
     expect(parseChatEvent('{"type":"templates","ids":"classic-envelope"}')).toBeNull()
     expect(parseChatEvent('{"type":"gifts","ideas":[{"reason":"no title"}]}')).toBeNull()
+    expect(parseChatEvent('{"type":"draft","letterId":"abc","kind":"letter","templateId":"postcard"}')).toBeNull()
+    expect(parseChatEvent('{"type":"draft","letterId":"abc","kind":"poem","templateId":"postcard","content":{}}')).toBeNull()
+    expect(parseChatEvent('{"type":"draft","letterId":"abc","kind":"letter","templateId":"postcard","content":["x"]}')).toBeNull()
   })
 
   it("keeps a refusal or error without a message, so the UI can use its own words", () => {

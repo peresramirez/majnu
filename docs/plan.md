@@ -116,7 +116,7 @@ These files are written together during setup. After that, changes are additive 
 - `lib/letters/templates.ts`: template metadata only (`id`, `kind`, `name`, `description`, `bestFor`). It imports no components, so a broken template cannot take down the chat route.
 - `lib/letters/fixtures.ts`: one realistic example per template.
 - `lib/letters/store.ts`: `getPublicLetter(slug)` and `toPublicView(letter, now, { ownerPreview })`. `getPublicLetter` always resolves the demo slugs `demo-letter`, `demo-gift` and `demo-calendar` to fixtures, so templates can be built and shown without the database.
-- `lib/agents/events.ts`: the newline-delimited JSON events `POST /api/chat` streams to the chat UI, and the request body.
+- `lib/agents/events.ts`: the newline-delimited JSON events `POST /api/chat` streams to the chat UI, and the request body. The `draft` event (live drafts, issue #30) was added after setup.
 
 Template ids, fixed now: letters `classic-envelope`, `wedding-invite`, `party-invite`, `gift-reveal`, `postcard`; calendars `advent-classic` (24 doors) and `countdown` (any number of days, any occasion).
 
@@ -124,14 +124,16 @@ Template ids, fixed now: letters `classic-envelope`, `wedding-invite`, `party-in
 
 All agent code runs on the server in `lib/agents/`.
 
-- **Main agent** (`main.ts`): leads the conversation in steps: who the letter is for and the occasion → template → message and details (date and place for invitations, gifts) → build → share → offer a calendar. The template list from `templates.ts` goes into its system prompt, with top-level prompt caching. Its tool loop is written by hand on `client.beta.messages.stream()` in `POST /api/chat`, not on `toolRunner`: in SDK 1.12.0 the runner keeps server-side threads and appends every reply itself, while the route must decide what is stored (refused replies are left out; a tool call cut off at `max_tokens` gets an error result so the history stays valid). It streams the newline-delimited events defined in `lib/agents/events.ts`; `components/create/use-letter-chat.ts` turns them into chat state. Replies are plain text with paragraphs and **bold** only, because the chat renders nothing else.
+- **Main agent** (`main.ts`): leads the conversation in steps, and the preview grows with it (issue #30, decided 22 November): who the letter is for and the occasion → a **first draft in that same turn**, with the template that fits best, and template cards to switch → message and details, with an `edit_letter` in the same turn for every message that adds a fact (a name, a memory, a gift, a date, a place) → share → offer a calendar. The first draft may come before the names; the builder then writes the recipient as the sender calls them ("Sister") and leaves the sender's name empty until they give it. The template list from `templates.ts` goes into its system prompt, with top-level prompt caching. Its tool loop is written by hand on `client.beta.messages.stream()` in `POST /api/chat`, not on `toolRunner`: in SDK 1.12.0 the runner keeps server-side threads and appends every reply itself, while the route must decide what is stored (refused replies are left out; a tool call cut off at `max_tokens` gets an error result so the history stays valid). It streams the newline-delimited events defined in `lib/agents/events.ts`; `components/create/use-letter-chat.ts` turns them into chat state. Replies are plain text with paragraphs and **bold** only, because the chat renders nothing else.
 - **Tools the main agent can call:**
   - `suggest_templates`: the chat shows clickable template cards; a click sends an ordinary message.
   - `research_gifts`: runs the research sub-agent.
-  - `build_letter`: runs the builder sub-agent, saves the result, and the preview reloads.
-  - `edit_letter`: the builder again, given the current content and the requested change.
+  - `build_letter`: runs the builder sub-agent; while it writes, the create page shows the draft (below); then it saves the result and the preview reloads.
+  - `edit_letter`: the builder again, given the current content and the requested change; its draft is shown over the current content.
+  - At most 2 builder runs per sender message (`MAX_BUILDS_PER_TURN` in `tools.ts`), to bound what an edit after every message spends.
 - **Research sub-agent** (`research.ts`): its own tool loop with Anthropic's web search (`web_search_20260209`, at most 4 searches) and a `report_gifts` tool it calls once at the end with 3–5 ideas (title, reason, price, link). When `TAVILY_API_KEY` is set, the search runs on Tavily instead, through a client tool `search_web` (`lib/agents/tavily.ts`: 5 trimmed results per search, an 8-second timeout, a failed search returned to the model as an error) with the same caps, and Anthropic's web search remains the fallback when the key is empty.
-- **Builder sub-agent** (`builder.ts`): one `client.beta.messages.parse` call with `betaZodOutputFormat` of the content schema (the beta namespace, because `fallbacks` and `block_binding` exist only there), validated again with zod and retried once. Today's date and the sender's timezone (Europe/Berlin when the browser sends none) go in the user message.
+- **Builder sub-agent** (`builder.ts`): one streamed `client.beta.messages.stream` call with `betaZodOutputFormat` of the content schema in `output_config.format` (the beta namespace, because `fallbacks` and `block_binding` exist only there). The SDK parses and validates the final message as `parse()` did; the result is then checked against the template, and retried once, exactly as before. Today's date and the sender's timezone (Europe/Berlin when the browser sends none) go in the user message.
+- **Live drafts** (`draft.ts`, issue #30): while the builder streams, its unfinished JSON is parsed tolerantly, cut down to what the draft view shows (no gift codes, links, images or gift list), merged over the current content when editing, and sent as a `draft` event at most four times a second. The create page shows it in a draft sheet in the preview's frame (`components/create/draft-sheet.tsx`) until the saved page has reloaded. Drafts are never stored and never reach a template or `/l/<slug>`.
 
 Rules the current models impose:
 
@@ -143,7 +145,7 @@ Rules the current models impose:
 
 Verified live on `claude-opus-5-5` (21 November): `output_config.effort`, `block_binding: drop_block` (stored history replayed after a JSON round trip with no input transformations), `fallbacks: "default"` (accepted; an actual fallback was not triggered), effort and format sharing one `output_config`, and `web_search_20260209` with `max_uses: 4`. Re-run the manual check after changing a prompt or the SDK: `npx vitest run --config scripts/agent-smoke.config.mts` (about 20 short paid requests).
 
-Limits in the chat route on top of the spending guard: messages over 4,000 characters are refused, one message triggers at most 6 model requests, and research stops after 4 searches and 4 requests.
+Limits in the chat route on top of the spending guard: messages over 4,000 characters are refused, one message triggers at most 6 main-agent requests and at most 2 builder runs (each up to 2 requests), and research stops after 4 searches and 4 requests.
 
 Not tonight: Claude Managed Agents, where Anthropic hosts the agent loop and a sandbox. It is in beta and adds session start-up to a chat that has to feel instant.
 

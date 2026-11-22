@@ -237,7 +237,7 @@ export function GiftBox3D({ content, mood, claimed }: { content: LetterContent; 
               type="button"
               onClick={() => void open()}
               disabled={stage !== "closed"}
-              aria-label={`${party ? "Pop open" : "Open"} the gift from ${content.senderName}`}
+              aria-label={`${party ? "Pop open" : "Open"} the gift${content.senderName?.trim() ? ` from ${content.senderName}` : ""}`}
               className={`pointer-events-auto rounded-full bg-[var(--accent)] px-7 py-3.5 text-[15px] font-semibold text-[var(--accent-ink)] shadow-[0_10px_30px_-12px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-300 ease-calm hover:-translate-y-px ${
                 stage !== "closed" ? "opacity-0" : ""
               } ${focusRing}`}

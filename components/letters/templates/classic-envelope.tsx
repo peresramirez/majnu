@@ -169,7 +169,7 @@ export function ClassicEnvelope({ content }: { content: LetterContent }) {
                 type="button"
                 onClick={open}
                 disabled={stage !== "sealed"}
-                aria-label={`Open the letter from ${content.senderName}`}
+                aria-label={content.senderName?.trim() ? `Open the letter from ${content.senderName}` : "Open the letter"}
                 className={`env-seal absolute left-1/2 top-[48%] h-[70px] w-[70px] -translate-x-1/2 -translate-y-1/2 rounded-full ${focusRing}`}
                 style={{ zIndex: 5 }}
               >

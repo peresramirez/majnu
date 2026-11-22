@@ -1,14 +1,18 @@
-// Builder sub-agent (issue #7): one structured-output call that turns a brief
-// from the main agent into the content of a letter or calendar, validated
-// against the contract in lib/letters/schema.ts. Retries once when the output
-// does not fit the template.
+// Builder sub-agent (issue #7): one streamed structured-output call that turns
+// a brief from the main agent into the content of a letter or calendar,
+// validated against the contract in lib/letters/schema.ts. Retries once when
+// the output does not fit the template. While it streams, the text goes to an
+// optional draft sink, so the create page can show the page being written
+// (issue #30, lib/agents/draft.ts); only the validated result is returned.
 import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod"
+import type { BetaMessageStream } from "@anthropic-ai/sdk/lib/BetaMessageStream"
 import { CalendarContent, LetterContent, type LetterKind, type TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { AGENT_EFFORT, agentRequestBase, getClient } from "./client"
 import { describeToday, isValidTimezone } from "./context"
+import type { DraftSink } from "./draft"
 import { httpsOnly } from "./safe-url"
 
 export type BuiltContent =
@@ -23,6 +27,9 @@ export type BuildInput = {
   // The page is given as a gift, so it must carry one even on a template where
   // a gift is optional (party-box). The finder's wrap step sets it.
   giftRequired?: boolean
+  // Receives the streamed JSON text for live drafts. Optional: the finder's
+  // wrap step builds without one.
+  draft?: DraftSink
 } & (
   | { mode: "build"; brief: string }
   | { mode: "edit"; current: LetterContent | CalendarContent; change: string }
@@ -49,6 +56,7 @@ export const BUILDER_SYSTEM_PROMPT = `You write the content of a personal gift p
 
 Writing
 - Write in the language of the sender's own words in the brief (the brief itself may be in English). Keep names exactly as given.
+- An early draft may come before the names: if the brief says a name is not known yet, write recipientName the way the sender calls the person ("my sister" becomes "Sister") and leave senderName empty.
 - Write as the sender, in the first person, to the recipient. Warm, specific and personal: use the details in the brief. Plain words, short sentences, nothing generic or flowery.
 - Use the sender's own phrases where they gave them. Do not invent memories or facts about their lives. When the brief is thin, stay simple and sincere rather than making things up.
 - No exclamation marks unless the sender used them. No emoji unless the sender asked.
@@ -78,6 +86,8 @@ Editing
 - When you are given the current content and a change, apply the change and keep everything else exactly as it is, unless the change requires otherwise. Return the whole content.`
 
 const MAX_TOKENS = 16000
+
+const CUT_OFF = "the answer was cut off; keep the messages shorter"
 
 // The gift list on an invitation (issue #35) is written only by the
 // update_gift_list tool, which gives each gift a stable id that guests' claims
@@ -205,18 +215,37 @@ export async function buildContent(input: BuildInput): Promise<BuiltContent> {
 
   let problems: string[] | null = null
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) input.draft?.restart()
     let parsed: unknown
+    // Read from the stream before the final message is parsed, so a refusal or
+    // a cut-off is told apart from JSON that does not fit, even when parsing fails.
+    let stopReason: string | null = null
     try {
-      const message = await getClient().beta.messages.parse({
+      // Streamed with the same structured output format as a parse() call: the
+      // SDK parses and validates the final message against the zod schema.
+      const stream: BetaMessageStream<unknown> = getClient().beta.messages.stream({
         ...agentRequestBase(),
         max_tokens: MAX_TOKENS,
         system: BUILDER_SYSTEM_PROMPT,
         output_config: { effort: AGENT_EFFORT, format },
         messages: [{ role: "user", content: userPrompt(input, problems) }],
       })
-      if (message.stop_reason === "refusal") throw new BuilderRefusal()
-      if (message.stop_reason === "max_tokens") {
-        problems = ["the answer was cut off; keep the messages shorter"]
+      let textBlocks = 0
+      for await (const event of stream) {
+        if (event.type === "content_block_start" && event.content_block.type === "text") {
+          // A fallback model starts its answer again in a new text block.
+          if (textBlocks++ > 0) input.draft?.restart()
+        } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+          input.draft?.push(event.delta.text)
+        } else if (event.type === "message_delta" && event.delta.stop_reason) {
+          stopReason = event.delta.stop_reason
+        }
+      }
+      const message = await stream.finalMessage()
+      stopReason = message.stop_reason ?? stopReason
+      if (stopReason === "refusal") throw new BuilderRefusal()
+      if (stopReason === "max_tokens") {
+        problems = [CUT_OFF]
         continue
       }
       parsed = message.parsed_output
@@ -225,8 +254,12 @@ export async function buildContent(input: BuildInput): Promise<BuiltContent> {
       // Anything else here is output that failed JSON or schema validation.
       if (error instanceof Anthropic.APIError || error instanceof BuilderRefusal) throw error
       if (!(error instanceof Anthropic.AnthropicError)) throw error
-      problems = ["the JSON did not match the schema"]
+      if (stopReason === "refusal") throw new BuilderRefusal()
+      problems = [stopReason === "max_tokens" ? CUT_OFF : "the JSON did not match the schema"]
       continue
+    } finally {
+      // Whatever arrived since the last draft, so the screen ends on the full text.
+      input.draft?.flush()
     }
     if (!parsed) {
       problems = ["there was no JSON in the answer"]

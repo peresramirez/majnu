@@ -42,6 +42,16 @@ export function parseChatEvent(line: string): ChatEvent | null {
       return isArray(e.ideas) && e.ideas.every((idea) => !!idea && typeof idea === "object" && isString((idea as { title?: unknown }).title))
         ? (e as ChatEvent)
         : null
+    case "draft":
+      return isString(e.letterId) &&
+        e.letterId &&
+        (e.kind === "letter" || e.kind === "calendar") &&
+        isString(e.templateId) &&
+        !!e.content &&
+        typeof e.content === "object" &&
+        !isArray(e.content)
+        ? (e as ChatEvent)
+        : null
     case "preview":
       return isString(e.letterId) && e.letterId && isString(e.kind) && isString(e.templateId) ? (e as ChatEvent) : null
     case "limit":

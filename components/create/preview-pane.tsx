@@ -10,11 +10,18 @@ import { SharePanel } from "@/components/share/share-panel"
 import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
 import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import { site } from "@/lib/site"
+import { DraftSheet } from "./draft-sheet"
+import type { DraftView } from "./draft-state"
 
 // The gift as the recipient will see it, at phone width, with the share panel
 // under it and "Make it unique" (the personalised wrapper, €2.99 once) under
 // that. Beside the chat from lg up; on phones it replaces the chat while
 // "Preview" is on.
+//
+// While Majnu writes (issue #30), the draft sheet takes the frame's place: in
+// place of the empty state for a new gift, and over the preview while it is
+// changed. It stays until the reloaded preview of the saved content has loaded,
+// so the frame is never blank and never shows an unsaved draft as the page.
 export function PreviewPane({
   letterId,
   slug,
@@ -22,6 +29,8 @@ export function PreviewPane({
   hasContent,
   version,
   recipientName,
+  draft,
+  onPreviewShown,
   onBack,
   className = "",
 }: {
@@ -32,6 +41,9 @@ export function PreviewPane({
   hasContent: boolean
   version: number
   recipientName: string | null
+  draft: DraftView | null
+  // The preview of the saved content has loaded, so a saved draft can go.
+  onPreviewShown: () => void
   onBack: () => void
   className?: string
 }) {
@@ -69,7 +81,13 @@ export function PreviewPane({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 lg:px-6">
         {src ? (
           <>
-            <PreviewFrame key={frameVersion} src={frameVersion ? `${src}?v=${frameVersion}` : src} title={recipientName ? `Preview of the gift for ${recipientName}` : "Preview of your gift"} />
+            <PreviewFrame
+              key={frameVersion}
+              src={frameVersion ? `${src}?v=${frameVersion}` : src}
+              title={recipientName ? `Preview of the gift for ${recipientName}` : "Preview of your gift"}
+              draft={draft}
+              onLoaded={onPreviewShown}
+            />
             <div className="mx-auto mt-5 w-full max-w-[400px]">
               {slug ? (
                 <SharePanel url={`${site.url}/l/${slug}`} />
@@ -94,6 +112,10 @@ export function PreviewPane({
               {letterId && <MakeItUnique letterId={letterId} returnTo={`/create/${letterId}`} refreshKey={version} className="mt-4" />}
             </div>
           </>
+        ) : draft ? (
+          <div className={frameBox}>
+            <DraftSheet draft={draft} />
+          </div>
         ) : (
           <div className="mx-auto flex h-full max-w-[320px] flex-col items-center justify-center py-16 text-center">
             <MoonPhase lit={0} size={44} className="text-night-lilac" />
@@ -108,11 +130,30 @@ export function PreviewPane({
   )
 }
 
-function PreviewFrame({ src, title }: { src: string; title: string }) {
+// The phone-sized frame the preview and the draft share.
+const frameBox =
+  "relative mx-auto h-[68dvh] min-h-[420px] w-full max-w-[400px] overflow-hidden rounded-[28px] bg-night-plum ring-1 ring-night-petal/10 lg:h-[min(780px,calc(100dvh-17rem))]"
+
+function PreviewFrame({
+  src,
+  title,
+  draft,
+  onLoaded,
+}: {
+  src: string
+  title: string
+  draft: DraftView | null
+  onLoaded: () => void
+}) {
   const [loaded, setLoaded] = useState(false)
   return (
-    <div className="relative mx-auto h-[68dvh] min-h-[420px] w-full max-w-[400px] overflow-hidden rounded-[28px] bg-night-plum ring-1 ring-night-petal/10 lg:h-[min(780px,calc(100dvh-17rem))]">
-      {!loaded && (
+    <div className={frameBox}>
+      {draft && (
+        <div className="absolute inset-0 z-10">
+          <DraftSheet draft={draft} />
+        </div>
+      )}
+      {!loaded && !draft && (
         <div className="absolute inset-0 grid place-items-center" role="status">
           <span className="flex flex-col items-center gap-3 text-sm text-night-lilac">
             <WaxingMoon size={28} className="text-night-rose" />
@@ -123,7 +164,12 @@ function PreviewFrame({ src, title }: { src: string; title: string }) {
       <iframe
         src={src}
         title={title}
-        onLoad={() => setLoaded(true)}
+        // Under the draft, the older page is out of reach for keyboards and screen readers.
+        inert={draft ? true : undefined}
+        onLoad={() => {
+          setLoaded(true)
+          onLoaded()
+        }}
         className={`relative h-full w-full border-0 transition-opacity duration-300 ease-calm ${loaded ? "opacity-100" : "opacity-0"}`}
       />
     </div>
