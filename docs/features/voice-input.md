@@ -61,6 +61,7 @@ One recording, in order:
 | `components/landing/hero-finder.tsx` | The landing page's message box: the button sits between the text and Find a gift, passes the same `ensureSession` with a spot under the box where the bot check can show itself, and hides the typed example while it records |
 | `supabase/migrations/0005_voice.sql` | The `voice_transcriptions` table and `claim_voice_transcription()` |
 | `OPENAI_API_KEY` | Server only. Without it the route answers 503 `unavailable` and the button says voice is not available |
+| `OPENAI_API_KEY_FALLBACK` | Optional, server only. Used when OpenAI refuses the primary for its key or its quota (`insufficient_quota`), within `FALLBACK_CAP_USD` a month; when no key can be used the route answers 429 `site_busy` ([provider-fallbacks.md](provider-fallbacks.md)) |
 | `MAJNU_TRANSCRIBE_MODEL` | Optional. Defaults to `gpt-transcribe`. Another model (for example `whisper-1`) gets one `language` instead of `languages[]` |
 | `MAJNU_DAILY_VOICE_CAP` | Optional. Transcriptions per UTC day for the whole site, default 1000; `0` turns voice off |
 

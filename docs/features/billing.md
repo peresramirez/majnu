@@ -108,6 +108,7 @@ The test-mode product is "Majnu personalised wrapper" (`prod_VfiOBakdbyQU8Z`) wi
 - €2.99 per wrapper including VAT; Stripe's fee is about €0.29 on a standard EU card; one run costs about $0.26 in model use (capped at $3) plus sandbox time ([business-plan.md](../business-plan.md#unit-economics-estimates-to-be-replaced-by-measured-numbers)).
 - One paid run per letter at a time; Checkout Sessions expire after an hour.
 - The design request is at most 500 characters (the job accepts 2,000).
+- **Fallback keys** (issue #67, [provider-fallbacks.md](provider-fallbacks.md)): the design job starts its sandbox with `DAYTONA_API_KEY_FALLBACK` when Daytona refuses the primary for its key, quota or billing. Claude Code gets `ANTHROPIC_API_KEY_FALLBACK` when a free token count shows the primary refused (as on 22 November, when the tier threshold stopped every run). A run on a fallback key reserves $4.50 (Anthropic) and about $0.06 (Daytona) against that key's $150 monthly cap before the sandbox starts, and settles with Claude Code's reported cost and the sandbox's running time. If no key can be used, or a cap is reached, the run fails before any sandbox starts and the purchase is refunded as for any failed run.
 
 ## How it was checked
 
