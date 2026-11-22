@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isPublicHostname, PAID_SOURCES, parseProfileLink, usesApify } from "@/lib/social/links"
+import { isPublicHostname, linkFingerprint, PAID_SOURCES, parseProfileLink, targetKey, TYPO_HOSTS, usesApify } from "@/lib/social/links"
 
 describe("parseProfileLink", () => {
   it("reads Instagram profile links in their usual shapes", () => {
@@ -141,5 +141,83 @@ describe("usesApify", () => {
     expect(usesApify("linkedin")).toBe(true)
     expect(usesApify("web")).toBe(false)
     expect([...PAID_SOURCES].sort()).toEqual(["instagram", "linkedin", "tiktok"])
+  })
+})
+
+describe("typo correction (issue #89)", () => {
+  it("maps every listed misspelling to its platform when the path is clearly a profile, and says what it read", () => {
+    const expected: Record<string, string> = {
+      "linked.com": "linkedin", "linkdin.com": "linkedin", "linkedln.com": "linkedin", "linkedin.co": "linkedin",
+      "linkedin.cm": "linkedin", "linkedin.con": "linkedin", "linkedinn.com": "linkedin", "linkedn.com": "linkedin",
+      "linkein.com": "linkedin", "lnkedin.com": "linkedin", "likedin.com": "linkedin", "linkeding.com": "linkedin",
+      "linkdin.co": "linkedin",
+      "instagram.co": "instagram", "instagram.cm": "instagram", "instagram.con": "instagram", "insta.com": "instagram",
+      "instagam.com": "instagram", "instgram.com": "instagram", "intagram.com": "instagram", "instagrm.com": "instagram",
+      "instagran.com": "instagram", "instagramm.com": "instagram", "insatgram.com": "instagram",
+      "tiktok.co": "tiktok", "tiktok.cm": "tiktok", "tiktok.con": "tiktok", "tik-tok.com": "tiktok", "tiktock.com": "tiktok",
+      "tictok.com": "tiktok", "ticktok.com": "tiktok", "ticktock.com": "tiktok", "tiktoc.com": "tiktok", "tiktk.com": "tiktok",
+    }
+    expect(TYPO_HOSTS).toEqual(expected)
+    for (const [host, platform] of Object.entries(expected)) {
+      if (platform === "linkedin") {
+        expect(parseProfileLink(`https://www.${host}/in/anna-schmidt-1a2b3c/`)).toEqual({
+          ok: true,
+          target: { source: "linkedin", username: "anna-schmidt-1a2b3c" },
+          corrected: "linkedin.com/in/anna-schmidt-1a2b3c",
+        })
+      } else {
+        const corrected = platform === "tiktok" ? "tiktok.com/@anna.climbs" : "instagram.com/anna.climbs"
+        for (const path of ["anna.climbs", "@Anna.Climbs/"]) {
+          expect(parseProfileLink(`${host}/${path}`)).toEqual({ ok: true, target: { source: platform, username: "anna.climbs" }, corrected })
+        }
+      }
+    }
+  })
+
+  it("reads the teammate's link from the issue as linkedin.com", () => {
+    expect(parseProfileLink("linked.com/in/lena-example")).toEqual({
+      ok: true,
+      target: { source: "linkedin", username: "lena-example" },
+      corrected: "linkedin.com/in/lena-example",
+    })
+  })
+
+  it("reads instagr.am, Instagram's own short domain, without calling it a typo", () => {
+    expect(parseProfileLink("instagr.am/natgeo")).toEqual({ ok: true, target: { source: "instagram", username: "natgeo" } })
+  })
+
+  it("does not correct a typo'd host whose path is not clearly a profile: it suggests one, or refuses", () => {
+    expect(parseProfileLink("linked.com/anna-schmidt")).toEqual({ ok: false, problem: "maybe_typo", suggestion: "linkedin.com/in/anna-schmidt" })
+    expect(parseProfileLink("linked.com/company/example-bikes")).toEqual({ ok: false, problem: "not_a_profile" })
+    expect(parseProfileLink("linked.com/")).toEqual({ ok: false, problem: "not_a_profile" })
+    expect(parseProfileLink("insta.com/p/DNQuxufAih9")).toEqual({ ok: false, problem: "not_a_profile" })
+    expect(parseProfileLink("insta.com/explore")).toEqual({ ok: false, problem: "not_a_profile" })
+    expect(parseProfileLink("tiktok.co/@anna/video/123")).toEqual({ ok: false, problem: "not_a_profile" })
+  })
+
+  it("asks about hosts close to a platform's name that are not on the list, and never reads them", () => {
+    expect(parseProfileLink("linkedim.com/in/anna-schmidt")).toEqual({ ok: false, problem: "maybe_typo", suggestion: "linkedin.com/in/anna-schmidt" })
+    expect(parseProfileLink("https://tiktak.com/@anna.climbs")).toEqual({ ok: false, problem: "maybe_typo", suggestion: "tiktok.com/@anna.climbs" })
+    expect(parseProfileLink("instagrem.de/anna.climbs")).toEqual({ ok: false, problem: "maybe_typo", suggestion: "instagram.com/anna.climbs" })
+  })
+
+  it("leaves real platforms and unrelated pages alone", () => {
+    expect(parseProfileLink("https://www.linkedin.com/in/anna-schmidt")).toEqual({ ok: true, target: { source: "linkedin", username: "anna-schmidt" } })
+    expect(parseProfileLink("https://example.com/about")).toEqual({ ok: true, target: { source: "web", url: "https://example.com/about" } })
+    expect(parseProfileLink("https://linktr.ee/anna")).toEqual({ ok: true, target: { source: "web", url: "https://linktr.ee/anna" } })
+    // Near a platform's name but with nothing that looks like a profile: read as a page, as before.
+    expect(parseProfileLink("https://tiktak.com/")).toEqual({ ok: true, target: { source: "web", url: "https://tiktak.com/" } })
+  })
+})
+
+describe("the link a session tries once", () => {
+  it("is the same however the link is written, and never stores the link itself", async () => {
+    expect(targetKey({ source: "tiktok", username: "Other" })).toBe("tiktok:other")
+    expect(targetKey({ source: "web", url: "https://www.example.com/about/" })).toBe(targetKey({ source: "web", url: "https://example.com/about" }))
+    expect(targetKey({ source: "web", url: "https://example.com/a?x=1" })).not.toBe(targetKey({ source: "web", url: "https://example.com/a" }))
+    const a = await linkFingerprint({ source: "instagram", username: "natgeo" })
+    expect(a).toMatch(/^[0-9a-f]{24}$/)
+    expect(await linkFingerprint({ source: "instagram", username: "NatGeo" })).toBe(a)
+    expect(await linkFingerprint({ source: "tiktok", username: "natgeo" })).not.toBe(a)
   })
 })
