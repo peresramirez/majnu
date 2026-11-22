@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { SocialLinks } from "@/components/brand/social-links"
 import { Wordmark } from "@/components/brand/wordmark"
 
 const focusRing =
@@ -30,6 +31,7 @@ export function SiteFooter() {
         </nav>
         <p>© {new Date().getFullYear()} Majnu</p>
       </div>
+      <SocialLinks className="mx-auto mt-6 max-w-6xl" />
     </footer>
   )
 }
