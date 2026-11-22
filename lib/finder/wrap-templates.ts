@@ -1,7 +1,7 @@
 // Which templates the finder's wrap step offers for one gift (issue #59).
 //
-// Every gift can be wrapped in the gift reveal, the 3D gift box, the classic
-// envelope or the postcard. The party pop box bursts into confetti and
+// Every gift can be wrapped in the gift reveal, the 3D gift box, the 3D gift
+// tin (issue #99), the classic envelope or the postcard. The party pop box bursts into confetti and
 // balloons, so it is offered only when the visitor told Majnu the gift is for
 // a birthday or a party: the occasion the finder agent heard, kept in
 // FinderContext.occasion.
@@ -14,11 +14,11 @@ import type { FinderContext, WrapTemplateId } from "./events"
 // What POST /api/finder/wrap accepts, and what a wrap-step message to POST
 // /api/finder may name (issue #70). Re-exported by lib/finder/wrap.ts; here so
 // the finder route can check it without loading the builder.
-export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
+export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
 
 // The order they are offered in: the gift templates first, then the letters
 // that carry one. The first is chosen when the wrap step opens.
-export const WRAP_ORDER: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"]
+export const WRAP_ORDER: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"]
 
 // The model writes the occasion as the visitor said it, usually in their own
 // language ("Geburtstag", "cumpleaños", "her 30th birthday party"). These are

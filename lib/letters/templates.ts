@@ -92,6 +92,36 @@ export const templates: TemplateMeta[] = [
     plan: "free",
   },
   {
+    id: "wedding-invite-3d",
+    kind: "letter",
+    category: "invitation",
+    name: "3D pop-up wedding card",
+    description:
+      "A folded card in 3D. The cover lifts and three layers of cut paper unfold into arches around your names, as petals drift down; then the date, time and place with a map link and a calendar file, and your message.",
+    bestFor: ["weddings", "engagements", "save the dates", "anniversaries"],
+    plan: "free",
+  },
+  {
+    id: "party-invite-3d",
+    kind: "letter",
+    category: "invitation",
+    name: "3D party ticket",
+    description:
+      "A ticket to the party in 3D. The stub tears off, confetti cannons fire and the ticket flips to show when and where; then a countdown, a map link, a calendar file and your message.",
+    bestFor: ["birthday parties", "house parties", "launches", "get-togethers"],
+    plan: "free",
+  },
+  {
+    id: "gift-3d",
+    kind: "letter",
+    category: "gift",
+    name: "3D gift tin",
+    description:
+      "A round keepsake tin in 3D, made around a gift. The lid unscrews, a warm glow rises and the gift card spins up out of the tin; then the code to copy, a link to redeem it and your note.",
+    bestFor: ["gift cards", "vouchers", "experiences", "thank-yous"],
+    plan: "free",
+  },
+  {
     id: "postcard",
     kind: "letter",
     category: "letter",

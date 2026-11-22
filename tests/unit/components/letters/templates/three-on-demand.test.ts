@@ -13,7 +13,15 @@ const root = process.cwd()
 const SCENES = [
   { scene: "components/letters/templates/gift-box-3d/scene.ts", loader: "components/letters/templates/gift-box-3d.tsx", specifier: "./gift-box-3d/scene" },
   { scene: "components/letters/templates/wedding-envelope-3d/scene.ts", loader: "components/letters/templates/wedding-envelope-3d/view.tsx", specifier: "./scene" },
+  { scene: "components/letters/templates/wedding-invite-3d/scene.ts", loader: "components/letters/templates/wedding-invite-3d.tsx", specifier: "./wedding-invite-3d/scene" },
+  { scene: "components/letters/templates/party-invite-3d/scene.ts", loader: "components/letters/templates/party-invite-3d.tsx", specifier: "./party-invite-3d/scene" },
+  { scene: "components/letters/templates/gift-3d/scene.ts", loader: "components/letters/templates/gift-3d.tsx", specifier: "./gift-3d/scene" },
 ]
+
+// The stage the issue #99 scenes share. It imports three.js too, so it may be
+// imported only by those scenes, which are themselves reached only through import().
+const STAGE = "components/letters/templates/three-kit/stage.ts"
+const STAGE_USERS = SCENES.slice(2).map((s) => s.scene)
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -50,7 +58,13 @@ const withoutExtension = (path: string) => path.replace(/\.(ts|tsx|mts)$/, "")
 describe("three.js loads on demand", () => {
   it("is imported by the scene modules and nothing else", () => {
     const importers = files.filter((f) => runtimeImports(f).some((m) => m === "three" || m.startsWith("three/")))
-    expect(importers.sort()).toEqual(SCENES.map((s) => s.scene).sort())
+    expect(importers.sort()).toEqual([...SCENES.map((s) => s.scene), STAGE].sort())
+  })
+
+  it("lets only the issue #99 scenes import the shared stage", () => {
+    const target = withoutExtension(STAGE)
+    const importers = files.filter((f) => runtimeImports(f).some((m) => resolveFrom(f, m) === target))
+    expect(importers.sort()).toEqual([...STAGE_USERS].sort())
   })
 
   it.each(SCENES)("reaches $scene only through import() or a type-only import", ({ scene, loader, specifier }) => {

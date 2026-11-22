@@ -120,8 +120,8 @@ export type FinderEvent =
 export type WrapFill = { recipientName?: string; senderName?: string; note?: string; giftCode?: string }
 
 // Wrapping a chosen gift in a template: POST /api/finder/wrap answers JSON.
-// gift-box-3d and party-box were added in issue #50 (additive).
-export type WrapTemplateId = Extract<TemplateId, "gift-reveal" | "classic-envelope" | "postcard" | "gift-box-3d" | "party-box">
+// gift-box-3d and party-box were added in issue #50, gift-3d in issue #99 (additive).
+export type WrapTemplateId = Extract<TemplateId, "gift-reveal" | "classic-envelope" | "postcard" | "gift-box-3d" | "party-box" | "gift-3d">
 
 export type WrapRequest = {
   sessionId: string
