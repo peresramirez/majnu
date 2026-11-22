@@ -7,7 +7,9 @@
 import { createClient } from "@/lib/supabase/client"
 
 const TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-const CHECK_TIMEOUT_MS = 30_000
+// A browser that blocks the check (strict privacy settings, automation)
+// should not wait long: the search carries on without the token after this.
+const CHECK_TIMEOUT_MS = 8_000
 
 type TurnstileOptions = {
   sitekey: string
@@ -161,6 +163,12 @@ async function signIn(getContainer: () => HTMLElement | null): Promise<void> {
     }
     try {
       token = await captchaToken(siteKey, container)
+    } catch {
+      // The check could not run or failed in this browser (developer's
+      // request, 22 November): carry on without a token rather than stopping
+      // the visitor. Supabase decides; while its captcha setting is off the
+      // guest account is created, and the per-visitor limits still apply.
+      token = undefined
     } finally {
       temporary?.remove()
     }
