@@ -40,7 +40,7 @@ Three migrations in [`supabase/migrations/`](../../supabase/migrations/):
 | `letters` | `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` or `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, timestamps | `slug` must match `^[A-Za-z0-9_-]{6,64}$`; `title` at most 200 characters; `content` an object of at most 200,000 bytes (it is fed back to the model on edits); `chat` an array. Index on `(owner_id, created_at desc)` for the dashboard and the limits |
 | `profiles` | `user_id` → `auth.users`, `plan` (`free` or `full-moon`), `stripe_customer_id` unique, `stripe_subscription_id`, `plan_renews_at`, `plan_cancel_at`, timestamps | One row per user, created by `handle_new_user()`, a `security definer` trigger function with an empty `search_path` whose execute right is revoked from the API roles. The billing columns are left from the retired subscription; no code reads or writes them |
 | `purchases` | `owner_id`, `letter_id` (null if the letter is deleted), `status` (`pending`, `paid`, `designing`, `done`, `failed`, `refunded`), the request, `consent_at` and `consent_text`, amount, the Stripe session, payment intent and refund ids, `receipt_url`, `design_id`, `failure_reason`, timestamps ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per personalised wrapper ([billing.md](billing.md)). Owners read their own rows except `failure_reason`; only the service role writes. A partial unique index allows one `paid` or `designing` purchase per letter |
-| `letter_events` | `letter_id`, `type` (`open`, `door_open`, `gift_click`), `day` 0 to 366, `visitor_id`, `user_agent`, `created_at` | Unique on `(letter_id, type, day, visitor_id)`, so repeat visits add nothing; that index also serves lookups by letter |
+| `letter_events` | `letter_id`, `type` (`open`, `door_open`, `gift_click`), `day` 0 to 366, `visitor_id`, `user_agent`, `country`, `city`, `language`, `device` (added in `0009_open_details.sql` for the Tracker, nullable), `created_at` | Unique on `(letter_id, type, day, visitor_id)`, so repeat visits add nothing; that index also serves lookups by letter |
 | `letter_designs` | `letter_id`, `html` (1 to 512,000 bytes), `request` (1 to 2,000 characters), `created_at` | Index on `(letter_id, created_at desc)` for the newest design |
 | `letter_summaries` (view) | Each letter with `recipient_name`, `has_content` and its open statistics | `security_invoker`, so it runs under the caller's row-level security |
 
@@ -56,7 +56,7 @@ Row-level security is turned on explicitly for every table (tables created by SQ
 |---|---|---|---|
 | `letters` | nothing | `select` own rows; `update` own rows, **only** `kind`, `template_id`, `title`, `content`, `updated_at` | everything |
 | `profiles` | nothing | `select` own row | everything |
-| `letter_events` | nothing | `select` events of own letters | everything |
+| `letter_events` | nothing | `select` events of own letters, every column except `visitor_id` and `user_agent` (a column grant since `0009`; the visitor count comes from `private.letter_unique_visitors()`) | everything |
 | `letter_designs` | nothing | `select` designs of own letters | everything |
 | `letter_summaries` | nothing | `select`, filtered by the policies above | `select` |
 

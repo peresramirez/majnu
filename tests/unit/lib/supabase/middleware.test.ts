@@ -66,9 +66,9 @@ describe("updateSession", () => {
     }
   })
 
-  it("sends real users from the sign-in pages to the dashboard or their next", async () => {
+  it("sends real users from the sign-in pages to the gift finder or their next", async () => {
     fakes.user = member
-    expect(await visit("/signup")).toBe("https://majnu.app/dashboard")
+    expect(await visit("/signup")).toBe("https://majnu.app/dashboard/find")
     expect(await visit("/signin?next=%2Fdashboard%2Ffind")).toBe("https://majnu.app/dashboard/find")
   })
 
