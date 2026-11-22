@@ -7,6 +7,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { WaxingMoon } from "@/components/app/waxing-moon"
 import { eyebrow, focusRing } from "@/components/app/styles"
 import { SharePanel } from "@/components/share/share-panel"
+import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
 import { MakeItUnique } from "@/components/wrapper/make-it-unique"
 import { site } from "@/lib/site"
 
@@ -36,6 +37,9 @@ export function PreviewPane({
 }) {
   const ready = hasContent && letterId !== null
   const src = ready ? `/create/${encodeURIComponent(letterId)}/preview` : null
+  // Bumped when the voice note changes, so the preview reloads with it.
+  const [noteVersion, setNoteVersion] = useState(0)
+  const frameVersion = version || noteVersion ? `${version}.${noteVersion}` : ""
 
   return (
     <aside aria-label="Preview" className={`min-h-0 flex-col bg-night-deep/70 lg:border-l lg:border-night-petal/10 ${className}`}>
@@ -65,7 +69,7 @@ export function PreviewPane({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 lg:px-6">
         {src ? (
           <>
-            <PreviewFrame key={version} src={version ? `${src}?v=${version}` : src} title={recipientName ? `Preview of the gift for ${recipientName}` : "Preview of your gift"} />
+            <PreviewFrame key={frameVersion} src={frameVersion ? `${src}?v=${frameVersion}` : src} title={recipientName ? `Preview of the gift for ${recipientName}` : "Preview of your gift"} />
             <div className="mx-auto mt-5 w-full max-w-[400px]">
               {slug ? (
                 <SharePanel url={`${site.url}/l/${slug}`} />
@@ -81,6 +85,10 @@ export function PreviewPane({
                 <p role="status" className="flex items-center gap-2 text-sm text-night-lilac">
                   <WaxingMoon size={16} className="text-night-rose" /> Getting your link…
                 </p>
+              )}
+              {/* A voice note for the recipient. It asks the server for the saved one and hides itself on calendars. */}
+              {letterId && (
+                <AudioNoteRecorder key={letterId} letterId={letterId} recipientName={recipientName} onChange={() => setNoteVersion((v) => v + 1)} className="mt-5" />
               )}
               {/* Asks the server whether this gift can have one (letters only) and how far a paid one is. */}
               {letterId && <MakeItUnique letterId={letterId} returnTo={`/create/${letterId}`} refreshKey={version} className="mt-4" />}

@@ -54,7 +54,7 @@ One recording, in order:
 | `lib/voice/openai.ts` | The `fetch` call to OpenAI's transcription endpoint, the multipart body, the retry without hints, the timeout. Server only |
 | `lib/voice/usage.ts` | Claim, settle and release with the service-role client; reads `MAJNU_DAILY_VOICE_CAP`. Server only |
 | `components/voice/voice-button.tsx` | The button, Stop, Cancel, timer, error bubble and live region |
-| `components/voice/use-voice-recorder.ts` | `getUserMedia`, `MediaRecorder`, the upload, and freeing the microphone on stop, cancel and unmount |
+| `components/voice/use-voice-recorder.ts` | `getUserMedia`, `MediaRecorder`, the upload, and freeing the microphone on stop, cancel and unmount. Voice notes in gifts ([audio-note.md](audio-note.md)) use the same hook with `maxSeconds`, `recordingTypes` and `onRecording`; without them it behaves as described here |
 | `components/voice/recorder-state.ts` | Pure logic: the state machine, the live-region text, the timer label, microphone errors and the route's answers |
 | `components/create/composer.tsx` | The Letters & invitations message box: the button sits beside Send |
 | `components/finder/finder-dialog.tsx` | The finder's message box: the button sits beside Send and passes the finder's `ensureSession` |

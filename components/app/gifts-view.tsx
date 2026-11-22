@@ -1,20 +1,25 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import type { AudioNoteSummary } from "@/lib/audio/rules"
 import type { HostGiftList } from "@/lib/claims/owner"
 import type { LetterSummary } from "@/lib/letters/store"
 import { GiftCard } from "./gift-card"
 import { pageContainer, primaryButton } from "./styles"
 
-// The My gifts tab: every gift, newest first, with when it was opened, and for
-// invitations with a gift list, who is bringing what.
+// The My gifts tab: every gift, newest first, with when it was opened, for
+// invitations with a gift list who is bringing what, and on every letter its
+// voice note. `audioNotes` is left out when the notes could not be loaded; each
+// letter's recorder then asks for its own.
 export function GiftsView({
   letters,
   giftLists = {},
+  audioNotes,
   now,
 }: {
   letters: LetterSummary[]
   giftLists?: Record<string, HostGiftList>
+  audioNotes?: Record<string, AudioNoteSummary>
   now: Date
 }) {
   if (letters.length === 0) {
@@ -51,7 +56,12 @@ export function GiftsView({
       <ul className="mt-8 grid gap-4 md:grid-cols-2">
         {letters.map((letter) => (
           <li key={letter.id}>
-            <GiftCard letter={letter} giftList={giftLists[letter.id]} now={now} />
+            <GiftCard
+              letter={letter}
+              giftList={giftLists[letter.id]}
+              audioNote={audioNotes ? (audioNotes[letter.id] ?? null) : undefined}
+              now={now}
+            />
           </li>
         ))}
       </ul>
