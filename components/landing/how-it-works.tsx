@@ -1,161 +1,237 @@
-import type { CSSProperties } from "react"
-import { ArrowRight, BookOpen, Coffee, Flower2, Gift, Link2, MapPin, MessageCircle, QrCode, UserRound } from "lucide-react"
+"use client"
+
+import { Fragment, useEffect, useRef, type CSSProperties, type RefObject } from "react"
 import { MoonPhase } from "@/components/brand/moon-phase"
-import { steps, type StepVisual } from "@/components/landing/how-it-works-steps"
-import { Reveal } from "@/components/landing/reveal"
+import { GiftScene } from "@/components/landing/gift-scene"
+import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, stepPosition, steps, windows } from "@/components/landing/how-it-works-steps"
 
-// The landing page's "How it works": the three steps from how-it-works-steps.ts,
-// each with its moon phase, a short title, one line and a small picture.
+// The landing page's "How it works", told one step at a time.
+//
+// The section is a tall track; its screen is sticky, so it stays put while the
+// visitor scrolls through the track. The scroll position becomes one CSS
+// variable, `--u` (steps of scroll since the section pinned, see
+// how-it-works-steps.ts), and app/globals.css moves every letter from it: the
+// step on screen lifts and blurs away like mist in moonlight, and the next one
+// settles in. After the last step the track ends and the page scrolls on.
+// `--u` is written on each step and progress mark, held still while that step
+// rests, so a frame restyles only the letters that are moving.
+//
+// Story mode is pure CSS, under `(prefers-reduced-motion: no-preference) and
+// (scripting: enabled)`. Otherwise (reduced motion, no JavaScript, older
+// browsers) the same markup is a plain list of the three steps. The classes
+// here are that list; app/globals.css overrides them in story mode.
+//
+// Screen readers and search engines read the real text (`.story-text`): the
+// heading, the line, and three level-3 headings with their lines, in order. In
+// story mode it is visually hidden, never removed, and the letters people see
+// are an aria-hidden copy (`.story-visual`).
 
-// The pieces of each picture arrive one after another once its card scrolls in.
-// <Reveal> sets data-reveal on the group; it only ever hides anything when
-// reduced motion is off, so with reduced motion everything is simply there.
-// `--i` (the step) and `--d` (the piece) set the delay.
-const arrive =
-  "motion-safe:transition-[opacity,transform] motion-safe:duration-700 motion-safe:ease-calm [transition-delay:calc(var(--i,0)*90ms_+_var(--d,0ms))] group-data-[reveal=hidden]/step:translate-y-1.5 group-data-[reveal=hidden]/step:opacity-0"
-const at = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties
-
-const chip =
-  "inline-flex h-6 items-center gap-1 rounded-full bg-night-velvet px-2 text-[11px] font-medium text-night-petal ring-1 ring-inset ring-night-petal/15"
-
-// 1. A message to Majnu and what it assumed, as the finder shows them.
-function Ask() {
-  return (
-    <div className="flex h-full flex-col justify-center gap-2.5">
-      <p
-        className={`self-end whitespace-nowrap rounded-[14px] rounded-br-[5px] bg-night-petal/10 px-3 py-1.5 text-[13px] text-night-petal ${arrive}`}
-        style={at(250)}
-      >
-        A gift for my mother
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        <span className={`${chip} ${arrive}`} style={at(700)}>
-          <UserRound className="h-3 w-3 text-night-lilac" />
-          About 45–70
-        </span>
-        <span className={`${chip} ${arrive}`} style={at(850)}>
-          <MapPin className="h-3 w-3 text-night-lilac" />
-          Germany
-        </span>
-      </div>
-    </div>
-  )
+// A drift for each letter between -1 and 1, the same on the server and in the
+// browser, so the letters scatter a little differently as they leave.
+const drift = (n: number) => {
+  const x = Math.sin(n * 12.9898 + 4.1414) * 43758.5453
+  return (x - Math.floor(x)) * 2 - 1
 }
 
-// 2. Three gifts with prices; the one Majnu recommends lifts and gets its badge.
-const gifts = [
-  { icon: Coffee, price: "€24" },
-  { icon: Flower2, price: "€39", recommended: true },
-  { icon: BookOpen, price: "€18" },
-]
-
-function Choose() {
-  return (
-    <div className="grid h-full grid-cols-3 items-end gap-2 pt-3">
-      {gifts.map(({ icon: Icon, price, recommended }, i) => (
-        <div
-          key={price}
-          className={`relative rounded-xl bg-night-velvet p-1.5 ring-1 ring-inset ${
-            recommended ? "-translate-y-1 ring-night-petal/35" : "ring-night-petal/10"
-          } ${arrive}`}
-          style={at(250 + i * 120)}
-        >
-          {recommended && (
-            <span
-              className={`absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-night-orchid px-1.5 py-px text-[9px] font-semibold tracking-wide text-night-plum ${arrive}`}
-              style={at(900)}
-            >
-              Recommended
+// Splits text into inline-block pieces (letters or words) that move on their
+// own. Words stay whole so lines only break between them. `--c` is the piece's
+// place in the wave, from `from` to `to`.
+function Glyphs({ text, by, from, to, seed }: { text: string; by: "letter" | "word"; from: number; to: number; seed: number }) {
+  const words = text.split(" ")
+  const total = by === "letter" ? words.join("").length : words.length
+  let n = 0
+  return words.map((word, w) => (
+    <Fragment key={w}>
+      {w > 0 && " "}
+      <span className="story-word">
+        {(by === "letter" ? Array.from(word) : [word]).map((piece) => {
+          const i = n++
+          const style = {
+            "--c": (from + ((to - from) * i) / Math.max(1, total - 1)).toFixed(3),
+            "--r": drift(seed + i).toFixed(3),
+          } as CSSProperties
+          return (
+            <span key={i} className="story-glyph" style={style}>
+              {piece}
             </span>
-          )}
-          <span className="grid h-7 place-items-center rounded-lg bg-gradient-to-br from-night-petal/[0.14] to-night-petal/[0.03]">
-            <Icon className="h-4 w-4 text-night-lilac" strokeWidth={1.75} />
-          </span>
-          <span className="mt-1 block px-0.5 text-[11px] font-semibold text-night-petal">{price}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// 3. The wrapped gift and the ways to send it.
-const channels = [
-  { icon: Link2, label: "Link" },
-  { icon: MessageCircle, label: "WhatsApp" },
-  { icon: QrCode, label: "QR code" },
-]
-
-function Send() {
-  return (
-    <div className="flex h-full items-center justify-between gap-1.5">
-      <span
-        className={`grid h-11 w-11 flex-none place-items-center rounded-2xl bg-night-rose/15 ring-1 ring-inset ring-night-rose/30 ${arrive}`}
-        style={at(250)}
-      >
-        <Gift className="h-[22px] w-[22px] text-night-rose" strokeWidth={1.5} />
+          )
+        })}
       </span>
-      <ArrowRight className={`h-3.5 w-3.5 flex-none text-night-lilac/70 ${arrive}`} style={at(500)} />
-      <ul className="flex gap-2.5">
-        {channels.map(({ icon: Icon, label }, i) => (
-          <li key={label} className={`flex flex-col items-center gap-1 ${arrive}`} style={at(650 + i * 120)}>
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-night-petal/[0.06] ring-1 ring-inset ring-night-petal/15">
-              <Icon className="h-3.5 w-3.5 text-night-petal" />
-            </span>
-            <span className="whitespace-nowrap text-[10px] leading-none text-night-lilac">{label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
+    </Fragment>
+  ))
 }
 
-const visuals = { ask: Ask, choose: Choose, send: Send } satisfies Record<StepVisual, unknown>
+// The timeline in CSS: `--enter` and `--leave` per step and per progress mark.
+const NEVER = 99
+const timing = (k: number) =>
+  ({ "--enter": windows[k].enter.toFixed(3), "--leave": (windows[k].leave ?? NEVER).toFixed(3) }) as CSSProperties
 
-// On phones each step is a tight stack: title and line, then the picture.
-// Where there is room the picture moves beside the text: from sm (the painting
-// is a card above this section) and from xl. From md up the column sits on the
-// left of the pinned painting; between md and xl it stays narrow, as wide as
-// the free space beside the couple, so the steps stack again there.
-const column = "max-w-xl md:max-w-md xl:max-w-xl"
-const card =
-  "grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-3.5 p-4 sm:grid-cols-[auto_minmax(0,1fr)_14.5rem] sm:items-center sm:gap-x-5 sm:p-6 md:grid-cols-[auto_minmax(0,1fr)] md:p-5 xl:grid-cols-[auto_minmax(0,1fr)_14.5rem] xl:p-6"
-const picture = "col-span-2 sm:col-span-1 md:col-span-2 xl:col-span-1"
+// Until the script runs, every step reads `--u: 0`: the first step is on screen.
+const track = {
+  "--u": 0,
+  "--seg": `${SCREENS_PER_STEP * 100}svh`,
+  "--steps": steps.length,
+  "--span": SPAN,
+  "--glyph": GLYPH,
+} as CSSProperties
+
+// Reads the scroll position on `scroll` (passive), then at most once a frame
+// eases towards it and writes `--u` where it changed. scrollY is read in the
+// scroll event, not in the frame: reading it after a style write makes Chrome
+// recalculate styles early. The section's place in the page is measured on
+// resize, never while scrolling.
+function useStoryScroll(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const section = ref.current
+    const screen = section?.querySelector<HTMLElement>("[data-story-screen]")
+    if (!section || !screen) return
+
+    let live = false
+    let y = window.scrollY
+    let top = 0
+    let seg = 1
+    let current = 0
+    let raf = 0
+    let last = 0
+
+    const goal = () => Math.min(steps.length + 1, Math.max(-2, (y - top) / seg))
+    // Each step and its mark, with the value last written to it.
+    const targets = Array.from(section.querySelectorAll<HTMLElement>("[data-step]"), (node) => ({
+      node,
+      k: Number(node.dataset.step),
+      last: "",
+    }))
+    const write = (u: number) => {
+      for (const target of targets) {
+        const value = stepPosition(u, target.k).toFixed(4)
+        if (value !== target.last) {
+          target.node.style.setProperty("--u", value)
+          target.last = value
+        }
+      }
+    }
+    const measure = () => {
+      // Story mode is decided in CSS; the screen is only sticky there.
+      live = getComputedStyle(screen).position === "sticky"
+      y = window.scrollY
+      top = section.getBoundingClientRect().top + y
+      seg = (section.offsetHeight - screen.offsetHeight) / steps.length || 1
+    }
+    const tick = (now: number) => {
+      const g = goal()
+      // About 70 ms behind the scroll, the same at 60 and 120 Hz: enough to
+      // smooth a mouse wheel's steps without the letters trailing a finger.
+      const dt = last ? Math.min(64, now - last) : 16
+      last = now
+      current += (g - current) * (1 - Math.exp(-dt / 70))
+      if (Math.abs(g - current) < 0.001) current = g
+      write(current)
+      if (current === g) {
+        raf = 0
+        last = 0
+      } else raf = requestAnimationFrame(tick)
+    }
+    const wake = () => {
+      if (live && !raf) raf = requestAnimationFrame(tick)
+    }
+    const onScroll = () => {
+      y = window.scrollY
+      wake()
+    }
+    const remeasure = () => {
+      measure()
+      wake()
+    }
+
+    measure()
+    if (live) {
+      current = goal()
+      write(current)
+    }
+    // The section moves when anything above it changes height (the hero's
+    // message box grows, fonts arrive), so watch the body as well as the track.
+    const resize = new ResizeObserver(remeasure)
+    resize.observe(section)
+    resize.observe(document.body)
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)")
+    window.addEventListener("scroll", onScroll, { passive: true })
+    motion.addEventListener("change", remeasure)
+    return () => {
+      cancelAnimationFrame(raf)
+      resize.disconnect()
+      window.removeEventListener("scroll", onScroll)
+      motion.removeEventListener("change", remeasure)
+    }
+  }, [ref])
+}
 
 export function HowItWorks() {
+  const ref = useRef<HTMLElement>(null)
+  useStoryScroll(ref)
+
   return (
-    <section
-      id="how"
-      aria-labelledby="how-title"
-      className="relative z-10 mx-auto max-w-6xl scroll-mt-8 px-5 pb-20 pt-2 sm:px-8 md:pb-24 md:pt-0"
-    >
-      <div className={column}>
-        <h2 id="how-title" className="font-display text-4xl leading-tight sm:text-5xl">How it works</h2>
-        <p className="mt-3 leading-relaxed text-night-lilac">Majnu would have given Layla the moon. Yours takes three steps.</p>
-        <ol className="mt-8 space-y-3">
-          {steps.map((step, i) => {
-            const Picture = visuals[step.visual]
-            return (
-              <li key={step.title} style={{ "--i": i } as CSSProperties}>
-                <Reveal className="group/step">
-                  <div className={`reveal-item rounded-3xl bg-night-velvet/80 ring-1 ring-inset ring-night-petal/10 backdrop-blur-sm ${card}`}>
-                    <MoonPhase lit={step.lit} size={26} className="self-start text-night-rose sm:mt-0.5" />
-                    <div>
-                      <h3 className="text-balance font-display text-2xl leading-tight">{step.title}</h3>
-                      <p className="mt-1.5 text-pretty text-[15px] leading-normal text-night-lilac">{step.line}</p>
-                    </div>
-                    <div
-                      aria-hidden="true"
-                      className={`h-[92px] rounded-2xl bg-night-plum/60 px-3 py-2.5 ring-1 ring-inset ring-night-petal/[0.08] ${picture}`}
-                    >
-                      <div className="mx-auto h-full max-w-[16rem]">
-                        <Picture />
-                      </div>
-                    </div>
-                  </div>
-                </Reveal>
-              </li>
-            )
-          })}
+    <section ref={ref} id="how" aria-labelledby="how-title" className="story relative z-10" style={track}>
+      {/* Where the moon should be on its way (gift-scene.tsx reads them): one at
+          each point of the timeline, placed in the track so they scroll with it. */}
+      {moonMarks.map((mark) => (
+        <span
+          key={mark.at}
+          data-moon={mark.t}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 h-px w-px"
+          style={{ top: `calc(${mark.at.toFixed(3)} * var(--seg))` }}
+        />
+      ))}
+
+      <div data-story-screen className="story-screen mx-auto max-w-6xl px-5 pb-20 pt-2 sm:px-8 md:pb-24 md:pt-0">
+        <div className="md:max-w-md xl:max-w-xl">
+          <div className="flex items-center justify-between gap-4 md:justify-start md:gap-5">
+            {/* The label keeps the name in sentence case: in story mode the
+                heading is set in capitals, which Chrome passes on to screen readers. */}
+            <h2 id="how-title" aria-label="How it works" className="story-heading font-display text-4xl leading-tight sm:text-5xl">
+              How it works
+            </h2>
+            {/* Three moons, one per step: the current one lit in rose gold. */}
+            <div aria-hidden="true" className="story-marks hidden items-center gap-2.5">
+              {steps.map((step, k) => (
+                <span key={step.title} data-step={k} className="story-mark relative block h-4 w-4" style={timing(k)}>
+                  <MoonPhase lit={step.lit} size={16} className="absolute inset-0 text-night-lilac/60" />
+                  <MoonPhase lit={step.lit} size={16} className="story-mark-on absolute inset-0 text-night-rose" />
+                </span>
+              ))}
+            </div>
+          </div>
+          <p className="story-intro mt-3 leading-relaxed text-night-lilac">
+            Majnu would have given Layla the moon. Yours takes three steps.
+          </p>
+        </div>
+
+        {/* Phones: the scene is part of the pinned screen. From md up it is the
+            backdrop behind the hero and this section (app/(marketing)/page.tsx). */}
+        <div className="story-scene relative -mx-5 mt-8 h-[min(110vw,440px)] sm:-mx-8 md:hidden">
+          <GiftScene variant="story" />
+        </div>
+
+        <ol className="story-steps mt-8 flex flex-col gap-6 md:max-w-md xl:max-w-xl">
+          {steps.map((step, k) => (
+            <li key={step.title} data-step={k} className="story-step" style={timing(k)}>
+              <div className="story-text flex gap-3.5">
+                <MoonPhase lit={step.lit} size={26} className="mt-0.5 flex-none text-night-rose" />
+                <div>
+                  <h3 className="text-balance font-display text-2xl leading-tight">{step.title}</h3>
+                  <p className="mt-1.5 text-pretty text-[15px] leading-normal text-night-lilac">{step.line}</p>
+                </div>
+              </div>
+              <div aria-hidden="true" className="story-visual hidden select-none">
+                <p className="text-balance font-display text-[clamp(34px,9.6vw,46px)] leading-[1.08] tracking-[-0.01em] text-night-petal md:text-[clamp(46px,5vw,72px)] md:leading-[1.04]">
+                  <Glyphs text={step.title} by="letter" from={0} to={0.75} seed={k * 37} />
+                </p>
+                <p className="mt-3 max-w-[32ch] text-[17px] leading-[1.55] text-night-lilac md:mt-5 md:text-[19px]">
+                  <Glyphs text={step.line} by="word" from={0.3} to={1} seed={k * 37 + 19} />
+                </p>
+              </div>
+            </li>
+          ))}
         </ol>
       </div>
     </section>
