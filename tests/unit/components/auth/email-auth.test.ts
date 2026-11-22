@@ -1,7 +1,7 @@
 // Email sign-in and sign-up, including a guest turning their anonymous account
 // into a real one (the same user, so their gifts stay).
 import { describe, expect, it, vi } from "vitest"
-import { signInWithEmail, signUpWithEmail } from "@/components/auth/email-auth"
+import { sendPasswordReset, sendSignInLink, signInWithEmail, signUpWithEmail } from "@/components/auth/email-auth"
 
 type User = { id: string; is_anonymous?: boolean; email?: string } | null
 
@@ -80,5 +80,45 @@ describe("signUpWithEmail", () => {
     const auth = fakeAuth(null)
     auth.signUp.mockResolvedValue({ data: { session: { access_token: "a" }, user: { id: "new" } }, error: null } as never)
     expect(await signUpWithEmail(asAuth(auth), { ...credentials, confirmUrl })).toEqual({ ok: true, status: "signed_in", upgradedGuest: false })
+  })
+})
+
+describe("sendSignInLink and sendPasswordReset", () => {
+  const redirectTo = "https://majnu.app/auth/callback?next=%2Fdashboard"
+
+  function linkAuth(error: { message: string; code?: string } | null) {
+    return {
+      signInWithOtp: vi.fn(async () => ({ data: {}, error })),
+      resetPasswordForEmail: vi.fn(async () => ({ data: {}, error })),
+    }
+  }
+  const asLinkAuth = (auth: ReturnType<typeof linkAuth>) => auth as unknown as Parameters<typeof sendSignInLink>[0]
+
+  it("asks for a sign-in link without creating an account", async () => {
+    const auth = linkAuth(null)
+    expect(await sendSignInLink(asLinkAuth(auth), { email: "anna@example.com", captchaToken: "tok", redirectTo })).toEqual({ ok: true })
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({
+      email: "anna@example.com",
+      options: { shouldCreateUser: false, emailRedirectTo: redirectTo, captchaToken: "tok" },
+    })
+  })
+
+  it("answers the same for an address with no account", async () => {
+    const auth = linkAuth({ message: "Signups not allowed for otp", code: "otp_disabled" })
+    expect(await sendSignInLink(asLinkAuth(auth), { email: "nobody@example.com", redirectTo })).toEqual({ ok: true })
+  })
+
+  it("passes other errors on", async () => {
+    const auth = linkAuth({ message: "Email rate limit exceeded", code: "over_email_send_rate_limit" })
+    expect(await sendSignInLink(asLinkAuth(auth), { email: "anna@example.com", redirectTo })).toEqual({
+      ok: false,
+      error: { message: "Email rate limit exceeded", code: "over_email_send_rate_limit" },
+    })
+  })
+
+  it("asks for a password reset that lands on the callback", async () => {
+    const auth = linkAuth(null)
+    expect(await sendPasswordReset(asLinkAuth(auth), { email: "anna@example.com", redirectTo })).toEqual({ ok: true })
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("anna@example.com", { redirectTo })
   })
 })
