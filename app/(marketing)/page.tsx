@@ -12,6 +12,7 @@ import { Wordmark } from "@/components/brand/wordmark"
 import { firstName } from "@/components/letters/names"
 import { TemplateCard } from "@/components/letters/template-card"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
+import { withNext } from "@/lib/billing/next-path"
 import { free, wrapper } from "@/lib/plans"
 
 const focusRing =
@@ -193,8 +194,12 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <p className="mt-10 text-sm leading-relaxed text-night-lilac">
-                  You only pay if you want one, for the gift you choose: tap &ldquo;Make it unique&rdquo; once it is wrapped. Needs a free account.
+                  You only pay if you want one, for the gift you choose: tap &ldquo;Make it unique&rdquo; once it is wrapped, or buy them in advance. Needs a free account.
                 </p>
+                {/* Sign up, then straight to the Purchases tab to buy personalisations (developer's request). */}
+                <Link href={withNext("/signup", "/dashboard/purchases")} className={`mt-4 ${primaryButton}`}>
+                  Sign up to buy <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
               </div>
             </div>
             <p className="mt-6 text-center text-sm text-night-lilac/80">Prices in euros including VAT, paid once through Stripe. Nothing renews.</p>
