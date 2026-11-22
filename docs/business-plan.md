@@ -10,7 +10,7 @@ Finding the right gift for someone you love is hard, and a gift card in an email
 
 | | Free | Paid |
 |---|---|---|
-| Finding a gift: search, three options with one recommended, personalising with a few questions | Yes, no account, personalising included (2 finder sessions a day per visitor, 10 searches each; since 22 November) | |
+| Finding a gift: search, three options with one recommended, personalising with a few questions | Yes, no account, personalising included (100 finder sessions a day per visitor, 30 searches each; since 22 November) | |
 | Wrapping the chosen gift in a default template (gift reveal, 3D gift box, party pop box, classic envelope, postcard), with the gift code the sender bought | Yes | |
 | Letters and invitations made in chat, gift lists on invitations | Yes | |
 | Advent calendars and countdowns | Yes, with a free account | |
@@ -44,9 +44,9 @@ Everything that makes Majnu useful is free, so ads can send people straight into
 | VAT inside €2.99 | about €0.48 at the German 19% rate | Depends on the buyer's country once sales go beyond Germany |
 | **Left per wrapper** | **roughly €1.6–1.9** before hosting and ads | €2.99 minus VAT, Stripe and one run |
 | One free gift search | a few short model requests plus up to 4 Tavily searches | `docs/features/gift-finder-api.md`; to be measured |
-| One visitor's most in a day | 2 sessions × 10 searches = 20 searches, plus up to 30 messages per session (each a model request, a search or not) | `lib/finder/limits.ts` |
+| One visitor's most in a day | 100 sessions × 30 searches, plus up to 100 messages a session; in practice the site-wide cap of 300 searches a day binds first per session (each a model request, a search or not) | `lib/finder/limits.ts` |
 
-The free searches are the main cost. Since 22 November (issue #70) a visitor may run up to 20 a day instead of 3, because a search that misses is worse for the product than its cost: 2 finder sessions a day, each with 10 searches, counted from a session's first search. They are bounded by those per-visitor limits, the site-wide daily cap (`MAJNU_DAILY_SEARCH_CAP`, default 300, which now matters more), the monthly spend limit in the Anthropic Console, the fallback key's `FALLBACK_CAP_USD`, and Tavily's plan. Most visitors stop after one or two searches; watch the share who reach 10 in a session before raising the site cap.
+The free searches are the main cost. Since 22 November (issue #70) a visitor may run far more than the old 3 a day (100 sessions of 30 searches since the developer raised the limits on 22 November; the site-wide cap binds first), because a search that misses is worse for the product than its cost: 100 finder sessions a day, each with 30 searches, counted from a session's first search. They are bounded by those per-visitor limits, the site-wide daily cap (`MAJNU_DAILY_SEARCH_CAP`, default 300, which now matters more), the monthly spend limit in the Anthropic Console, the fallback key's `FALLBACK_CAP_USD`, and Tavily's plan. Most visitors stop after one or two searches; watch the share who reach 10 in a session before raising the site cap.
 
 ## The funnel and what we measure
 

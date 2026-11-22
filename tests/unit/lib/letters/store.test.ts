@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { createLetter, getPublicLetter, saveLetterContent } from "@/lib/letters/store"
+import { LIMITS } from "@/lib/limits"
 
 const fakes = vi.hoisted(() => {
   // A chainable query: every builder method returns the query itself, and
@@ -138,9 +139,9 @@ describe("createLetter", () => {
   it("refuses when the daily limit is reached", async () => {
     fakes.serverClient.mockResolvedValue({
       auth: { getUser: async () => ({ data: { user: { id: USER } }, error: null }) },
-      from: () => fakes.query(() => ({ count: 5, error: null }), []),
+      from: () => fakes.query(() => ({ count: LIMITS.lettersPerDay, error: null }), []),
     })
-    await expect(createLetter()).rejects.toThrow(/5 gifts today/)
+    await expect(createLetter()).rejects.toThrow(new RegExp(`${LIMITS.lettersPerDay} gifts today`))
     expect(fakes.adminClient).not.toHaveBeenCalled()
   })
 

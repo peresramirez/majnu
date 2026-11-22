@@ -114,7 +114,7 @@ sequenceDiagram
 3. The server reads the visitor's country and region from the network; the browser sends its language and timezone. Majnu infers the relationship and an age range from what was typed and shows them as chips the visitor can correct. It searches at once when it knows enough, and asks one to three questions first when what is missing would change the gifts a lot (issue #70).
 4. The research agent searches with Tavily and returns **three options** with one recommended, sometimes with one follow-up question. If none fits, Majnu asks a few questions and searches again.
 5. Choosing an option opens the wrap step in two steps (issue #71): the design, then their name, your name, a note and the gift code. A message typed there goes to Majnu with the choice, and Majnu can fill in the form. Wrapping gives the link and QR code.
-6. Limits (22 November, issue #70): 2 finder sessions per visitor per day, counted from their first search, each with 10 searches, personalised or not and without an account; a reload continues the open session. Plus a site-wide daily cap.
+6. Limits (22 November, issue #70): 100 finder sessions per visitor per day, counted from their first search, each with 30 searches, personalised or not and without an account; a reload continues the open session. Plus a site-wide daily cap.
 
 ### Making a letter in chat
 

@@ -1,12 +1,12 @@
 // The gift finder's share of the spending guard (docs/plan.md, "Accounts and
 // limits"; changed 22 November, issue #70).
 //
-// - A visitor, guest or member, gets 2 finder sessions per UTC day. A
+// - A visitor, guest or member, gets 100 finder sessions per UTC day (the developer raised it from 2 on 22 November so no one runs out while talking with Majnu). A
 //   session is one conversation with the finder ("New search" starts
 //   another), and it counts only from its first search: a session that never
 //   searched costs nothing, and one that searched yesterday counts again on
 //   the day it searches again.
-// - Each session allows 10 searches, plain or personalised alike. Personalising
+// - Each session allows 30 searches, plain or personalised alike. Personalising
 //   needs no account and has no cap of its own.
 // - A request without a session id continues today's open session (one that
 //   still has searches and messages left) instead of starting another, so
@@ -21,7 +21,7 @@
 //   Neither is reached by anyone using the finder as meant.
 // - Calendar sessions (lib/finder/pool-limits.ts) do not count towards the
 //   finder's 2: they have their own cap of 2 idea pools a day, and the same
-//   10 searches per session and the site-wide cap.
+//   30 searches per session and the site-wide cap.
 //
 // Searches are counted in finder_searches (migration 0004), which records the
 // session of every search. A search is claimed by inserting its row first and
@@ -67,14 +67,14 @@ import {
 
 export const FINDER_LIMITS = {
   // Finder sessions that may search on one UTC day, counted from their first search.
-  sessionsPerDay: 2,
+  sessionsPerDay: 100,
   // Searches in one session, plain or personalised.
-  searchesPerSession: 10,
-  // Visitor messages in one session: 10 searches with questions around them.
-  messagesPerSession: 30,
+  searchesPerSession: 30,
+  // Visitor messages in one session: its searches with questions around them.
+  messagesPerSession: 100,
   // New sessions a day, searched or not: a guard against a script, never
   // reached by a visitor, because an open session is continued.
-  sessionsStartedPerDay: 10,
+  sessionsStartedPerDay: 200,
 } as const
 
 export const DEFAULT_DAILY_SEARCH_CAP = 300

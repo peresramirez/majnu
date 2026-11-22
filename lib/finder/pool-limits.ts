@@ -4,11 +4,11 @@
 //
 // - A calendar has its own finder session (one whose context has a `calendar`
 //   marker, see lib/calendars/sessions.ts). Calendar sessions are not among
-//   the finder's 2 sessions a day: making a calendar never uses up a gift search.
+//   the finder's daily sessions: making a calendar never uses up a gift search.
 // - A pool of ideas is a search in that session: at most POOLS_PER_DAY pools a
-//   day per user, the calendar's counterpart of the finder's 2 sessions a day.
+//   day per user, the calendar's counterpart of the finder's daily sessions.
 // - "More like this" is a later search in the same session. Like every
-//   session, a calendar's allows 10 searches (FINDER_LIMITS.searchesPerSession),
+//   session, a calendar's allows FINDER_LIMITS.searchesPerSession searches,
 //   its pools included. There is no personalised cap any more.
 // - Every search counts against the site-wide MAJNU_DAILY_SEARCH_CAP.
 //
