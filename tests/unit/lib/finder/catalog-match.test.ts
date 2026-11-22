@@ -144,6 +144,12 @@ describe("pickCatalogueGifts", () => {
     expect(picked.map(({ gift }) => gift.id)).not.toContain("m-expensive")
   })
 
+  it("treats a budget as a limit: only gifts at most 15% above it, even fewer than six", () => {
+    const picked = pickCatalogueGifts(rows, { group: "mother", budget: 20, seed: "s" })
+    expect(picked.every(({ gift }) => typeof gift.price_eur === "number" && gift.price_eur <= 23)).toBe(true)
+    expect(pickCatalogueGifts(rows, { group: "mother", budget: 1, seed: "s" })).toEqual([])
+  })
+
   it("fills up with general gifts, then any, when the group has fewer than six", () => {
     const picked = pickCatalogueGifts(rows, { group: "father", seed: "s" })
     expect(picked[0].gift.id).toBe("f0")
@@ -197,7 +203,7 @@ describe("the options it streams", () => {
     expect(answer.options.why).toBe("Sie liebt Bücher.")
     expect(answer.options.catalogue).toEqual({ message: "Geschenk für meine Mama zum Geburtstag", group: "mother" })
     expect(answer.context).toEqual({ country: "DE", language: "de", currency: "EUR", relationship: "Mama", occasion: "Geburtstag" })
-    expect(answer.line).toBe("Hier sind 3 Ideen für den Anfang. Mein Favorit steht vorne.")
+    expect(answer.line).toBe("Hier sind 3 Ideen aus unserem Katalog, mein Favorit vorne. Soll ich etwas nur für diese Person suchen? Tippe unten auf „Personalise the gift“.")
   })
 
   it("has nothing to answer with an empty catalogue", () => {
@@ -271,5 +277,19 @@ describe("detectGroup: pets", () => {
 
   it("still prefers the person when the pet is only mentioned", () => {
     expect(detectGroup("a gift for my mother, she loves her cat").group).toBe("mother")
+  })
+})
+
+describe("typos and budgets (developer's request, 22 November)", () => {
+  it("understands a misspelt person right after 'for my'", () => {
+    expect(detectGroup("gift for my gieldfriend 20 euros")).toEqual({ group: "partner", word: "girlfriend" })
+    expect(detectGroup("a gift for my mohter")).toEqual({ group: "mother", word: "mother" })
+    expect(detectGroup("Geschenk für meine Freudnin").group).toBe("partner")
+  })
+
+  it("does not guess from look-alike words elsewhere", () => {
+    expect(detectGroup("I would rather have something small").group).toBe("general")
+    expect(detectGroup("something for the other room").group).toBe("general")
+    expect(detectGroup("she loves cooking").group).toBe("general")
   })
 })

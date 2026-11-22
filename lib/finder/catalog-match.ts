@@ -128,6 +128,45 @@ const GROUP_PATTERNS = Object.entries(GROUP_WORDS).flatMap(([group, words]) =>
 
 export type GroupMatch = { group: CatalogueGroup; word?: string }
 
+// Typos ("gieldfriend", "mohter", "Freudnin"): when no group word matched
+// exactly, a word of six letters or more, right after "for my" or the like, that is one edit away from a group
+// word (two for words of eight or more) counts, and the chip shows the word
+// spelled right. Swapped neighbours count as one edit.
+const FUZZY_WORDS = Object.entries(GROUP_WORDS).flatMap(([group, words]) =>
+  words.filter((word) => word.length >= 5 && !word.includes(" ")).map((word) => ({ group: group as CatalogueGroup, word })),
+)
+
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)])
+  for (let j = 1; j <= b.length; j++) d[0][j] = j
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
+    }
+  }
+  return d[a.length][b.length]
+}
+
+function fuzzyGroup(text: string): GroupMatch {
+  for (const hit of text.matchAll(/[a-z]{6,}/g)) {
+    const token = hit[0]
+    // Only the word right after "for my", "für meine", "para mi": elsewhere a
+    // near miss is usually another word ("rather", "other").
+    if (!FOR_WORDS.test(text.slice(Math.max(0, (hit.index ?? 0) - 40), hit.index))) continue
+    const allowed = token.length >= 8 ? 2 : 1
+    let found: { group: CatalogueGroup; word: string; distance: number } | null = null
+    for (const { group, word } of FUZZY_WORDS) {
+      const distance = editDistance(token, word, allowed)
+      if (distance <= allowed && (!found || distance < found.distance)) found = { group, word, distance }
+    }
+    if (found) return { group: found.group, word: found.word }
+  }
+  return { group: "general" }
+}
+
 // Who the gift is for, from the visitor's words. `word` is what they wrote,
 // for the relationship chip ("Mama"); absent for `general`.
 export function detectGroup(message: string): GroupMatch {
@@ -142,7 +181,7 @@ export function detectGroup(message: string): GroupMatch {
       if (!best || score < best.score) best = { group, index: match.index, length: match[0].length, score }
     }
   }
-  if (!best) return { group: "general" }
+  if (!best) return fuzzyGroup(text)
   // The visitor's own spelling: normalising keeps every character but ß in place.
   const original = originalSpan(message, best.index, best.length)
   return { group: best.group, word: original }
@@ -314,10 +353,17 @@ export function pickCatalogueGifts(rows: readonly CatalogueGift[], query: Catalo
       return { gift, score, tie: hash(`${query.seed ?? ""}:${gift.id}`) }
     })
   scored.sort((a, b) => b.score - a.score || a.tie - b.tie)
+  // A budget the visitor named is a limit, not a preference (developer's
+  // request, 22 November): only gifts at most 15% above it, even if that is
+  // fewer than six. None at all → the caller falls back to Majnu.
+  const budget = query.budget
+  const affordable = budget
+    ? scored.filter(({ gift }) => typeof gift.price_eur === "number" && Number.isFinite(gift.price_eur) && gift.price_eur <= budget * 1.15)
+    : scored
   // One gift per shop and title only once: the visitor sees six different ideas.
   const seen = new Set<string>()
   const picked: ScoredGift[] = []
-  for (const entry of scored) {
+  for (const entry of affordable) {
     const key = normalise(entry.gift.title)
     if (seen.has(key)) continue
     seen.add(key)
@@ -385,16 +431,21 @@ export function messageLanguage(message: string): "en" | "de" | "es" | null {
   return best[1] > 0 && Object.values(counts).filter((n) => n === best[1]).length === 1 ? best[0] : null
 }
 
-const LINES: Record<"en" | "de" | "es", (count: number) => string> = {
-  en: (count) => `Here are ${count === 6 ? "six" : count} ideas to start with. My favourite is first.`,
-  de: (count) => `Hier sind ${count === 6 ? "sechs" : count} Ideen für den Anfang. Mein Favorit steht vorne.`,
-  es: (count) => `Aquí tienes ${count === 6 ? "seis" : count} ideas para empezar. Mi favorita va primero.`,
+// It says the ideas come from our catalogue (and the budget, when one was
+// named) and invites the visitor to personalise for ideas found for them.
+const LINES: Record<"en" | "de" | "es", (count: number, budget?: number | null) => string> = {
+  en: (count, budget) =>
+    `${count === 1 ? "Here is one idea" : `Here are ${count === 6 ? "six" : count} ideas`} from our catalogue${budget ? ` under €${budget}` : ""}, my favourite first. Want something found just for them? Tap “Personalise the gift” below.`,
+  de: (count, budget) =>
+    `${count === 1 ? "Hier ist eine Idee" : `Hier sind ${count === 6 ? "sechs" : count} Ideen`} aus unserem Katalog${budget ? ` bis ${budget} €` : ""}, mein Favorit vorne. Soll ich etwas nur für diese Person suchen? Tippe unten auf „Personalise the gift“.`,
+  es: (count, budget) =>
+    `${count === 1 ? "Aquí tienes una idea" : `Aquí tienes ${count === 6 ? "seis" : count} ideas`} de nuestro catálogo${budget ? ` por menos de ${budget} €` : ""}, mi favorita primero. ¿Quieres algo buscado solo para esa persona? Toca «Personalise the gift» abajo.`,
 }
 
 // Majnu's short line above the catalogue's cards.
-export function catalogueLine(language: string, count: number): string {
+export function catalogueLine(language: string, count: number, budget?: number | null): string {
   const key = (["en", "de", "es"] as const).find((l) => l === language) ?? "en"
-  return LINES[key](count)
+  return LINES[key](count, budget)
 }
 
 // The marker a session keeps with the catalogue's options until the next
@@ -441,7 +492,7 @@ export function catalogueAnswer(opts: {
       catalogue: { message: opts.message.slice(0, 2000), group: query.group, ...(opts.startedOver ? { startedOver: true } : {}) },
     },
     context,
-    line: catalogueLine(language, options.length),
+    line: catalogueLine(language, options.length, query.budget),
     language,
   }
 }
