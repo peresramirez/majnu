@@ -1,0 +1,63 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "majnu",
+  // Wraps the fetch handler OpenNext generates (.open-next/worker.js) and adds
+  // the queue consumer for personalised wrappers. See worker.ts.
+  "main": "./worker.ts",
+  "compatibility_date": "2026-11-21",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // The job's modules import "server-only", which throws outside a React
+  // Server Components build. In the Worker bundle it is an empty module.
+  "alias": {
+    "server-only": "./node_modules/server-only/empty.js"
+  },
+  // esbuild's keep-names adds __name(...) calls inside functions that
+  // next-themes turns into an inline <script>, where __name does not exist
+  // ("ReferenceError: __name is not defined" on every page). OpenNext's fix:
+  // https://opennext.js.org/cloudflare/howtos/keep_names
+  "keep_names": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "majnu"
+    }
+  ],
+  "queues": {
+    "producers": [{ "binding": "DESIGN_QUEUE", "queue": "majnu-designs" }],
+    "consumers": [
+      {
+        // One paid design per invocation. No retries: a retry is another
+        // paid run, and the job refunds the failures it sees.
+        "queue": "majnu-designs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 0,
+        "dead_letter_queue": "majnu-designs-dlq",
+        "max_concurrency": 3
+      },
+      {
+        // Messages whose consumer died mid-run: refund the purchase.
+        "queue": "majnu-designs-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5
+      }
+    ]
+  },
+  // Cloudflare Email Service: Majnu's account emails (lib/email/sender.ts),
+  // sent from hello@majnu.app only. majnu.app must be onboarded to Email Sending.
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["hello@majnu.app"] }],
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "majnu.app", "custom_domain": true },
+    { "pattern": "www.majnu.app", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true
+}

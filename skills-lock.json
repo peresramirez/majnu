@@ -1,0 +1,194 @@
+{
+  "version": 2,
+  "skills": {
+    "agents-sdk": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/agents-sdk/SKILL.md",
+      "computedHash": "7522d2aa3b6b850e3778af08ba3f0d70d1dc9b8c2c5da47e7f2e3f5944e4d691",
+      "installMode": "copy"
+    },
+    "bfl-api": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/bfl-api/SKILL.md",
+      "computedHash": "212076bb906421fa8f55095048fabb5ff7a4094818df1ce31e265fd4c840cc73",
+      "installMode": "copy"
+    },
+    "cloudflare": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/cloudflare/SKILL.md",
+      "computedHash": "a40c5c77e4b96b0f6603a54e67bf2ff401a872366af48ff8f6ae0e872d4ad324",
+      "installMode": "copy"
+    },
+    "cloudflare-email-service": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/cloudflare-email-service/SKILL.md",
+      "computedHash": "7c3d2a100a0cf9ff344c915ed32a8e335d3157db6943b130db104b6411f496bd",
+      "installMode": "copy"
+    },
+    "design-taste-frontend": {
+      "source": "Leonxlnx/taste-skill",
+      "commit": "f6b76575f949707b4e3c37cd86cb44b0b98643e8",
+      "sourceType": "github",
+      "skillPath": "skills/taste-skill/SKILL.md",
+      "computedHash": "b10eab0a9684cd09cf34c31ef04a3bf530a5f4404422f9c520d42372d670c7fc",
+      "installMode": "copy"
+    },
+    "flux-3-archival-formats": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-archival-formats/SKILL.md",
+      "computedHash": "aaa82e6190aa4116338348b8901cc83d9eed2cb8127e7858422761936904327a",
+      "installMode": "copy"
+    },
+    "flux-3-audio-dialogue": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-audio-dialogue/SKILL.md",
+      "computedHash": "e5e4907b1666231d24d6a390ed2c0e61b77714cf7148cf8027450751908e6b95",
+      "installMode": "copy"
+    },
+    "flux-3-cinematic-inserts": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-cinematic-inserts/SKILL.md",
+      "computedHash": "c231dfc0fcc3edeeed2f7297c85c7877b080789980f4aaf6368faeaaa90d7de3",
+      "installMode": "copy"
+    },
+    "flux-3-generate": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-generate/SKILL.md",
+      "computedHash": "66c59004f6f8a4f9cace4499aa2b8542d03ff3d1514c2b9c479f0909ad0d9d76",
+      "installMode": "copy"
+    },
+    "flux-3-keyframes-continuation": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-keyframes-continuation/SKILL.md",
+      "computedHash": "145c71cec47d1f9fad04d2b69eec9910067e210a07dcde20da6237365ad78835",
+      "installMode": "copy"
+    },
+    "flux-3-product-ads": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-product-ads/SKILL.md",
+      "computedHash": "2b5d4de1bc58dde0bc360c038bacee2b02f3aaf015b7d81357125335544a2e9c",
+      "installMode": "copy"
+    },
+    "flux-3-prompt-doctor": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-prompt-doctor/SKILL.md",
+      "computedHash": "c0ea3a1ab96416513d6bcea6760dd0014c62bdfdbda6c57ec46b1bfd8916cc01",
+      "installMode": "copy"
+    },
+    "flux-3-video": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-3-video/SKILL.md",
+      "computedHash": "1b39f4b8e53ec49f9c7c830c55e0b7a9d62f76fd713bafb900ced6d19d60156f",
+      "installMode": "copy"
+    },
+    "flux-image-best-practices": {
+      "source": "black-forest-labs/skills",
+      "commit": "8907d515b0ac270a988ec7a239add81ee13d6cba",
+      "sourceType": "github",
+      "skillPath": "skills/flux-image-best-practices/SKILL.md",
+      "computedHash": "3c94c331a1e12ebc298385dbfc4f6a2f25c215afaab811b50360fdfaf9721f47",
+      "installMode": "copy"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "83485963700bcf11d5bf78118facb301676b69d918fee2e45a95e7f1a2840f6c",
+      "installMode": "copy"
+    },
+    "nextjs-on-cloudflare": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/nextjs-on-cloudflare/SKILL.md",
+      "computedHash": "5da56bb44703eb542ee923ddf428a4c12c3d97cbeb50bd34b9d8aa3b68d33836",
+      "installMode": "copy"
+    },
+    "stripe-best-practices": {
+      "source": "docs.stripe.com",
+      "sourceUrl": "https://docs.stripe.com",
+      "sourceType": "well-known",
+      "computedHash": "abf8e949bcbcc38081c03eb66b22e741c3cf1be6bae627546d711e6d32327a09",
+      "wellKnownDigest": "sha256:7f8652e59a6e0c9c302fae67fcd8ad6ad7c8bf6ed772af39cc99dc4d48e560a2"
+    },
+    "stripe-docs": {
+      "source": "docs.stripe.com",
+      "sourceUrl": "https://docs.stripe.com",
+      "sourceType": "well-known",
+      "computedHash": "e4d4628efd7efb5558971920fcbf94176691fa279990a9a8b0833c12bf54bc0d",
+      "wellKnownDigest": "sha256:354fb04e9c979223bfecabc994fff41c8da5b5ea155684f1b4ade3a6fed07bac"
+    },
+    "stripe-implementation-planner": {
+      "source": "docs.stripe.com",
+      "sourceUrl": "https://docs.stripe.com",
+      "sourceType": "well-known",
+      "computedHash": "0e9dfdb7060c3cefad1e395bef23bd76e4b424eb64d6653a382ed959ac94116b",
+      "wellKnownDigest": "sha256:8326402f28f0b0620266103b9f9448a30c6ab73b4c371c6ef8e3080b64c3bf77"
+    },
+    "supabase": {
+      "source": "supabase/agent-skills",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "sourceType": "github",
+      "skillPath": "skills/supabase/SKILL.md",
+      "computedHash": "2fbff32fd63b7d31585cacf0ed43e5bf8d05dd20d6c0c751d256cb967a00eec1",
+      "installMode": "copy"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "sourceType": "github",
+      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "3eb972c2d7c818e544e35cc33ea8d7147d4d78ae08142ef40037b0fbac7a2505",
+      "installMode": "copy"
+    },
+    "workers-best-practices": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/workers-best-practices/SKILL.md",
+      "computedHash": "7f941bbc549454872a4c7c261bf75a1ef7aaa69666bc85cec91e97cf40c11cc6",
+      "installMode": "copy"
+    },
+    "workers-profiling": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/workers-profiling/SKILL.md",
+      "computedHash": "3a7b8b1c2cfa19b293a8f55967dab217481cc04eb0dffe4b99e90df879529850",
+      "installMode": "copy"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "commit": "5108325ecceabc899c761e07aa617b09c02445ee",
+      "sourceType": "github",
+      "skillPath": "skills/wrangler/SKILL.md",
+      "computedHash": "182e370d8c26e6bcb896a57a63e6cab006b253b9278cc3515f7b9db2c4d07661",
+      "installMode": "copy"
+    }
+  }
+}

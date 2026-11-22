@@ -1,0 +1,214 @@
+# Daytona redesign: the personalised wrapper's designer
+
+## What it does
+
+This is the one paid thing in Majnu: the **personalised wrapper**, €2.99 once ([billing.md](billing.md)). A sender asks for a one-off look for a gift ("a 1950s cinema ticket by the sea") instead of one of our designs, pays, and Claude Code, running in a Daytona sandbox, writes one self-contained HTML page from the letter's content. We check the page, store it with the letter and delete the sandbox, and from then on `/l/<slug>` shows the design. The result never depends on the sandbox still existing. Letters only: a calendar baked into one static page would carry its locked doors.
+
+A paid purchase starts the job from a Cloudflare Queue consumer in the same Worker as the app; a failed run is refunded automatically. A developer can also run it by hand.
+
+## How it works
+
+```mermaid
+sequenceDiagram
+  participant W as Webhook or return page
+  participant Q as Queue majnu-designs
+  participant C as Queue consumer (worker.ts)
+  participant Job as redesignLetter
+  participant DB as Supabase
+  participant D as Daytona sandbox (REST)
+  participant A as Anthropic API
+  W->>DB: purchase pending → paid
+  W->>Q: { purchaseId }
+  Q->>C: one message (max_retries 0, dead-letter queue)
+  C->>DB: purchase paid → designing (once)
+  C->>Job: letterId, request
+  Job->>DB: load the letter (service role), letters only
+  Job->>D: create an ephemeral sandbox from the snapshot, eu, TTL 20 min
+  Job->>D: upload content.json, request.txt, prompt.md
+  Job->>D: run claude --print with file tools only, $3 and 360 s
+  D->>A: model requests with the run's own key
+  Job->>D: download out/index.html
+  Job->>D: delete the sandbox, also after a failure
+  Job->>Job: checkDesignHtml
+  Job->>DB: insert into letter_designs
+  C->>DB: purchase → done with design_id (or refund and → refunded)
+```
+
+```mermaid
+flowchart LR
+  recipient(["Recipient"]) -->|"GET /l/slug"| page["Gift page"]
+  page -->|"getLatestDesignInfo"| db[("letter_designs")]
+  page -->|"iframe sandbox"| design["GET /l/slug/design?v=id"]
+  design -->|"newest design, strict CSP"| db
+```
+
+### The snapshot
+
+Every sandbox starts from the snapshot `majnu-letters-v3` (22 November, with the 3D skill; `majnu-letters-v1` and the intermediate `majnu-letters-v2`, which lacked the skill's `[hidden]` rule, still exist and are no longer used), built in the `eu` region by [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts) (`--print` shows the Dockerfile and builds nothing):
+
+- `node:22-bookworm-slim`, with Claude Code pinned to **2.1.323**, the version npm tagged `stable` when the snapshot was defined, so a CLI release cannot change flags under us. Auto-update, telemetry, error reporting and non-essential traffic are switched off.
+- The project Claude Code works in, [`daytona/sandbox/`](../../daytona/sandbox/), copied to `/home/daytona/letter`: the [`majnu-letter` skill](../../daytona/sandbox/.claude/skills/majnu-letter/SKILL.md) with the page rules and its [3D file](../../daytona/sandbox/.claude/skills/majnu-letter/3d.md), a [`CLAUDE.md`](../../daytona/sandbox/CLAUDE.md), [permissions](../../daytona/sandbox/.claude/settings.json) that allow only the file tools, and one rendered example per template in `daytona/sandbox/reference/rendered/` (made by [`export-references.mts`](../../scripts/daytona/export-references.mts) from the workbench).
+- The template sources, the schema and the fixtures as read-only reference.
+- No keys. The Anthropic key is passed to each run's command only.
+
+Snapshots are immutable by name. After changing the templates, the skill or the CLI version, refresh the rendered examples, build the next name (`majnu-letters-v4`) by setting `DAYTONA_SNAPSHOT` for the build, and then move `DEFAULT_SNAPSHOT` in `lib/daytona/config.ts` to it (or set `DAYTONA_SNAPSHOT` where the job runs). Sandboxes already running keep the old one, and a bad build never replaces a working one. The alternative, a plain sandbox with the templates pushed in at every start, would start slower and not pin the CLI, for the same upkeep.
+
+### The job
+
+The job reaches Daytona with `fetch` ([`lib/daytona/rest.ts`](../../lib/daytona/rest.ts)), not `@daytona/sdk`: it runs in the Worker's queue consumer, and the SDK does not bundle for Workers (it pulls in `@aws-sdk/client-s3`, OpenTelemetry's Node SDK, `tar`, `ws` and `socket.io-client`, and uses axios's Node HTTP adapter). The six calls it needs were recorded from a traced SDK 0.233 run and are written out with the same paths and bodies: `POST /sandbox` (snapshot, labels, `target`, `autoDeleteInterval: 0` for ephemeral, `ttlMinutes`, `domainAllowList`), `GET /sandbox/{id}` while it starts, `GET /sandbox?labels=` and `DELETE /sandbox/{id}` on the API, and `files/bulk-upload`, `process/execute`, `files/info` and `files/download` on the toolbox proxy the create response names. Daytona's own error message is kept in the error, so the tier fallback below still recognises it. The SDK stays for building snapshots on a laptop.
+
+[`redesignLetter(letterId, request)`](../../lib/daytona/redesign.ts):
+
+1. Checks the letter id is a UUID and cleans the request (line ends normalised, control characters removed, at most 2,000 characters).
+2. Loads the letter with the service-role client. A calendar, or a letter without valid content, is refused.
+3. Starts an **ephemeral** sandbox labelled with a job id, with `ttlMinutes: 20`: it destroys itself 20 minutes after it was created, whatever happens to the job. The network allow list is `api.anthropic.com`. Daytona enforces a per-sandbox list only on Tier 3 and 4; our current tier refuses it, so the job retries without it and the tier's own policy applies (Daytona's essential services: package registries, git hosts and model providers). If the start fails late, sandboxes carrying the job's label are deleted.
+4. Uploads `input/content.json`, `input/request.txt` and `input/prompt.md` as **files**, so no user text is ever part of a shell command.
+5. Runs Claude Code headless ([`buildClaudeCommand()`](../../lib/daytona/redesign.ts)) with `ANTHROPIC_API_KEY` and `MAJNU_MODEL` in that one command's environment only. The key is never written to a file, a label, the sandbox's own environment or a log.
+6. Downloads `out/index.html` (refusing anything over 500 KB before downloading), then **deletes the sandbox**, also when anything before failed. A failed delete is tried once more; after that the TTL removes it.
+7. Checks the page ([`checkDesignHtml()`](../../lib/daytona/validate.ts)) and, only if it passes, inserts it into `letter_designs`.
+
+Every log line and error goes through `redact()`, which removes the Anthropic, Daytona, Supabase service-role and Stripe keys and anything shaped like `sk-ant-…`.
+
+The command, as fixed text:
+
+| Flag | Why |
+|---|---|
+| `timeout --kill-after=15 360` | A 6-minute limit inside the sandbox; the SDK call that waits for it has its own, 60 seconds longer |
+| `claude --print "$(cat input/prompt.md)"` | The prompt comes from a file we wrote |
+| `--model "$MAJNU_MODEL"`, `--effort medium` | The app's model, at more effort than the chat agents: a design benefits from thought and nobody is waiting on each reply |
+| `--max-budget-usd 3` | This CLI version has no turn limit, so the run is bounded by spend and time |
+| `--restricted`, `--tools "Read,Write,Edit,Glob,Grep"`, `--disallowedTools "Bash,WebFetch,WebSearch"` | Only file tools exist in the session, confined to the project folder: no shell and no web |
+| `--settings .claude/settings.json`, `--permission-mode acceptEdits` | Our permissions, passed explicitly because `--restricted` skips project settings files |
+| `--no-session-persistence`, `--output-format json` | Nothing about the run is kept on disk; the last line reports turns, cost and duration |
+
+A run that stopped at its budget after writing the page is still checked; a run that timed out (exit 124) or failed otherwise is not.
+
+### The page checker
+
+[`checkDesignHtml()`](../../lib/daytona/validate.ts) enforces mechanically the page rules in the skill. It is defence in depth, not the boundary: it works on raw text with regular expressions and errs on the side of rejecting. It refuses a page that:
+
+- is over 500 KB, under 200 bytes, or does not start with `<!doctype html>`;
+- contains one of our keys, or anything shaped like an Anthropic key;
+- has a `<form>`, `<iframe>`, `<object>`, `<embed>`, `<base>`, `<link>`, `<meta http-equiv>` or a `<script src>`;
+- uses `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, cookies, any storage API, workers, `window.open`, a location change, a dynamic `import()`, a re-export (`export … from`), a three.js loader (`TextureLoader` and every other `…Loader`), `eval`, `new Function`, CSS `@import` or `image-set()`;
+- imports any module but our three.js, or imports it more than once, or has an import map other than `{"imports":{"three":"/vendor/three/0.187.0/three.module.min.js"}}` ([3D](#3d-the-one-script-a-design-may-load));
+- loads anything with `src`, `poster`, `background` or CSS `url()` that is not a `data:` URI or a `#fragment`, or has attributes such as `srcset`, `ping`, `action` or `formaction`;
+- links anywhere but the letter's own `https` gift links, or names another URL inside a script;
+- shows a gift code in the markup. Codes may live only inside the script, inserted when the recipient taps a "Reveal your code" button.
+
+### Storage and serving
+
+`letter_designs` ([`0003_letter_designs.sql`](../../supabase/migrations/0003_letter_designs.sql)) holds `letter_id`, the `html` (1 to 512,000 bytes), the `request` (1 to 2,000 characters, kept so a design can be traced back to it) and `created_at`. Row-level security is on; owners can read the designs of their own letters; only the service role writes, because a browser must never be able to put HTML on our domain. Designs are deleted with their letter.
+
+[`GET /l/[slug]/design`](../../app/(public)/l/[slug]/design/route.ts) looks the letter up by exact slug and returns its newest design with these headers ([`designs.ts`](../../lib/daytona/designs.ts)), which are the **security boundary**:
+
+```text
+Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://majnu.app/vendor/three/0.187.0/three.module.min.js [<request origin>/vendor/three/0.187.0/three.module.min.js]; img-src data:; font-src data:; base-uri 'none'; form-action 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+X-Robots-Tag: noindex, nofollow
+Cache-Control: private, no-store
+```
+
+The `sandbox` directive gives the document an opaque origin: its scripts run but cannot read our cookies or storage or script the page around it, and `default-src 'none'` means the browser makes no request for it, whatever the HTML tries, except for the one three.js file named by its full URL. The policy names that file on `majnu.app` and on the origin the request came to (a preview or a dev server), because the page's origin is opaque and `'self'` would not name our host. `allow-popups` exists only so a gift link (`target="_blank"`) opens the shop in a normal tab. Errors are plain text and say nothing about the letter.
+
+`/l/<slug>` checks `getLatestDesignInfo(slug)` for letters and, when a design exists, renders a full-screen `<iframe>` of `/l/<slug>/design?v=<design id>` with the same sandbox attributes and the open beacon outside it. `?v=` makes a new design load fresh. If the lookup fails, the page falls back to its template.
+
+### 3D: the one script a design may load
+
+A request such as "a snow globe with our city inside" deserves a real 3D scene, so a design may use **Three.js**, but only one copy we host and pin:
+
+```mermaid
+flowchart LR
+  npm["node_modules/three 0.187.0<br/>three.module.js + three.core.js"] -->|"scripts/daytona/vendor-three.mts<br/>(esbuild, one minified ES module)"| file["public/vendor/three/0.187.0/<br/>three.module.min.js"]
+  file -->|"static asset, public/_headers:<br/>immutable, CORS *"| host["majnu.app/vendor/three/0.187.0/three.module.min.js"]
+  skill["3d.md in the sandbox skill"] -->|"exact import path"| page["design HTML"]
+  page -->|"checkDesignHtml: one import of that path"| db[("letter_designs")]
+  db --> design["/l/slug/design<br/>CSP script-src names that one file"]
+  design -->|"import (CORS, Origin: null)"| host
+```
+
+- **One file.** three 0.187.0 ships `three.module.js`, which imports `./three.core.js`, and no minified build. [`scripts/daytona/vendor-three.mts`](../../scripts/daytona/vendor-three.mts) bundles the two with esbuild into one self-contained, minified ES module: `public/vendor/three/0.187.0/three.module.min.js`, 731 KB (186 KB gzipped), sha-256 `ea0b317604d082b1393cb2bbe5c6e5f97884a3b66eaa55cf55d89104f8779a2a`, recorded as `THREE_MODULE_SHA256` in [`config.ts`](../../lib/daytona/config.ts) and checked by `tests/unit/lib/daytona/three.test.ts`. A published version is never overwritten, because stored designs import it by URL; a new version gets a new folder, a new hash and a new snapshot.
+- **Headers.** [`public/_headers`](../../public/_headers) gives `/vendor/three/*` `Cache-Control: public,max-age=31536000,immutable`, `Access-Control-Allow-Origin: *`, `Cross-Origin-Resource-Policy: cross-origin` and `nosniff` on Cloudflare; [`next.config.mjs`](../../next.config.mjs) sets the same for the dev server. CORS is required: the design's document has an opaque origin, so its module import is a cross-origin CORS request with `Origin: null`. The file is a public library, so `*` gives nothing away.
+- **The path, not a URL.** A design imports the root-relative path `/vendor/three/0.187.0/three.module.min.js`, which resolves against `/l/<slug>/design` on whatever host serves it, so the same stored page works on majnu.app, a preview and a dev server. The CSP names the full URL on `majnu.app` and on the request's origin (`designCsp(origin)` in [`designs.ts`](../../lib/daytona/designs.ts); an origin that is not a plain `http(s)://host[:port]` is ignored).
+- **The checker** accepts exactly one static import whose specifier is that path, character for character, or the bare name `three` with the single import map `{"imports":{"three":"<that path>"}}`. It refuses other versions, other files in the folder, query strings, fragments, relative and walking paths, absolute URLs (ours included), `three/addons/...`, a second import, a side-effect import of anything else, a re-export, `import()`, an import it cannot read (a comment inside it), an import map with anything else in it (another entry, `scopes`, `integrity`), two import maps, and every three.js `…Loader`, since loaders fetch files. The CSP enforces the same single file in the browser.
+- **The skill** ([`3d.md`](../../daytona/sandbox/.claude/skills/majnu-letter/3d.md), named from `SKILL.md` and from the prompt): when 3D helps and when a flat page is better; core three.js only (no addons, no loaders, no textures but canvases it draws); a still fallback that is always there (the page is complete HTML with an SVG of the scene, replaced by the canvas only after its first frame, and back on a lost context; with reduced motion nothing moves); a budget (one scene, under 50,000 triangles, at most three lights, no shadows or transmission, pixel ratio at most 2, 60 fps on a phone, paused when hidden or scrolled away); and accessibility (the words stay real HTML over or beside the canvas, the canvas is `aria-hidden`, touch still scrolls).
+
+## Pieces
+
+| Piece | Job |
+|---|---|
+| [`lib/daytona/config.ts`](../../lib/daytona/config.ts) | Names and limits shared by the job, the snapshot script and the checker. No imports, no secrets |
+| [`lib/daytona/redesign.ts`](../../lib/daytona/redesign.ts) | The job |
+| [`lib/daytona/rest.ts`](../../lib/daytona/rest.ts) | Daytona's REST API with `fetch`, behind the job's `Sandboxes` interface |
+| [`worker.ts`](../../worker.ts), [`lib/billing/consumer.ts`](../../lib/billing/consumer.ts), [`lib/billing/fulfil.ts`](../../lib/billing/fulfil.ts) | The Worker entry that adds the queue consumer to the OpenNext app, the consumer, and the job for one paid purchase (claim, run, done or refund) |
+| [`scripts/daytona/run-purchase.mts`](../../scripts/daytona/run-purchase.mts) | Runs the job for one paid purchase by hand, as the consumer would |
+| [`lib/daytona/validate.ts`](../../lib/daytona/validate.ts) | The page checker |
+| [`lib/daytona/designs.ts`](../../lib/daytona/designs.ts) | Reading stored designs and the headers they are served with; never imports the Daytona SDK |
+| [`app/(public)/l/[slug]/design/route.ts`](../../app/(public)/l/[slug]/design/route.ts) | Serves the newest design |
+| [`scripts/daytona/redesign.mts`](../../scripts/daytona/redesign.mts) | Runs one redesign by hand, loading the job through Vite's module runner so the app's imports resolve |
+| [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts), [`scripts/daytona/export-references.mts`](../../scripts/daytona/export-references.mts) | Build the snapshot and refresh its rendered examples |
+| [`daytona/sandbox/`](../../daytona/sandbox/) | The project Claude Code works in, with the skill and its [3D file](../../daytona/sandbox/.claude/skills/majnu-letter/3d.md) |
+| `public/vendor/three/0.187.0/three.module.min.js`, [`scripts/daytona/vendor-three.mts`](../../scripts/daytona/vendor-three.mts) | The pinned three.js a design may import, and the script that makes it |
+| `letter_designs` table | Stored pages |
+| `DAYTONA_API_KEY` | Daytona access. A Worker secret, used by the queue consumer |
+| `DAYTONA_ANTHROPIC_API_KEY` | Optional key of its own for the sandbox, with a low spend limit; otherwise `ANTHROPIC_API_KEY` is used |
+| `DAYTONA_API_KEY_FALLBACK`, `ANTHROPIC_API_KEY_FALLBACK` | Optional fallbacks: the sandbox starts with the Daytona fallback when Daytona refuses the primary for its key, quota or billing, and Claude Code gets the Anthropic fallback when a free token count shows its primary refused. Both are counted against `FALLBACK_CAP_USD` a month ([provider-fallbacks.md](provider-fallbacks.md)) |
+| `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v3`, `eu`, `https://app.daytona.io/api` |
+
+The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`), used only by the snapshot script. Queues `majnu-designs` and `majnu-designs-dlq` are bound in [`wrangler.jsonc`](../../wrangler.jsonc) and created by `scripts/deploy.sh` if missing.
+
+## Data and privacy
+
+- **What leaves our systems:** the letter's content and the sender's request go into a Daytona sandbox in the EU, and from there to Anthropic. The sandbox is deleted as soon as the page is downloaded, and in any case within 20 minutes.
+- **What we keep:** the page and the request, in `letter_designs`, for as long as the letter exists. Only the owner can read them through the API; the public route serves only the HTML, by exact slug.
+- **The request is untrusted.** A stranger wrote it and a model reads it, so it is a file the prompt calls a description of a look, never an instruction. Claude Code has no shell or web tools, the sandbox's network is limited, the key is cheap to lose when `DAYTONA_ANTHROPIC_API_KEY` is used, the checker rejects pages that leak keys, and the browser enforces the CSP whatever the page says.
+- The privacy page names Daytona, the sandbox in the EU, and that it is deleted within 20 minutes.
+
+## Limits and costs
+
+| Limit | Value |
+|---|---|
+| Spend per run | $3 (`--max-budget-usd`) |
+| Time per run | 360 s inside the sandbox, plus 15 s before a kill |
+| Sandbox lifetime | 20 minutes from creation, whatever happens |
+| Page size | 500 KB (512,000 bytes), in the job, the checker and the database |
+| Request length | 2,000 characters |
+| three.js | One file, 731 KB (186 KB gzipped), loaded only by designs that import it and cached for a year; a 3D scene is held to the budget in `3d.md` |
+
+**3D runs** (22 November, two runs, above) took 137 to 139 s and cost $0.44 to $0.46 in model spend for 19 to 23 KB pages; the visitor's browser also fetches three.js once (186 KB gzipped, then cached for a year).
+
+**The first end-to-end run** (21 November, a birthday letter, "a 1950s cinema ticket by the sea", recorded in [docs/plan.md](../plan.md#daytona-redesign-only-if-everything-else-is-done)) took 81 s in all: under 2 s to start the sandbox, 9 Claude Code turns costing $0.26, and a 15 KB page. Daytona's own charge for the sandbox time is not recorded.
+
+## Running it in production
+
+A run takes about 90 seconds, too long for a request, so a paid purchase runs it in a **Cloudflare Queue consumer** that lives in the same Worker as the app ([`worker.ts`](../../worker.ts) wraps OpenNext's fetch handler and adds `queue`), so `npm run deploy` still deploys one Worker. Why a queue and not a Workflow: a consumer has 15 minutes of wall time per message, which holds one run with room to spare; waiting on Daytona and Anthropic is I/O, not CPU time; and the job has no steps worth retrying separately, since a retry is another paid run. A Workflow would add a class export, a second binding and per-step state for no gain here.
+
+- **The consumer's environment.** On Workers `process.env` starts empty. OpenNext fills it for web requests only, so `worker.ts` fills it before each batch ([`lib/billing/queue-env.ts`](../../lib/billing/queue-env.ts)): the Worker's variables and secrets first, then the public values from `.env.production` that the build writes to `.open-next/cloudflare/next-env.mjs`. Without it every message failed with "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set" (found live on 22 November with the first coupon redemption; no paid customer was affected).
+- **No compiled zod parsers in the Worker.** zod v4 decides when a schema is built whether it may compile a parser with `new Function`. The queue bundle builds its schemas while the Worker starts, when code generation is still allowed, and the first parse in the job then fails with "Code generation from strings disallowed for this context". `worker.ts` imports [`lib/zod-jitless.ts`](../../lib/zod-jitless.ts) first, which sets zod's `jitless` option before any schema exists.
+- **`majnu-designs`**: `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 3`, dead-letter queue `majnu-designs-dlq`. The webhook and the return page send `{ purchaseId }` after moving the purchase to `paid`. The consumer claims it (`paid → designing`, once), runs the job, and marks it `done` or refunds it ([billing.md](billing.md#the-design-job-and-refunds)); it acknowledges every message it could handle.
+- **`majnu-designs-dlq`**: a message lands here only if the consumer threw (it could not reach the database or Stripe) or died. Its consumer refunds the purchase if it is still `paid` or `designing`.
+- **Where there is no queue:** `next dev` runs the job in the background of the dev server; anywhere else the purchase stays `paid` and `node scripts/daytona/run-purchase.mts <purchaseId>` runs it by hand.
+- **Bundling:** wrangler bundles `worker.ts` with the job's modules. `server-only` is aliased to an empty module in `wrangler.jsonc`, because it throws outside a React Server Components build; `process.env` holds the Worker's secrets (`nodejs_compat` with a 2026 compatibility date).
+- **CPU:** the consumer's own work is small (a few database writes and the page checker on at most 500 KB). On Workers Paid the default 30 s of CPU per invocation is plenty; on Workers Free the 10 ms limit could be too tight for the checker on a large page.
+
+## How it was checked
+
+- **Unit tests** in [`tests/unit/lib/daytona/`](../../tests/unit/lib/daytona/): `redesign.test.ts` runs the job against a fake sandbox (the happy path; never logging a key; deleting the sandbox after every kind of failure; the time limit; a page written before the budget ran out; oversized, rule-breaking, code-showing and key-leaking pages thrown away; the tier fallback; clean-up by label; bad input), `rest.test.ts` (the REST client's paths, bodies and headers against a fake `fetch`, waiting for a start, Daytona's error text, deleting by label), `validate.test.ts`, `designs.test.ts` and `design-route.test.ts`. The purchase side is in [`tests/unit/lib/billing/`](../../tests/unit/lib/billing/) (`fulfil.test.ts`, `consumer.test.ts`, `queue.test.ts`).
+- **Live, the REST client (22 November):** a sandbox from `majnu-letters-v1` in `eu` started in 0.8 s; upload, a command with an environment variable, file info, download and delete all worked, with no model call.
+- **Live, a paid purchase that failed (22 November):** paid with a Stripe test card on a dev server, with `DAYTONA_SNAPSHOT` pointing at a snapshot that does not exist. The job tried the allow list, recognised the tier's refusal in the REST error, retried without it, got "Snapshot not found", and the payment was refunded automatically ([billing.md](billing.md#how-it-was-checked)).
+- **Live, earlier:** the first end-to-end design run, by hand with the SDK, on 21 November.
+- **3D, unit tests (22 November):** `validate.test.ts` accepts the five allowed shapes of the three.js import (namespace, single quotes, named imports, the import map, `import.meta` beside it) and refuses nineteen others (other versions, other files, query, hash, relative, walking and protocol-relative paths, absolute URLs including ours, a CDN, an addon, a side-effect import of another file, a second import, the bare name without a map, a re-export, `import()`, an escaped specifier, an import with a comment inside, a texture loader), six bad import maps, two import maps, and a `<script src>` for three.js itself. `designs.test.ts` pins the CSP (one exact file on majnu.app and on the request's origin; no `'self'`, folder or wildcard; a malformed origin ignored). `three.test.ts` checks the vendored file's sha-256, that it imports nothing, and its `_headers` rule.
+- **3D, live (22 November), two runs with `scripts/daytona/redesign.mts`** on a test letter (the gift-reveal fixture, owned by the `wrapper-e2e` test user), Claude Code on `ANTHROPIC_API_KEY_FALLBACK` (the primary is over its spend limit):
+  - *"A snow globe with our city inside: Berlin's TV tower and a few rooftops under falling snow…"*, snapshot `majnu-letters-v2`: 139 s in all, 11 turns, **$0.46**, a 23.4 KB page that passed the checker. In the dev server's browser at 375 and 1440 px, `/l/<slug>` loaded `/vendor/three/0.187.0/three.module.min.js` (200) inside the sandboxed frame and drew a 3D globe with drifting snow, console clean. On the design URL, an `import()` of `three.core.js` from the same folder was blocked by the CSP. With WebGL disabled (an init script making `getContext("webgl…")` return null) there was no canvas, the SVG still and every word showed, and the only console line was three's own "Error creating WebGL context". With reduced motion emulated the scene rendered once and the loop never started. It showed one flaw: the page hid its SVG still with `hidden` while its CSS set `display: block`, so the still showed through the transparent canvas, and "Shake the globe" stayed visible without WebGL. The skill now requires `[hidden] { display: none !important; }`, and `majnu-letters-v3` carries it.
+  - *"Paper lanterns slowly rising over a dark lake at night…"*, snapshot `majnu-letters-v3`: 137 s, 8 turns, **$0.44**, a 19.3 KB page that passed the checker and has the `[hidden]` rule. 3D lanterns at 375 and 1440 px, console clean, no horizontal scroll, canvas `aria-hidden`, only the code and gift buttons focusable; with WebGL off the SVG still showed with no scene-only control left.
+  - Daytona's charge for the two sandboxes (about 2.5 minutes each at 1 vCPU and 2 GiB) is not reported by the API; building each snapshot took under a minute.
+- **3D, not verified:** frame rate on a real phone (the scenes were checked in desktop Chrome with mobile emulation only); Safari and Firefox; the `_headers` rule on Cloudflare (`next.config.mjs` covers the dev server, where the CORS and cache headers were seen with `curl`; the production asset headers take effect at deploy); the paid queue path with a 3D request.
+- **Not verified:** a successful design run through the queue (the two 3D runs above went through the REST client by hand, on the fallback Anthropic key); the queue consumer on Cloudflare, and wrangler bundling `worker.ts` (both happen only at deploy; the build here is `next build`); the network allow list, which our Daytona tier refuses.
+
+## Open questions
+
+- Run one real design through the queue after deploying, once the Anthropic key's limit is raised, and record its time and cost here.
+- Decide whether `DAYTONA_ANTHROPIC_API_KEY` becomes required in production: the sandbox runs the model on text a stranger wrote and paid for.
+- A design that is made but looks wrong is refunded by hand on request (the terms promise it); there is no "make it again" yet.
+- Issue [#39](https://github.com/peresramirez/majnu/issues/39) covers the production path.

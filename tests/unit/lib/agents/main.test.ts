@@ -1,0 +1,267 @@
+import Anthropic from "@anthropic-ai/sdk"
+import type { BetaContentBlock, BetaMessage, BetaMessageParam } from "@anthropic-ai/sdk/resources/beta"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+vi.mock("server-only", () => ({}))
+
+// A fake client: each stream() call plays the next scripted reply.
+const replies: Array<Partial<BetaMessage> | Error> = []
+const requests: Array<Record<string, unknown>> = []
+
+function streamOf(reply: Partial<BetaMessage>) {
+  const content = (reply.content ?? []) as BetaContentBlock[]
+  const events = content.flatMap((block, index) => {
+    const start = { type: "content_block_start", index, content_block: block.type === "text" ? { ...block, text: "" } : block }
+    return block.type === "text" ? [start, { type: "content_block_delta", index, delta: { type: "text_delta", text: block.text } }] : [start]
+  })
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield* events
+    },
+    finalMessage: async () => ({ role: "assistant", type: "message", ...reply }) as BetaMessage,
+  }
+}
+
+vi.mock("@/lib/agents/client", () => ({
+  getClient: () => ({
+    beta: {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          // A copy: the loop keeps appending to the same arrays.
+          requests.push(JSON.parse(JSON.stringify(params)))
+          const reply = replies.shift()
+          if (!reply) throw new Error("no scripted reply left")
+          if (reply instanceof Error) throw reply
+          return streamOf(reply)
+        },
+      },
+    },
+  }),
+  agentRequestBase: () => ({
+    model: "claude-opus-5-5",
+    betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"],
+    thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
+    fallbacks: "default",
+  }),
+  AGENT_EFFORT: "low",
+}))
+
+vi.mock("@/lib/agents/tools", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/agents/tools")>()),
+  runTool: vi.fn(async (toolUse: { id: string }) => ({ type: "tool_result", tool_use_id: toolUse.id, content: "Done." })),
+}))
+vi.mock("@/lib/limits", () => ({ canUseFeature: vi.fn() }))
+vi.mock("@/lib/letters/store", () => ({ saveLetterContent: vi.fn() }))
+
+import type { ChatEvent } from "@/lib/agents/events"
+import { MAIN_SYSTEM_PROMPT, builtGiftNote, runMainAgent } from "@/lib/agents/main"
+import { MAIN_TOOLS, runTool, type TurnState } from "@/lib/agents/tools"
+import { letterFixtures } from "@/lib/letters/fixtures"
+
+let events: ChatEvent[]
+const state = (): TurnState => ({
+  letterId: "letter-1",
+  shareUrl: null,
+  now: new Date("2026-11-21T12:00:00Z"),
+  timezone: "Europe/Berlin",
+  emit: (event) => events.push(event),
+  letter: { kind: null, templateId: null, content: null },
+})
+
+const text = (t: string) => ({ type: "text", text: t, citations: null }) as BetaContentBlock
+const toolUse = (id: string, name: string, input: unknown = {}) => ({ type: "tool_use", id, name, input }) as BetaContentBlock
+const thinking = { type: "thinking", thinking: "", signature: "sig" } as BetaContentBlock
+
+beforeEach(() => {
+  events = []
+  replies.length = 0
+  requests.length = 0
+  vi.mocked(runTool).mockClear()
+})
+
+describe("runMainAgent", () => {
+  it("sends a byte-stable request with the plan's settings and per-request facts in the user turn", async () => {
+    replies.push({ content: [text("Hello.")], stop_reason: "end_turn" })
+    const history: BetaMessageParam[] = [
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: [text("earlier reply")] as never },
+    ]
+    await runMainAgent({ history, message: "A letter for Anna", state: state() })
+
+    const request = requests[0]!
+    expect(request.system).toBe(MAIN_SYSTEM_PROMPT)
+    expect(request.tools).toEqual(JSON.parse(JSON.stringify(MAIN_TOOLS)))
+    expect(request.output_config).toEqual({ effort: "low" })
+    expect(request.thinking).toEqual({ type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } })
+    expect(request.fallbacks).toBe("default")
+    expect(request).not.toHaveProperty("temperature")
+    expect(request).not.toHaveProperty("tool_choice")
+    expect(MAIN_SYSTEM_PROMPT).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+
+    const messages = request.messages as BetaMessageParam[]
+    // The stored history goes first, unchanged.
+    expect(messages.slice(0, 2)).toEqual(JSON.parse(JSON.stringify(history)))
+    const turn = messages[2]!.content as Array<{ type: string; text: string }>
+    expect(turn[0]!.text).toMatch(/^<context>Today is Saturday 2026-11-21 in Europe\/Berlin/)
+    expect(turn[1]).toEqual({ type: "text", text: "A letter for Anna" })
+  })
+
+  it("runs tools, appends every reply as returned, and separates the replies' text", async () => {
+    replies.push(
+      { content: [thinking, text("Let me write it."), toolUse("t1", "build_letter", { templateId: "classic-envelope", brief: "x" })], stop_reason: "tool_use" },
+      { content: [thinking, text("It is in the preview.")], stop_reason: "end_turn" },
+    )
+    const result = await runMainAgent({ history: [], message: "Go", state: state() })
+
+    expect(result.outcome).toBe("done")
+    expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"])
+    expect(result.appended[1]!.content).toEqual([thinking, text("Let me write it."), toolUse("t1", "build_letter", { templateId: "classic-envelope", brief: "x" })])
+    expect(result.appended[2]!.content).toEqual([{ type: "tool_result", tool_use_id: "t1", content: "Done." }])
+    expect(runTool).toHaveBeenCalledTimes(1)
+
+    const streamed = events.flatMap((e) => (e.type === "text" ? [e.delta] : [])).join("")
+    expect(streamed).toBe("Let me write it.\n\nIt is in the preview.")
+    expect(events).toContainEqual({ type: "tool", name: "build_letter", status: "start", label: "Writing your letter…" })
+    // The second request replays the first reply and the tool result.
+    expect((requests[1]!.messages as unknown[]).length).toBe(3)
+  })
+
+  it("keeps nothing of a refused reply and reports the refusal", async () => {
+    replies.push({ content: [text("I was about to")], stop_reason: "refusal" })
+    const result = await runMainAgent({ history: [], message: "Something odd", state: state() })
+
+    expect(result.outcome).toBe("refusal")
+    expect(result.appended.some((m) => m.role === "assistant")).toBe(false)
+    expect(events.at(-1)).toMatchObject({ type: "refusal" })
+  })
+
+  it("answers a tool call cut off at max_tokens with an error result instead of running it", async () => {
+    replies.push(
+      { content: [toolUse("t1", "build_letter", { templateId: "classic-envelope" })], stop_reason: "max_tokens" },
+      { content: [text("Sorry, trying again later.")], stop_reason: "end_turn" },
+    )
+    const result = await runMainAgent({ history: [], message: "Go", state: state() })
+
+    expect(runTool).not.toHaveBeenCalled()
+    const results = result.appended[2]!.content as Array<{ type: string; tool_use_id: string; is_error?: boolean }>
+    expect(results).toEqual([expect.objectContaining({ type: "tool_result", tool_use_id: "t1", is_error: true })])
+    expect(events).toContainEqual({ type: "tool", name: "build_letter", status: "error", label: "Something went wrong writing the letter." })
+  })
+
+  it("leaves out what the declining model wrote before a mid-reply fallback", async () => {
+    const fallback = { type: "fallback", from: { model: "claude-opus-5-5" }, to: { model: "claude-opus-5" }, trigger: {} } as unknown as BetaContentBlock
+    replies.push({ content: [thinking, text("Dear "), fallback, text("Anna.")], stop_reason: "end_turn" })
+    const result = await runMainAgent({ history: [], message: "Go", state: state() })
+
+    expect(result.appended[1]!.content).toEqual([text("Dear "), fallback, text("Anna.")])
+  })
+
+  it("turns an API error into a friendly error event and keeps what was done", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    replies.push(
+      { content: [toolUse("t1", "suggest_templates", { templateIds: ["postcard"] })], stop_reason: "tool_use" },
+      new Anthropic.RateLimitError(429, undefined, "rate limited", new Headers()),
+    )
+    const result = await runMainAgent({ history: [], message: "Go", state: state() })
+
+    expect(result.outcome).toBe("error")
+    expect(events.at(-1)).toEqual({ type: "error", message: "A lot of people are making gifts right now. Try again in a minute." })
+    // The tool round is complete, so the history is still valid to save.
+    expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "user"])
+  })
+
+  it("resends a paused turn so the server can continue it", async () => {
+    replies.push({ content: [text("Part one")], stop_reason: "pause_turn" }, { content: [text(" and two.")], stop_reason: "end_turn" })
+    const result = await runMainAgent({ history: [], message: "Go", state: state() })
+
+    expect(requests).toHaveLength(2)
+    expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "assistant"])
+  })
+})
+
+describe("a built gift with no conversation (issue #62)", () => {
+  const wrapped = (): TurnState => ({
+    ...state(),
+    letter: { kind: "letter", templateId: "gift-reveal", content: letterFixtures["gift-reveal"] },
+  })
+
+  it("says in the first message's context block what is built, so Majnu edits it", async () => {
+    replies.push({ content: [text("Sure.")], stop_reason: "end_turn" })
+    await runMainAgent({ history: [], message: "Make it warmer", state: wrapped() })
+    const turn = (requests[0]!.messages as BetaMessageParam[])[0]!.content as Array<{ type: string; text: string }>
+    expect(turn[0]!.text).toMatch(/^<context>Today is .*This gift is already built and shown in the sender's preview, with no earlier chat: template "Gift reveal" \(gift-reveal\), for "Tom", from "Lea and Max"/)
+    expect(turn[0]!.text.endsWith("</context>")).toBe(true)
+    expect(turn[1]).toEqual({ type: "text", text: "Make it warmer" })
+    expect(MAIN_SYSTEM_PROMPT).toContain("change it with edit_letter, and use build_letter only if the sender wants to start over")
+  })
+
+  it("names the gift but never its code", () => {
+    const note = builtGiftNote(wrapped().letter)!
+    const gift = letterFixtures["gift-reveal"].gifts[0]!
+    expect(note).toContain(JSON.stringify(gift.title))
+    expect(note).not.toContain(gift.code!)
+    expect(note).not.toContain(gift.url!)
+  })
+
+  it("says nothing once there is a conversation, or when nothing is built", async () => {
+    replies.push({ content: [text("Sure.")], stop_reason: "end_turn" }, { content: [text("Hello.")], stop_reason: "end_turn" })
+    const history: BetaMessageParam[] = [
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: [text("earlier reply")] as never },
+    ]
+    await runMainAgent({ history, message: "Make it warmer", state: wrapped() })
+    await runMainAgent({ history: [], message: "A letter for Anna", state: state() })
+    for (const request of requests) {
+      const messages = request.messages as BetaMessageParam[]
+      const turn = messages[messages.length - 1]!.content as Array<{ type: string; text: string }>
+      expect(turn[0]!.text).not.toContain("already built")
+    }
+    expect(builtGiftNote(state().letter)).toBeNull()
+  })
+})
+
+describe("MAIN_SYSTEM_PROMPT", () => {
+  it("names every template that takes a gift list in the gift-list step", async () => {
+    const { GIFT_LIST_TEMPLATES } = await import("@/lib/claims/rules")
+    const step = MAIN_SYSTEM_PROMPT.split("\n").find((line) => line.startsWith("5. Gift list."))
+    expect(step).toBeDefined()
+    for (const id of GIFT_LIST_TEMPLATES) expect(step).toContain(id)
+    expect(step).toContain("wedding-invite, party-invite, wedding-envelope-3d, party-box")
+  })
+})
+
+// The preview grows with every message (issue #30).
+describe("MAIN_SYSTEM_PROMPT and live drafts", () => {
+  it("asks for a first draft as soon as the recipient and occasion are known, and an edit for each new fact", () => {
+    expect(MAIN_SYSTEM_PROMPT).toContain("A first draft, in the same turn you learn both. Call build_letter")
+    expect(MAIN_SYSTEM_PROMPT).toContain("call edit_letter in that same turn, before you reply")
+    expect(MAIN_SYSTEM_PROMPT).toContain("One edit_letter per message")
+    expect(MAIN_SYSTEM_PROMPT).toContain("A message can change the page at most twice")
+  })
+})
+
+describe("the status line while tools run", () => {
+  it("names the tool that is running, not the last one announced while the reply streamed", async () => {
+    replies.push(
+      {
+        content: [
+          text("Here is a first draft."),
+          toolUse("t1", "build_letter", { templateId: "classic-envelope", brief: "x" }),
+          toolUse("t2", "suggest_templates", { templateIds: ["classic-envelope", "postcard"] }),
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [text("What is her name?")], stop_reason: "end_turn" },
+    )
+    const seen: string[] = []
+    // What the status line shows when each tool starts running: the last start announced so far.
+    const record = async (toolUse: { id: string }) => {
+      const last = events.filter((e): e is Extract<ChatEvent, { type: "tool" }> => e.type === "tool" && e.status === "start").at(-1)
+      seen.push(last?.name ?? "")
+      return { type: "tool_result" as const, tool_use_id: toolUse.id, content: "Done." }
+    }
+    vi.mocked(runTool).mockImplementationOnce(record).mockImplementationOnce(record)
+    await runMainAgent({ history: [], message: "A birthday letter for my sister", state: state() })
+    expect(seen).toEqual(["build_letter", "suggest_templates"])
+  })
+})

@@ -1,0 +1,57 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files: only the empty template and the public production values are tracked
+.env*
+!.env.sample
+!.env.production
+
+# cloudflare
+/.open-next/
+/.wrangler/
+.dev.vars
+cloudflare-env.d.ts
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# internal docs (not for git)
+/docs/internal/
+
+# claude settings (contains API keys)
+.claude/
+
+# OS
+.DS_Store
+
+# media files
+*.mp4
+!public/pitch/social/03-app.mp4
+!public/pitch/majnu-app-demo.mp4
+!public/pitch/street-flyers.mp4
+
+# taste skill working files
+/.taste-skill/
+
+# Worktrees for parallel agent sessions (scripts/agents/session.sh)
+.claude/worktrees/
+
+# Supabase CLI working files
+supabase/.temp/

@@ -1,0 +1,295 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Eye, Plus } from "lucide-react"
+import { getGiftLinkInfo } from "@/app/(app)/create/actions"
+import { MoonPhase } from "@/components/brand/moon-phase"
+import { focusRing, smallButton } from "@/components/app/styles"
+import type { DisplayMessage } from "@/lib/agents/events"
+import type { LetterKind, TemplateId } from "@/lib/letters/schema"
+import { getTemplate, type TemplateMeta } from "@/lib/letters/templates"
+import { chatFrame, composeMessage } from "./chat-state"
+import { BuiltGiftOpening, ChatMessages, EmptyState } from "./chat-messages"
+import { Composer } from "./composer"
+import { PreviewPane } from "./preview-pane"
+import { TemplatePicker } from "./template-picker"
+import { useLetterChat } from "./use-letter-chat"
+
+export type ExistingGift = {
+  letterId: string
+  slug: string
+  title: string | null
+  recipientName: string | null
+  hasContent: boolean
+  kind: LetterKind
+  templateId: TemplateId | null
+  messages: DisplayMessage[]
+}
+
+// The Create tab. /dashboard renders it empty; /create/[id] renders it with a
+// gift that already exists. The first message of a new gift moves the address
+// to /create/<id> without reloading (see use-letter-chat.ts).
+export function CreateChat({ gift }: { gift?: ExistingGift }) {
+  const router = useRouter()
+  const chat = useLetterChat({
+    letterId: gift?.letterId,
+    messages: gift?.messages,
+    hasContent: gift?.hasContent,
+    kind: gift?.kind,
+    templateId: gift?.templateId,
+  })
+  const [link, setLink] = useState({
+    slug: gift?.slug ?? null,
+    title: gift?.title ?? null,
+    recipientName: gift?.recipientName ?? null,
+  })
+  const [linkFailed, setLinkFailed] = useState(false)
+  const [draft, setDraft] = useState("")
+  const [template, setTemplate] = useState<TemplateMeta | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // Phones show the chat or the preview, one at a time. A built gift with no
+  // conversation (wrapped in the gift finder) opens on its preview and link.
+  const [view, setView] = useState<"chat" | "preview">(
+    () => chatFrame({ letterId: gift?.letterId ?? null, hasContent: gift?.hasContent ?? false, itemCount: 0, storedMessages: gift?.messages.length }).phoneView,
+  )
+  const [unseenPreview, setUnseenPreview] = useState(false)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const pinnedToBottom = useRef(true)
+
+  const { letterId, previewVersion, items, streaming, status, hasContent, draft: pageDraft, draftChanges, previewShown } = chat
+  const started = items.length > 0 || letterId !== null
+  // The header only once a gift exists; the built-gift opening for a gift
+  // with no conversation (issue #62).
+  const frame = chatFrame({ letterId, hasContent, itemCount: items.length })
+  const templateMeta = chat.templateId ? getTemplate(chat.templateId) : pageDraft ? getTemplate(pageDraft.templateId) : undefined
+  const drafting = pageDraft?.phase === "writing"
+  // The draft's name once the builder has moved past it, so it is not shown half typed.
+  const draftName = pageDraft && pageDraft.content.headline !== undefined ? pageDraft.content.recipientName?.trim() || null : null
+  const draftHeadline = drafting ? pageDraft.content.headline?.trim() || null : null
+
+  // Coming back here with the browser's Back button can restore this new-gift
+  // screen at a /create/<id> address. Load that gift properly instead.
+  useEffect(() => {
+    if (gift) return
+    if (/^\/create\/[^/]+$/.test(window.location.pathname)) router.replace(window.location.pathname)
+    // Only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // "Use this template" on the Templates tab opens /dashboard?template=<id>.
+  // Attach that template to the message box, as choosing it with the Template
+  // button does, and drop the parameter so a reload does not attach it again.
+  useEffect(() => {
+    if (gift) return
+    const params = new URLSearchParams(window.location.search)
+    const chosen = getTemplate(params.get("template") ?? "")
+    if (!chosen) return
+    setTemplate(chosen)
+    params.delete("template")
+    const rest = params.toString()
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`)
+    if (window.matchMedia("(pointer: fine)").matches) composerRef.current?.focus()
+    // Only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The events carry only the letter id; fetch the link and name once the gift
+  // exists, and again after each rebuild in case the recipient changed.
+  useEffect(() => {
+    if (!letterId || (link.slug && previewVersion === 0)) return
+    let cancelled = false
+    getGiftLinkInfo(letterId)
+      .catch(() => null)
+      .then((info) => {
+        if (cancelled) return
+        if (info) setLink(info)
+        setLinkFailed(!info)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letterId, previewVersion])
+
+  // A rebuilt page on a phone, while the chat is showing: mark the Preview button.
+  // A draft being written marks it too, from the first words (issue #30).
+  useEffect(() => {
+    if ((previewVersion > 0 || draftChanges > 0) && view === "chat") setUnseenPreview(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewVersion, draftChanges])
+
+  // Follow the conversation unless the person has scrolled up to read.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && pinnedToBottom.current) el.scrollTop = el.scrollHeight
+  }, [items, status, streaming, view])
+
+  // Stay at the bottom when the chat area changes size: the tab bar coming
+  // back after typing, or a phone keyboard opening and closing.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => {
+      if (pinnedToBottom.current) el.scrollTop = el.scrollHeight
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const chatSend = chat.send
+  const send = useCallback(
+    (text: string) => {
+      pinnedToBottom.current = true
+      return chatSend(text)
+    },
+    [chatSend],
+  )
+
+  // Cards and chips in the chat keep focus after a click, so Enter would send
+  // them again. With a mouse, move focus to the message box; on touch screens
+  // just let go of it, so the keyboard does not open while Majnu replies.
+  const sendFromChat = useCallback(
+    (text: string) => {
+      const sent = send(text)
+      if (window.matchMedia("(pointer: fine)").matches) composerRef.current?.focus()
+      else (document.activeElement as HTMLElement | null)?.blur()
+      return sent
+    },
+    [send],
+  )
+
+  // A starter tapped in an empty chat carries the attached template too, as a
+  // typed message does: a template chosen with the Template button or from
+  // the Templates tab (/dashboard?template=<id>) is never dropped (issue #70).
+  const sendStarter = useCallback(
+    (text: string) => {
+      const sent = sendFromChat(composeMessage(template?.name ?? null, text))
+      if (sent) setTemplate(null)
+      return sent
+    },
+    [sendFromChat, template],
+  )
+
+  function sendDraft() {
+    if (send(composeMessage(template?.name ?? null, draft))) {
+      setDraft("")
+      setTemplate(null)
+    }
+  }
+
+  function chooseTemplate(t: TemplateMeta) {
+    setTemplate(t)
+    setPickerOpen(false)
+    // Wait for the sheet to hand focus back, then put the cursor in the message.
+    setTimeout(() => composerRef.current?.focus(), 0)
+  }
+
+  function showPreview() {
+    setView("preview")
+    setUnseenPreview(false)
+  }
+
+  // While a draft is on screen it is the newest name: an edit may have just changed it.
+  const recipientName = draftName ?? link.recipientName
+  const heading = recipientName ? `For ${recipientName}` : link.title ?? "New gift"
+
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,36%)]">
+      <section aria-label="Chat with Majnu" className={`flex min-h-0 flex-col ${view === "preview" ? "max-lg:hidden" : ""}`}>
+        {frame.header && (
+          <div className="flex flex-none items-center gap-3 border-b border-night-petal/10 px-4 py-2.5 sm:px-6">
+            <MoonPhase lit={hasContent ? 1 : pageDraft ? 0.6 : 0.3} size={22} className="flex-none text-night-rose" />
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[15px] font-semibold leading-tight text-night-petal">{heading}</h1>
+              {/* While Majnu writes, the line under the name follows the headline: a live glimpse of the page on phones. */}
+              <p className="truncate text-[13px] text-night-lilac">
+                {templateMeta && <span className="max-sm:hidden">{templateMeta.name} · </span>}
+                {drafting ? (draftHeadline ? `Writing “${draftHeadline}”` : "Writing the page…") : hasContent ? "Ready to send" : "In progress"}
+              </p>
+            </div>
+            {(hasContent || pageDraft) && (
+              <button type="button" onClick={showPreview} className={`relative lg:hidden ${smallButton}`}>
+                <Eye className="h-4 w-4" aria-hidden="true" />
+                Preview
+                {(unseenPreview || drafting) && (
+                  <span
+                    className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-night-orchid ring-2 ring-night-plum ${drafting ? "motion-safe:animate-pulse" : ""}`}
+                  >
+                    <span className="sr-only">{drafting ? "(being written)" : "(updated)"}</span>
+                  </span>
+                )}
+              </button>
+            )}
+            {letterId && (
+              <Link
+                href="/dashboard"
+                aria-label="Start a new gift"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-sm font-semibold text-night-lilac transition-colors duration-200 ease-calm hover:text-night-petal ${focusRing}`}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">New gift</span>
+              </Link>
+            )}
+          </div>
+        )}
+
+        <div
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            pinnedToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96
+          }}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
+            {frame.opening === "built" ? (
+              <BuiltGiftOpening recipientName={recipientName} onPick={sendStarter} disabled={streaming} />
+            ) : frame.opening === "new" ? (
+              <EmptyState onPick={sendStarter} disabled={streaming} />
+            ) : (
+              <ChatMessages items={items} streaming={streaming} status={status} onSend={sendFromChat} />
+            )}
+          </div>
+        </div>
+
+        <div className="flex-none px-3 pb-3 pt-1 sm:px-6 md:pb-5">
+          <div className="mx-auto max-w-2xl">
+            <Composer
+              ref={composerRef}
+              value={draft}
+              onChange={setDraft}
+              onSend={sendDraft}
+              busy={streaming}
+              template={template}
+              onRemoveTemplate={() => {
+                setTemplate(null)
+                composerRef.current?.focus()
+              }}
+              onOpenTemplates={() => setPickerOpen(true)}
+              placeholder={started ? "Reply to Majnu" : "Who is it for, and what's the occasion?"}
+            />
+            <p className="mt-2 hidden text-center text-xs text-night-lilac/70 md:block">Enter to send. Shift and Enter for a new line.</p>
+          </div>
+        </div>
+      </section>
+
+      <PreviewPane
+        className={view === "preview" ? "flex" : "hidden lg:flex"}
+        letterId={letterId}
+        slug={link.slug}
+        linkFailed={linkFailed}
+        hasContent={hasContent}
+        version={previewVersion}
+        recipientName={recipientName}
+        draft={pageDraft}
+        onPreviewShown={previewShown}
+        onBack={() => setView("chat")}
+      />
+
+      <TemplatePicker open={pickerOpen} onOpenChange={setPickerOpen} selectedId={template?.id ?? null} onChoose={chooseTemplate} />
+    </div>
+  )
+}

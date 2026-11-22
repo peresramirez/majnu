@@ -1,0 +1,345 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/*
+ * The bottom of the screen on phones (docs/features/app-shell.md, "iPhone").
+ *
+ * Safari on iOS 26 and later floats its toolbar over the page: the expanded
+ * address bar sits about 24 CSS px above the bottom of 100dvh, and
+ * env(safe-area-inset-bottom) stays 0 under it, so a bar padded with the inset
+ * alone has its labels behind the toolbar. --toolbar-overlap is the room to
+ * keep clear: 32px (the 24px overlap and 8px of air) in an iOS browser tab on
+ * a phone held upright, 0 elsewhere.
+ * -webkit-touch-callout is only supported by WebKit on iOS; Android, desktop
+ * browsers and iPads held upright (744px and wider) keep 0. A web app opened
+ * from the home screen has no Safari toolbar, and while a text field has focus
+ * the keyboard replaces the toolbar, so both drop back to 0.
+ *
+ * --safe-bottom is what every bar or sheet pinned to the bottom pads with: the
+ * larger of the home-indicator inset and the toolbar overlap.
+ */
+:root {
+  --toolbar-overlap: 0px;
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--toolbar-overlap));
+}
+@supports (-webkit-touch-callout: none) {
+  @media (orientation: portrait) and (max-width: 600px) {
+    :root {
+      --toolbar-overlap: 32px;
+    }
+  }
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    :root {
+      --toolbar-overlap: 0px;
+    }
+  }
+  :root:has(textarea:focus, select:focus, input:not([type="checkbox"], [type="radio"], [type="button"], [type="submit"], [type="reset"], [type="range"], [type="file"], [type="color"]):focus) {
+    --toolbar-overlap: 0px;
+  }
+}
+
+/*
+ * Safari 26 and later ignore theme-color: they colour the status bar and the
+ * toolbar area from the root's background (or from a fixed element touching
+ * the edge). The body is Petal by default, which left light bars around every
+ * dark screen, so a page marks its surface and the root takes its colour.
+ * Gift pages set the template's own colour (components/letters/registry.tsx).
+ */
+html:has([data-surface="night"]),
+html:has([data-surface="night"]) body {
+  background-color: #1b1226;
+}
+
+@keyframes moon-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+/* The finder's "Majnu is working" dots (components/finder/conversation.tsx). */
+@keyframes finder-dot {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* Scroll-in for landing sections; see components/landing/reveal.tsx. */
+[data-reveal] .reveal-item {
+  transition:
+    opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 800ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+[data-reveal="hidden"] .reveal-item {
+  opacity: 0;
+  transform: translateY(28px);
+}
+/* Each "What you can send" icon does one small thing as its card arrives. */
+[data-reveal="shown"] .reveal-icon {
+  animation-duration: 1000ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: backwards;
+  animation-delay: calc(var(--i, 0) * 90ms + 420ms);
+}
+[data-reveal="shown"] .motion-gift { animation-name: gift-lift; transform-origin: 50% 85%; }
+[data-reveal="shown"] .motion-letter { animation-name: letter-tilt; transform-origin: 50% 85%; }
+[data-reveal="shown"] .motion-pin { animation-name: pin-drop; }
+[data-reveal="shown"] .motion-calendar { animation-name: door-swing; transform-origin: 0% 50%; }
+@keyframes gift-lift {
+  35% { transform: translateY(-7px) rotate(-12deg); }
+  65% { transform: translateY(1px) rotate(5deg); }
+}
+@keyframes letter-tilt {
+  35% { transform: translateX(-2px) rotate(-14deg); }
+  70% { transform: rotate(6deg); }
+}
+@keyframes pin-drop {
+  0% { transform: translateY(-16px); opacity: 0; }
+  55% { transform: translateY(2px); opacity: 1; }
+  78% { transform: translateY(-3px); }
+}
+@keyframes door-swing {
+  40% { transform: perspective(60px) rotateY(-55deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * How it works, told one step at a time (components/landing/how-it-works.tsx).
+ *
+ * Story mode needs motion allowed and scripts running; otherwise the section
+ * keeps the plain list its classes describe. `--u` is how far the visitor has
+ * scrolled through the pinned section, in steps of scroll
+ * (how-it-works-steps.ts); each step's `--enter` and `--leave` say where its
+ * entrance and exit begin, and each letter's `--c` its place in the wave. Only
+ * transform, opacity and filter change while scrolling. The values are
+ * registered as numbers so the browser works each one out once per element
+ * instead of re-reading long formulas.
+ */
+@property --u { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --glyph-x { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glyph-e { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --glyph-out { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glyph-in { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --mark-on { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+/* The moon breathes while the visitor reads (components/landing/gift-scene.tsx). */
+@keyframes moon-glow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+/* The phone scene fades into the page above and below it. */
+.story-scene-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 76%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) and (scripting: enabled) {
+  /* One screen to pin in, plus one step of scroll per step. Rules below are
+     scoped to .story so they outrank Tailwind's responsive classes, which
+     Tailwind appends after this file. */
+  .story {
+    height: calc(100svh + var(--steps) * var(--seg));
+  }
+  /* svh: the small viewport, so Safari's toolbar showing and hiding never
+     resizes the pinned screen. On phones the scene fills the middle and the
+     step sits at the bottom, clear of the floating toolbar (--safe-bottom). */
+  .story .story-screen {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(28px, calc(var(--safe-bottom) + 16px));
+  }
+  .story .story-heading {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #bca8c4;
+  }
+  .story .story-intro {
+    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .story .story-scene {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    margin-top: 0;
+  }
+
+  /* Each mark lights up while its step enters and dims while it leaves. */
+  .story .story-marks {
+    display: flex;
+  }
+  .story .story-mark {
+    --mark-on: clamp(0, min((var(--u) - var(--enter)) / var(--span), 1 - (var(--u) - var(--leave)) / var(--span)), 1);
+    transform: scale(calc(1 + var(--mark-on) * 0.2));
+  }
+  .story .story-mark-on {
+    opacity: var(--mark-on);
+  }
+
+  /* All three steps share one place; only the current one is visible. */
+  .story .story-steps {
+    display: grid;
+    margin-top: 0;
+  }
+  .story .story-step {
+    grid-area: 1 / 1;
+    align-self: end;
+  }
+  /* The real text: hidden from sight, still read by screen readers. */
+  .story .story-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  .story .story-visual {
+    display: block;
+  }
+  .story .story-word {
+    display: inline-block;
+    white-space: nowrap;
+  }
+  /*
+   * A letter (or, in the line, a word). `--glyph-e` runs 0 to 1 as it arrives
+   * and `--glyph-x` 0 to 1 as it leaves, each over --glyph of scroll, later the
+   * further along the wave it is. Arriving eases out: it rises a little and
+   * comes into focus. Leaving eases in, like mist in moonlight: it drifts up and
+   * a little to one side, turns, grows, blurs and fades.
+   */
+  .story .story-glyph {
+    --glyph-x: clamp(0, (var(--u) - var(--leave) - var(--c) * (var(--span) - var(--glyph))) / var(--glyph), 1);
+    --glyph-e: clamp(0, (var(--u) - var(--enter) - var(--c) * (var(--span) - var(--glyph))) / var(--glyph), 1);
+    --glyph-out: calc(var(--glyph-x) * var(--glyph-x));
+    --glyph-in: calc(1 - (1 - var(--glyph-e)) * (1 - var(--glyph-e)));
+    display: inline-block;
+    opacity: calc(var(--glyph-in) - var(--glyph-out) * 1.4);
+    transform: translate3d(calc(var(--glyph-out) * var(--r) * 0.3em), calc((1 - var(--glyph-in)) * 0.5em - var(--glyph-out) * 0.9em), 0)
+      rotate(calc(var(--glyph-out) * var(--r) * 10deg)) scale(calc(1 + var(--glyph-out) * 0.15));
+    filter: blur(calc((1 - var(--glyph-in)) * 0.12em + var(--glyph-out) * 0.2em));
+  }
+
+  /* From md up the scene is the backdrop; the column sits in the middle of the
+     screen on its left, its steps lined up at the top. */
+  @media (min-width: 768px) {
+    .story .story-screen {
+      justify-content: center;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .story .story-steps {
+      margin-top: 44px;
+    }
+    .story .story-step {
+      align-self: start;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    --background: 326 33.3% 95.9%;
+    --foreground: 267 35.7% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 267 35.7% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 267 35.7% 11%;
+    --primary: 267 35.7% 11%;
+    --primary-foreground: 326 33.3% 95.9%;
+    --secondary: 323 28.9% 91.2%;
+    --secondary-foreground: 267 35.7% 11%;
+    --muted: 316 28.2% 92.4%;
+    --muted-foreground: 278 14.6% 40.4%;
+    --accent: 323 28.9% 91.2%;
+    --accent-foreground: 267 35.7% 11%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 320 23.1% 87.3%;
+    --input: 320 23.1% 87.3%;
+    --ring: 313 30.3% 42.7%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+  .dark {
+    --background: 267 35.7% 11%;
+    --foreground: 322 35.5% 93.9%;
+    --card: 268 34.9% 16.9%;
+    --card-foreground: 322 35.5% 93.9%;
+    --popover: 268 34.9% 16.9%;
+    --popover-foreground: 322 35.5% 93.9%;
+    --primary: 22 67.2% 74.9%;
+    --primary-foreground: 267 35.7% 11%;
+    --secondary: 268 34.9% 16.9%;
+    --secondary-foreground: 322 35.5% 93.9%;
+    --muted: 268 34.9% 16.9%;
+    --muted-foreground: 283 19.2% 71.4%;
+    --accent: 265 34.5% 21.6%;
+    --accent-foreground: 322 35.5% 93.9%;
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 267 30% 23.5%;
+    --input: 267 30% 23.5%;
+    --ring: 22 67.2% 74.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

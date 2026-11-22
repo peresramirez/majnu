@@ -1,0 +1,30 @@
+// The Worker's entry point (wrangler.jsonc "main"). It serves the app with the
+// fetch handler OpenNext generates, and adds the queue consumer that makes
+// personalised wrappers (lib/billing/consumer.ts,
+// docs/features/daytona-redesign.md).
+//
+// One Worker, one deploy: `npm run deploy` builds .open-next/worker.js and
+// wrangler bundles this file around it. The design job takes about 90 seconds,
+// far longer than a request should; a queue consumer may run for 15 minutes of
+// wall time per message, and waiting on Daytona and Anthropic is I/O, not CPU
+// time. Only the default export is allowed here: the runtime reads every
+// export of the entry module as a possible entrypoint.
+
+// First, before anything that builds a zod schema: no compiled parsers in the
+// Worker (see lib/zod-jitless.ts).
+import "./lib/zod-jitless"
+// @ts-ignore .open-next/worker.js is generated at build time by `opennextjs-cloudflare build`.
+import { default as handler } from "./.open-next/worker.js"
+// @ts-ignore .open-next/cloudflare/next-env.mjs is generated at build time too: the public values from .env.production.
+import * as nextEnv from "./.open-next/cloudflare/next-env.mjs"
+import { consumeDesignBatch, type MessageBatch } from "./lib/billing/consumer"
+import { populateQueueEnv, type NextEnvModule } from "./lib/billing/queue-env"
+
+export default {
+  fetch: handler.fetch,
+  async queue(batch: MessageBatch, env: Record<string, unknown>): Promise<void> {
+    // OpenNext fills process.env for web requests only; the job needs it too.
+    populateQueueEnv(process.env, env, nextEnv as unknown as NextEnvModule)
+    await consumeDesignBatch(batch)
+  },
+}
