@@ -1,12 +1,14 @@
 // /dev/templates: every template from lib/letters/fixtures.ts in a phone-sized
 // frame, all calendar doors open as in the owner's preview, plus the advent
 // calendar locked as of today. Each frame is an iframe of /dev/templates/<id>,
-// so templates get a real 375 px viewport.
+// so templates get a real 375 px viewport. /dev/templates?audio=1 frames every
+// letter template with the sample voice note.
 import Link from "next/link"
 import { Wordmark } from "@/components/brand/wordmark"
 import { TemplateCard } from "@/components/letters/template-card"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
-import { templates } from "@/lib/letters/templates"
+import { LETTER_TEMPLATE_IDS } from "@/lib/letters/schema"
+import { getTemplate, templates } from "@/lib/letters/templates"
 import { site } from "@/lib/site"
 import { PALETTES } from "./fixture-letter"
 import { SharePreview } from "./share-preview"
@@ -18,6 +20,15 @@ const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:o
 // States the issues ask to check: calendars with 0, 1, 12 and 24 doors open,
 // countdowns of 3, 7 and 24 days, invitations with no event.
 const STATES: { title: string; links: [string, string][] }[] = [
+  {
+    // The voice player (issue #83) sits inside each template's story, so
+    // open the envelope or the gift to find it.
+    title: "With a voice note",
+    links: [
+      ...LETTER_TEMPLATE_IDS.map((id): [string, string] => [getTemplate(id)?.name ?? id, `/dev/templates/${id}?audio=1`]),
+      ["Every frame", "/dev/templates?audio=1"],
+    ],
+  },
   {
     title: "Advent calendar",
     links: [
@@ -115,7 +126,10 @@ function Frame({ src, title, caption, id }: { src: string; title: string; captio
   )
 }
 
-export default function DevTemplatesPage() {
+const isLetter = (id: string) => (LETTER_TEMPLATE_IDS as readonly string[]).includes(id)
+
+export default async function DevTemplatesPage({ searchParams }: { searchParams: Promise<{ audio?: string }> }) {
+  const audio = (await searchParams).audio === "1"
   return (
     <div className="dark min-h-[100svh] bg-night-plum text-night-petal">
       <header className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-4 px-4 pb-6 pt-8 sm:px-8">
@@ -147,7 +161,7 @@ export default function DevTemplatesPage() {
               <Frame
                 key={t.id}
                 id={t.id}
-                src={`/dev/templates/${t.id}`}
+                src={`/dev/templates/${t.id}${audio && isLetter(t.id) ? "?audio=1" : ""}`}
                 title={t.name}
                 caption={`${t.id} · ${theme?.palette} · ${theme?.font}`}
               />

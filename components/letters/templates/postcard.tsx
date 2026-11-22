@@ -5,6 +5,8 @@
 // Tap the card, or use the "Turn over" button (the keyboard's way in), to flip
 // it. The side facing away is inert, so it is neither focusable nor read out.
 // With reduced motion nothing flips: both sides are shown, one above the other.
+// The sender's voice note, if there is one, appears under the card once it has
+// been turned to the written side (at once when both sides are shown).
 import { useId, useState } from "react"
 import type { LetterContent } from "@/lib/letters/schema"
 import { displayStyle, focusRing, MadeWith, paperStyle, Stars } from "../chrome"
@@ -13,6 +15,7 @@ import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { wholeName } from "../names"
 import { paletteOf } from "../theme"
+import { VoiceNoteSlot } from "../voice-player"
 
 function Landscape({ className = "" }: { className?: string }) {
   return (
@@ -60,6 +63,8 @@ function Stamp() {
 
 export function Postcard({ content }: { content: LetterContent }) {
   const [flipped, setFlipped] = useState(false)
+  // Once turned to the message, the voice note stays under the card.
+  const [turned, setTurned] = useState(false)
   // Stacked: both sides visible at once (the layout itself comes from CSS, so
   // it is right before this hook runs in the browser).
   const stacked = useReducedMotion()
@@ -77,7 +82,9 @@ export function Postcard({ content }: { content: LetterContent }) {
             className="postcard relative aspect-[3/4] w-full cursor-pointer touch-manipulation sm:aspect-[3/2]"
             data-flipped={flipped}
             onClick={() => {
-              if (!stacked) setFlipped((f) => !f)
+              if (stacked) return
+              setFlipped((f) => !f)
+              setTurned(true)
             }}
           >
             {/* Picture side */}
@@ -135,10 +142,15 @@ export function Postcard({ content }: { content: LetterContent }) {
           </div>
         </div>
 
+        {turned || stacked ? <VoiceNoteSlot tone="page" className="postcard-voice mt-7 max-w-[400px]" /> : null}
+
         {stacked ? null : (
           <button
             type="button"
-            onClick={() => setFlipped((f) => !f)}
+            onClick={() => {
+              setFlipped((f) => !f)
+              setTurned(true)
+            }}
             className={`postcard-turn mt-8 inline-flex items-center gap-2 rounded-full border px-5 py-3 text-[15px] font-medium transition-colors duration-200 ${focusRing}`}
             style={{ borderColor: "color-mix(in srgb, var(--page-ink) 30%, transparent)" }}
           >
@@ -166,6 +178,7 @@ export function Postcard({ content }: { content: LetterContent }) {
         }
         @media (prefers-reduced-motion: no-preference) {
           .postcard { transition: transform 1000ms cubic-bezier(0.22, 0.61, 0.36, 1); animation: postcard-peek 1400ms cubic-bezier(0.22, 0.61, 0.36, 1) 900ms 1 both; }
+          .postcard-voice { animation: postcard-voice 800ms cubic-bezier(0.22, 0.61, 0.36, 1) 600ms both; }
           .postcard[data-flipped="true"] { animation: none; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -177,6 +190,7 @@ export function Postcard({ content }: { content: LetterContent }) {
         @media (prefers-reduced-motion: reduce) and (min-width: 640px) {
           .postcard .postcard-face { aspect-ratio: 3 / 2; }
         }
+        @keyframes postcard-voice { from { opacity: 0; transform: translateY(12px); } }
         @keyframes postcard-peek { 0%, 100% { transform: rotateY(0); } 45% { transform: rotateY(-14deg); } }
       `}</style>
     </main>

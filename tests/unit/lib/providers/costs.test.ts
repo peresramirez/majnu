@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { anthropicRequestShape as shapeOf, IMAGE_TOKENS, PDF_PAGE_TOKENS } from "@/lib/providers/costs"
 import {
   UNKNOWN_MODEL_PRICE,
   anthropicCostUsd,
@@ -117,5 +118,28 @@ describe("daytonaCostUsd", () => {
 
   it("costs a whole 20-minute TTL under 6 cents", () => {
     expect(daytonaCostUsd(20 * 60, { cpu: 1, memory: 2, disk: 3 })).toBeLessThan(0.06)
+  })
+})
+
+describe("anthropicRequestShape with files", () => {
+  const body = (blocks: unknown[]) => JSON.stringify({ model: "claude-opus-5-5", max_tokens: 1000, messages: [{ role: "user", content: blocks }] })
+
+  it("prices a base64 photo as an image, not as its characters", () => {
+    const data = "A".repeat(400_000)
+    const shape = shapeOf(body([{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }]))
+    expect(shape.bodyChars).toBeLessThan(2_000 + IMAGE_TOKENS)
+    expect(shape.bodyChars).toBeGreaterThanOrEqual(IMAGE_TOKENS)
+  })
+
+  it("prices a base64 PDF by its estimated pages, at most 20", () => {
+    const small = shapeOf(body([{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "A".repeat(60_000) } }]))
+    expect(small.bodyChars).toBeGreaterThanOrEqual(PDF_PAGE_TOKENS)
+    const huge = shapeOf(body([{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "A".repeat(14_000_000) } }]))
+    expect(huge.bodyChars).toBeLessThanOrEqual(20 * PDF_PAGE_TOKENS + 2_000)
+  })
+
+  it("still counts plain text by its characters", () => {
+    const text = "x".repeat(5_000)
+    expect(shapeOf(body([{ type: "text", text }])).bodyChars).toBeGreaterThan(5_000)
   })
 })

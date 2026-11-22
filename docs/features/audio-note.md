@@ -1,10 +1,10 @@
 # Voice note in a gift
 
-Issue #38. The decision is in [../plan.md](../plan.md), "Voice": the sender records up to two minutes, the note is stored in a private Supabase Storage bucket with the letter and served from our own domain at `/l/<slug>/audio`, and every template shows a "Tap to hear" button when a note exists.
+Issues #38 (recording, storing, serving) and #83 (the voice player inside every template). The decision is in [../plan.md](../plan.md), "Voice": the sender records up to two minutes, the note is stored in a private Supabase Storage bucket with the letter and served from our own domain at `/l/<slug>/audio`, and every template plays it when a note exists.
 
 ## What it does
 
-After wrapping a gift in the finder, beside the create page's preview, and on every letter in My gifts, the sender can **record a voice note**: up to two minutes in their own voice. They listen back, then save it, record again or discard it; a saved note can be replaced or removed. The recipient opens the gift and sees **"Tap to hear Sam"** at the top of the page, over any template and over a personalised (Daytona) design. One tap plays it, another pauses it. Screen readers also get what was said, from a transcription. Guests (anonymous accounts) can add notes to the gifts they wrapped. Calendars have no notes.
+After wrapping a gift in the finder, beside the create page's preview, and on every letter in My gifts, the sender can **record a voice note**: up to two minutes in their own voice. They listen back, then save it, record again or discard it; a saved note can be replaced or removed. The recipient opens the gift and, once the envelope is open or the gift unwrapped, finds **"A voice note from Sam"** beside the message: a round play button and a waveform whose bars move with Sam's voice while it plays, fill with colour as it goes and show the time left. Each template draws it in its own paper, ink and type. Over a personalised (Daytona) design, which is a sandboxed frame we don't control, the note stays a **"Tap to hear Sam"** pill at the top of the page. One tap plays it, another pauses it. Screen readers also get what was said, from a transcription. Guests (anonymous accounts) can add notes to the gifts they wrapped. Calendars have no notes.
 
 ## How it works
 
@@ -69,11 +69,39 @@ Supabase deletes a file only through its Storage API; deleting its row in `stora
 
 ### The recipient hears it
 
+```mermaid
+flowchart TD
+  Page["/l/[slug] or the owner preview<br/>(server)"] -- "audio = {src, seconds, caption}" --> R["LetterRenderer"]
+  R -- "template places a slot<br/>(VOICE_NOTE_IN_TEMPLATE)" --> Ctx["VoiceNoteProvider"]
+  R -- "no slot (none today)" --> Pill["AudioNote pill + top band"]
+  Page -- "Daytona design" --> Over["AudioNoteOverlay pill<br/>over the frame"]
+  Ctx --> Slot["&lt;VoiceNoteSlot /&gt; in the template,<br/>after it opens, near the message"]
+  Slot --> VP["VoicePlayer"]
+  VP -- "first tap: new Audio(), AudioContext,<br/>audioSession = playback" --> Hook["useVoiceNoteAudio"]
+  Hook -- "GET, Range" --> Route["/l/[slug]/audio"]
+  Hook -- "element → AnalyserNode → speakers" --> VP
+```
+
 1. `/l/<slug>` looks the note up on the server (`getPublicAudioNote`, service role, by exact slug, only for a letter that is a letter and has valid content) next to the design lookup, and passes `{ src: "/l/<slug>/audio?v=<file id>", seconds, caption }` to `<LetterRenderer audio>`. The owner preview (`/create/<id>/preview`, which the finder's wrap result and the create page show in a frame) passes the owner's route instead. A failed lookup shows the page without a note.
-2. The renderer puts `AudioNote` first in the page (first on screen, so first for keyboards and screen readers) and reserves a band for it at the top: every template draws its page in a top-level `<main>` whose first screen is `min-h-[100svh]`; with a note, `<main>` gets the band as top padding (its own background, stars and gradient fill it, so there is no seam) and each first-screen block gets that much less height, so a template's own button at the bottom of the first screen (the 3D box's "Open your gift") stays on it. Over a Daytona design, the frame starts below the band, which takes the letter's page colour.
-3. Nothing is fetched until the first tap. The button plays and pauses, shows "Sam 0:12 / 0:42" and a thin progress bar; the name is the signature when it is short ("Lea and Max", "Mum"), else the first name. Browsers often report Infinity as the length of a recorded file, so the stored length stands in until they know better.
-4. `GET /l/<slug>/audio` reads the file through the Storage API and answers the whole file (200) or the byte range asked for (206 with `Content-Range`), 416 past the end, with `Accept-Ranges: bytes`, `Cache-Control: private, max-age=300`, an `ETag` (the file's random name; `If-Range` is honoured), `Cross-Origin-Resource-Policy: same-origin`, `nosniff`, `noindex` and `no-referrer`. Anything else, including a letter without content, a calendar or a demo slug, is a plain `404 Not found` with `no-store`.
-5. Accessibility: the button's name says what it does ("Tap to hear Sam", "Pause Sam's voice note"); the caption is its description, read once, with a verb that agrees with the sender ("Sam says:", "Lea and Max say:", issue #62); a live region says "Playing…", "Paused." or that it could not play; with reduced motion the bar jumps instead of gliding and nothing spins.
+2. **Inside the template (issue #83).** Every letter template places `<VoiceNoteSlot />` in its own story; `VOICE_NOTE_IN_TEMPLATE` in `voice-player-model.ts` lists them, typed by template id so a new template has to decide. For those, the renderer hands the note to the template through `VoiceNoteProvider` (a small React context) and draws neither the pill nor the band below. Where each template puts it:
+   - **Classic envelope:** on the letter, under the ornament, above the first paragraph.
+   - **Gift reveal, 3D gift box, party pop box:** at the top of the note card, under the gift card, with a rule before the message.
+   - **3D wedding envelope:** at the top of the hosts' note, under the maps and calendar buttons.
+   - **Wedding invitation:** centred on the engraved card, under the message and above the date.
+   - **Party invitation:** a paper pill with the accent button, between the message and the ticket.
+   - **Treasure map:** a dashed margin note in ink on the parchment, above the letter.
+   - **Postcard:** under the card, once it has been turned to the written side (at once with reduced motion, where both sides show).
+
+   The player (`voice-player.tsx`): a 52 px round button, "A voice note from Sam" in the template's display face (first name; a group whole: "Lea and Max"), the length before playing and the time left after ("-0:31"), and 34 bars. `tone="paper"` takes the palette's paper, ink, deep button and paper accent; `tone="page"` the page's ink and accent. Templates fine-tune it with `--vp-*` CSS variables (button, played and resting bar colours, surface, font, size).
+
+   **The waves.** At rest the bars sit in a gentle, voice-like shape seeded from the note's URL, so the server and the browser draw the same bars. On the first tap, inside the click (iPhone Safari allows audio only there), `useVoiceNoteAudio` makes the `<audio>` element and an `AudioContext`, and routes the element through an `AnalyserNode` (FFT 256) to the speakers. Once a frame while playing, each bar follows one band of the low spectrum, where voices are, mixed with the overall loudness; bars rise fast and settle slowly, and the halo behind the button grows with the voice. The played part fills with colour by a clip-path sweep read from `currentTime`. On pause the bars ease back to rest and the animation stops. The bars, sweep and halo are written straight to the DOM in `requestAnimationFrame`, without React renders.
+
+   **iPhones and the silent switch.** Web Audio on an iPhone is muted by the silent switch; `<audio>` is not. So the hook sets `navigator.audioSession.type = "playback"` (Safari 17 and later), which plays through the switch, and on an iPhone or iPad without that API it never routes through Web Audio: the note plays from the element and the bars breathe instead of following the voice. The same fallback covers any browser where the context will not start; a context is only connected once it is running, so a suspended one can never silence the note.
+
+3. **The pill (Daytona designs, and any template without a slot).** The renderer puts `AudioNote` first in the page (first on screen, so first for keyboards and screen readers) and reserves a band for it at the top: every template draws its page in a top-level `<main>` whose first screen is `min-h-[100svh]`; with a note, `<main>` gets the band as top padding (its own background, stars and gradient fill it, so there is no seam) and each first-screen block gets that much less height, so a template's own button at the bottom of the first screen (the 3D box's "Open your gift") stays on it. Over a Daytona design, the frame starts below the band, which takes the letter's page colour.
+4. Nothing is fetched until the first tap, in the player and the pill. The pill's button plays and pauses, shows "Sam 0:12 / 0:42" and a thin progress bar; the name is the signature when it is short ("Lea and Max", "Mum"), else the first name. Browsers often report Infinity as the length of a recorded file, so the stored length stands in until they know better.
+5. `GET /l/<slug>/audio` reads the file through the Storage API and answers the whole file (200) or the byte range asked for (206 with `Content-Range`), 416 past the end, with `Accept-Ranges: bytes`, `Cache-Control: private, max-age=300`, an `ETag` (the file's random name; `If-Range` is honoured), `Cross-Origin-Resource-Policy: same-origin`, `nosniff`, `noindex` and `no-referrer`. Anything else, including a letter without content, a calendar or a demo slug, is a plain `404 Not found` with `no-store`.
+6. Accessibility: in the player the button's name says what a tap does ("Play the voice note from Sam", "Pause the voice note from Sam"), the caption is its description ("Sam says: …"), a live region says "Playing the voice note from Sam.", "Paused." or that it could not play, and with reduced motion the bars stay still in their resting shape while the sweep and the time still move. The renderer drops a note whose URL is not a path on our own site (`isOwnAudioSrc`). In the pill, the button's name says what it does ("Tap to hear Sam", "Pause Sam's voice note"); the caption is its description, read once, with a verb that agrees with the sender ("Sam says:", "Lea and Max say:", issue #62); a live region says "Playing…", "Paused." or that it could not play; with reduced motion the bar jumps instead of gliding and nothing spins.
 
 Link previews and page titles are unchanged ("A letter for Anna"): the caption never reaches metadata or the preview image.
 
@@ -91,8 +119,13 @@ Link previews and page titles are unchanged ("A letter for Anna"): the caption n
 | `app/api/letters/[id]/audio/file/route.ts` | The owner's listen-back, whatever state the letter is in |
 | `app/(public)/l/[slug]/audio/route.ts` | The recipient's audio, from our own domain |
 | `app/(public)/l/[slug]/page.tsx`, `app/(owner)/create/[id]/preview/page.tsx` | Fill `audio` on the server; the design overlay |
-| `components/letters/audio-note.tsx` | `AudioNote` ("Tap to hear"), `AudioNoteOverlay` (over a design), `AUDIO_SPACE_CSS` (the band) |
-| `components/letters/registry.tsx` | The optional `audio` prop on `LetterRenderer` |
+| `components/letters/voice-player.tsx` | `VoicePlayer` (button, waveform, sweep, time, caption, live region), `VoiceNoteProvider` and `VoiceNoteSlot` (issue #83) |
+| `components/letters/use-voice-note-audio.ts` | The `<audio>` element and, on the first tap, the AudioContext, the audio session and the AnalyserNode |
+| `components/letters/voice-player-model.ts` | Pure: which templates place a slot, `isOwnAudioSrc`, the resting shape, bars from the analyser, the words and the time left |
+| `components/letters/templates/*` | Each letter template places `<VoiceNoteSlot />` near its message |
+| `components/letters/audio-note.tsx` | `AudioNote` ("Tap to hear"), `AudioNoteOverlay` (over a design), `AUDIO_SPACE_CSS` (the band): for designs and templates without a slot |
+| `components/letters/registry.tsx` | The optional `audio` prop on `LetterRenderer`; picks the slot or the pill and wraps the template in `VoiceNoteProvider` |
+| `public/dev/voice-note.m4a`, `app/dev/templates/` | The workbench's sample note (7 s of macOS `say`, AAC, 42 KB) and `?audio=1` on every template, with links under "With a voice note" |
 | `components/voice/audio-note-recorder.tsx`, `audio-note-model.ts` | The recorder and its pure state machine and API calls |
 | `components/voice/use-voice-recorder.ts`, `recorder-state.ts` | Gained `maxSeconds`, `recordingTypes` and the `onRecording` hand-back mode; without them the message box behaves as before |
 | `components/voice/use-audio-player.ts` | Play, pause and progress for both sides |
@@ -133,12 +166,21 @@ Link previews and page titles are unchanged ("A letter for Anna"): the caption n
   - Three OpenAI transcriptions in all, a few seconds each.
 - **Not checked:** real iOS Safari and Android Chrome with a real microphone (the "done when" of #38 asks for a note recorded on one phone and heard on another), Firefox, a real two-minute recording, and the routes on Cloudflare Workers (only `next dev`). Next.js's Node server drops `Content-Length` from route answers (`FORBIDDEN_HEADERS` in `next/dist/server/send-response.js`), so the 206 answers went out chunked with a correct `Content-Range`; whether Safari plays them that way, and what the Worker sends, is unverified.
 
+### The voice player (issue #83), 22 November
+
+- **Unit tests:** `tests/unit/components/letters/voice-player-model.test.ts` (38): every letter template places a slot; `isOwnAudioSrc` accepts our paths and refuses other origins, `//host`, `/\host`, `data:`, `blob:` and `javascript:`; the resting shape is stable per note, differs between notes, stays in range and has no jumps; the bins sit in the voice range in a scattered order; loudness; bars rise with sound, fall in silence, rise faster than they fall, breathe without an analyser and settle back to rest; the words, time left and live-region status. `fixture-letter.test.ts` checks the sample note is an MP4 in `public/dev` on our own domain.
+- **In the browser** (isolated Chrome, `next dev`, the workbench's `?audio=1`): at 375 × 812, with reduced motion, all nine letter templates: before opening no pill, no band (`<main>` padding 0) and no audio request; after opening the player in its place; a tap played it (the `.m4a` fetched from our own domain), the sweep and the time moved, the bars stayed still, a second tap paused it ("Paused."), no sideways scroll. With motion on, on the classic envelope at 375 px and the gift reveal at 1440 × 900: sampled every 300 ms, the bars followed the voice (about 15 % between phrases, 50 to 80 % while speaking), the halo grew with loudness, the sweep moved smoothly and the time counted down; at the end it returned to "0:07" and the resting shape. Keyboard: Tab reaches the button with a visible ring after the gift card, Enter plays, and the name becomes "Pause the voice note from Lea and Max". No console errors or warnings.
+- **Not checked:** a real iPhone (the silent switch, `audioSession`, the fallback on iOS before 17), Android Chrome, Firefox, a stored note on `/l/<slug>` (the dev data has none, so the fixture clip stood in), a Daytona design's pill (that code did not change), and the pill's fallback for a template without a slot (none exists today).
+
 ## Open questions
+
+- **iPhone checks for the player.** The audio-session handling follows WebKit's documented behaviour but has not run on a phone. If a note is silent on an iPhone in silent mode, the quick fix is to stop routing through Web Audio there (`unrouted`), at the cost of breathing bars.
+- **Seeking.** The waveform is not a slider: a recipient cannot jump to a point in the note. A scrubber needs a real `role="slider"` with keyboard steps.
 
 - **Safari and `Content-Length`.** See above. If Safari refuses to play, the fix is on the serving side (for example answering from a Worker route outside Next's response handling), not in the browser.
 - **webm notes on older iPhones.** Chrome before mp4 recording and Firefox record webm/opus, which iOS Safari before 17.4 may not play. Most senders now record AAC; a server-side transcode is not possible in a Worker.
 - **A scheduled purge.** Files of deleted gifts go on the next upload or removal by anyone. If letters start being deleted in bulk (account deletion), a daily cron calling `purgeDeletedAudio()` would empty the queue promptly.
-- **The renderer's band depends on a template convention** (a top-level `<main>` with a `min-h-[100svh]` first screen). A new template that breaks it would sit under the button; the overlap check in this page's live notes is how to catch it.
+- **The renderer's band depends on a template convention** (now only for a template without a slot) (a top-level `<main>` with a `min-h-[100svh]` first screen). A new template that breaks it would sit under the button; the overlap check in this page's live notes is how to catch it.
 - **Captions for people who cannot hear.** The caption reaches screen readers only; a visible "Read it" toggle on the gift page would help deaf recipients.
 - **The privacy page's list of providers** does not name OpenAI yet (also noted for voice input).
 - **Unfinished gifts** show the recorder on My gifts; a note there plays for the owner but only reaches recipients once the page is built.

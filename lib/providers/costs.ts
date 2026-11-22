@@ -102,6 +102,42 @@ export const DEFAULT_WEB_SEARCH_USES = 5
 // A request body we cannot measure, priced as this many input tokens.
 export const UNKNOWN_BODY_TOKENS = 200_000
 
+// Files sent as base64 (finder uploads, issue #77) are priced by what the
+// model is billed for, not by their characters: a base64 photo of a few
+// hundred kilobytes would otherwise reserve dollars for a few seconds. An image
+// is at most about 1,600 tokens once the API has scaled it; a PDF is billed
+// per page (text plus a page image), about 3,000 tokens a page at most, and
+// pages are estimated from the file's size (at least one, at most the
+// finder's 20). Generous on purpose, like the rest of the reservation.
+export const IMAGE_TOKENS = 1_600
+export const PDF_PAGE_TOKENS = 3_000
+export const PDF_BYTES_PER_PAGE = 50_000
+export const PDF_MAX_PAGES = 20
+
+type Base64Source = { type?: unknown; media_type?: unknown; data?: unknown }
+
+// Characters of base64 file data in the request and the tokens they stand for.
+function base64Files(messages: unknown): { chars: number; tokens: number } {
+  let chars = 0
+  let tokens = 0
+  if (!Array.isArray(messages)) return { chars, tokens }
+  for (const message of messages as Array<{ content?: unknown }>) {
+    if (!Array.isArray(message?.content)) continue
+    for (const block of message.content as Array<{ type?: unknown; source?: Base64Source }>) {
+      const source = block?.source
+      if (!source || source.type !== "base64" || typeof source.data !== "string") continue
+      chars += source.data.length
+      if (block.type === "image") tokens += IMAGE_TOKENS
+      else {
+        const bytes = Math.ceil((source.data.length * 3) / 4)
+        const pages = Math.min(PDF_MAX_PAGES, Math.max(1, Math.ceil(bytes / PDF_BYTES_PER_PAGE)))
+        tokens += pages * PDF_PAGE_TOKENS
+      }
+    }
+  }
+  return { chars, tokens }
+}
+
 export type AnthropicRequestShape = {
   model?: string
   // Characters in the JSON body. Every token is at least one character, so
@@ -114,7 +150,7 @@ export type AnthropicRequestShape = {
 // Reads what the reservation needs from a Messages API request body.
 export function anthropicRequestShape(body: unknown): AnthropicRequestShape {
   if (typeof body !== "string") return { bodyChars: null, webSearchUses: 0 }
-  let parsed: { model?: unknown; max_tokens?: unknown; tools?: unknown } = {}
+  let parsed: { model?: unknown; max_tokens?: unknown; tools?: unknown; messages?: unknown } = {}
   try {
     parsed = JSON.parse(body) as typeof parsed
   } catch {
@@ -128,9 +164,10 @@ export function anthropicRequestShape(body: unknown): AnthropicRequestShape {
       }
     }
   }
+  const files = base64Files(parsed.messages)
   return {
     model: typeof parsed.model === "string" ? parsed.model : undefined,
-    bodyChars: body.length,
+    bodyChars: body.length - files.chars + files.tokens,
     maxTokens: typeof parsed.max_tokens === "number" && parsed.max_tokens > 0 ? parsed.max_tokens : undefined,
     webSearchUses,
   }

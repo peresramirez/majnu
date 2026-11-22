@@ -110,34 +110,17 @@ export function fixtureLetter(
   return view ? { ...view, ownerPreview: !opts.guest } : null
 }
 
-// One second of silence as a WAV (8 kHz, 8-bit, mono), written out by hand.
-// Enough for the "Tap to hear" button to load and play, and served inline, so
-// the workbench needs no stored note and loads nothing from elsewhere.
-export function silentWav(): string {
-  const samples = 8000
-  const bytes = new Uint8Array(44 + samples)
-  const view = new DataView(bytes.buffer)
-  const ascii = (offset: number, text: string) => [...text].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)))
-  ascii(0, "RIFF")
-  view.setUint32(4, 36 + samples, true)
-  ascii(8, "WAVE")
-  ascii(12, "fmt ")
-  view.setUint32(16, 16, true) // fmt chunk size
-  view.setUint16(20, 1, true) // PCM
-  view.setUint16(22, 1, true) // mono
-  view.setUint32(24, 8000, true) // sample rate
-  view.setUint32(28, 8000, true) // byte rate
-  view.setUint16(32, 1, true) // block align
-  view.setUint16(34, 8, true) // bits per sample
-  ascii(36, "data")
-  view.setUint32(40, samples, true)
-  bytes.fill(128, 44) // 8-bit silence sits at the midpoint
-  return `data:audio/wav;base64,${Buffer.from(bytes).toString("base64")}`
-}
+// The sample voice note for ?audio=1: seven seconds of a synthesised voice
+// (macOS `say`, AAC in an .m4a, 42 KB) in public/dev/, so the voice player's
+// waveform has something to follow on every template. Served from our own
+// domain like a real note, and fetched only on the first tap.
+export const SAMPLE_AUDIO_PATH = "/dev/voice-note.m4a"
 
-// A voice note for ?audio=1, so the "Tap to hear" band (issue #38) can be
-// checked on every template without a stored note.
 export function sampleAudio(): LetterAudio {
-  // The length matches the clip, because the player shows the clip's own once it has played.
-  return { src: silentWav(), seconds: 1, caption: "A sample voice note for the workbench. It is one second of silence." }
+  // The length matches the clip, so the time is right before it has loaded.
+  return {
+    src: SAMPLE_AUDIO_PATH,
+    seconds: 7,
+    caption: "Hi! This is a little voice note, recorded just for you. I hope it makes you smile. Open it whenever you like.",
+  }
 }
