@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }),
 }))
 vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: () => ({ cf: { country: "DE", region: "Berlin", city: "Berlin", latitude: "52.5" }, env: {}, ctx: { waitUntil: () => {} } }),
+  getCloudflareContext: () => ({ cf: { country: "DE", region: "Berlin", city: "Berlin", latitude: "52.51234" }, env: {}, ctx: { waitUntil: () => {} } }),
 }))
 vi.mock("@/lib/finder/sessions", () => ({
   createFinderSession: vi.fn(),
@@ -16,6 +16,7 @@ vi.mock("@/lib/finder/sessions", () => ({
 vi.mock("@/lib/finder/limits", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/finder/limits")>()),
   canStartSession: vi.fn(),
+  findOpenSession: vi.fn(),
 }))
 vi.mock("@/lib/finder/agent", () => ({ runFinderTurn: vi.fn() }))
 
@@ -23,7 +24,7 @@ import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta"
 import { POST } from "@/app/api/finder/route"
 import { runFinderTurn } from "@/lib/finder/agent"
 import type { FinderEvent } from "@/lib/finder/events"
-import { canStartSession, FINDER_LIMITS } from "@/lib/finder/limits"
+import { canStartSession, findOpenSession, FINDER_LIMITS } from "@/lib/finder/limits"
 import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession } from "@/lib/finder/sessions"
 
 function post(body: unknown): Request {
@@ -69,6 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   user = { id: "user-1", is_anonymous: true }
   vi.mocked(canStartSession).mockResolvedValue({ ok: true })
+  vi.mocked(findOpenSession).mockResolvedValue(null)
   vi.mocked(createFinderSession).mockResolvedValue(fresh)
   vi.mocked(getMyFinderSession).mockResolvedValue(existing)
   vi.mocked(saveFinderSession).mockResolvedValue()
@@ -79,6 +81,79 @@ beforeEach(() => {
     return { appended: [userTurn, assistantTurn], outcome: "done" }
   })
   vi.spyOn(console, "error").mockImplementation(() => {})
+})
+
+describe("continuing today's open session (issue #70)", () => {
+  it("continues it for a message without a session id, so a reload uses up no session", async () => {
+    vi.mocked(findOpenSession).mockResolvedValue(existing)
+    const events = await eventsOf(await POST(post({ message: "Finde ein Geschenk für meinen Vater", locale })))
+
+    expect(events[0]).toEqual({ type: "session", sessionId: existing.id })
+    expect(findOpenSession).toHaveBeenCalledWith("user-1", expect.any(Date))
+    expect(createFinderSession).not.toHaveBeenCalled()
+    expect(canStartSession).not.toHaveBeenCalled()
+    const { state, history } = vi.mocked(runFinderTurn).mock.calls[0][0]
+    expect(history).toBe(existing.chat)
+    // The visitor sees none of the earlier conversation: Majnu is told so.
+    expect(state.startedOver).toBe(true)
+    expect(saveFinderSession).toHaveBeenCalledWith(existing, expect.objectContaining({ chat: [...existing.chat, userTurn, assistantTurn] }))
+  })
+
+  it("does not call an empty session a new start", async () => {
+    vi.mocked(findOpenSession).mockResolvedValue(fresh)
+    await eventsOf(await POST(post({ message: "Mama", locale })))
+    expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.startedOver).toBe(false)
+  })
+
+  it("starts a new session only when none is open, and never for a message that has an id", async () => {
+    await eventsOf(await POST(post({ message: "Mama", locale })))
+    expect(createFinderSession).toHaveBeenCalledTimes(1)
+    vi.mocked(createFinderSession).mockClear()
+    vi.mocked(findOpenSession).mockClear()
+    await eventsOf(await POST(post({ sessionId: existing.id, message: "Sie ist 60", locale })))
+    expect(findOpenSession).not.toHaveBeenCalled()
+    expect(createFinderSession).not.toHaveBeenCalled()
+  })
+})
+
+describe("a message from the wrap step (issue #70)", () => {
+  const shown = {
+    options: [
+      { id: "opt-1", title: "Fotobuch A4", description: "40 Seiten.", reason: "Erinnerungen.", url: "https://fotobuch.example/a4" },
+      { id: "opt-2", title: "Kräutergarten", description: "Sechs Kräuter.", reason: "Garten.", url: "https://garten.example/k" },
+    ],
+    recommendedId: "opt-1",
+    why: "Weil.",
+  }
+
+  beforeEach(() => {
+    vi.mocked(getMyFinderSession).mockResolvedValue({ ...existing, lastOptions: shown })
+  })
+
+  it("gives the agent the chosen option from the session's own last options, and the design", async () => {
+    await eventsOf(await POST(post({ sessionId: existing.id, message: "für meine Schwester Ana", locale, wrap: { optionId: "opt-2", templateId: "postcard" } })))
+    const { state } = vi.mocked(runFinderTurn).mock.calls[0][0]
+    expect(state.wrap).toEqual({ option: shown.options[1], templateId: "postcard" })
+  })
+
+  it("sends no choice without one", async () => {
+    await eventsOf(await POST(post({ sessionId: existing.id, message: "Hallo", locale })))
+    expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.wrap).toBeNull()
+  })
+
+  it("refuses an option that is not among the session's last options, without calling the model", async () => {
+    const response = await POST(post({ sessionId: existing.id, message: "für Ana", locale, wrap: { optionId: "opt-9", templateId: "postcard" } }))
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: "Dieses Geschenk ist nicht mehr in dieser Suche. Wähl eine der gezeigten Ideen." })
+    expect(runFinderTurn).not.toHaveBeenCalled()
+  })
+
+  it("refuses a choice without a session, or with a design the finder does not offer", async () => {
+    expect((await POST(post({ message: "für Ana", locale, wrap: { optionId: "opt-1", templateId: "postcard" } }))).status).toBe(404)
+    expect((await POST(post({ sessionId: existing.id, message: "für Ana", locale, wrap: { optionId: "opt-1", templateId: "wedding-invite" } }))).status).toBe(400)
+    expect(runFinderTurn).not.toHaveBeenCalled()
+    expect(createFinderSession).not.toHaveBeenCalled()
+  })
 })
 
 describe("POST /api/finder", () => {
@@ -117,7 +192,8 @@ describe("POST /api/finder", () => {
     expect(state.base).toEqual({ country: "DE", region: "Berlin", language: "de", currency: "EUR" })
     expect(state.browserLanguage).toBe("de-DE")
     expect(state.timezone).toBe("Europe/Berlin")
-    expect(JSON.stringify(state)).not.toMatch(/52\.5|latitude|city/)
+    // A distinctive latitude, so a timestamp's seconds ("…:52.5…") can never match by chance.
+    expect(JSON.stringify(state)).not.toMatch(/52\.51234|latitude|"city"/)
   })
 
   it("saves the turn append-only with the context and options it ended with", async () => {
@@ -175,7 +251,7 @@ describe("POST /api/finder", () => {
     const turn: BetaMessageParam = { role: "user", content: [{ type: "text", text: "<context/>" }, { type: "text", text: "Hi" }] }
     vi.mocked(getMyFinderSession).mockResolvedValue({ ...existing, chat: Array.from({ length: FINDER_LIMITS.messagesPerSession }, () => turn) })
     const events = await eventsOf(await POST(post({ sessionId: existing.id, message: "Hi", locale })))
-    expect(events).toEqual([{ type: "limit", reason: "finder_daily", message: expect.any(String) }, { type: "done" }])
+    expect(events).toEqual([{ type: "limit", reason: "session_full", message: expect.any(String) }, { type: "done" }])
     expect(runFinderTurn).not.toHaveBeenCalled()
   })
 

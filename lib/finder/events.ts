@@ -20,7 +20,15 @@ export type FinderRequest = {
   sessionId?: string
   message: string
   locale: FinderLocale
+  // Sent while the wrap step is open (issues #70 and #71): the gift and the
+  // design the visitor chose. The server checks the option is one of the
+  // session's last options and tells Majnu in the context block, so a message
+  // such as "it's for my sister Ana" is answered in that frame. Added for
+  // issue #70 (additive).
+  wrap?: WrapChoice
 }
+
+export type WrapChoice = { optionId: string; templateId: WrapTemplateId }
 
 // What Majnu assumed before searching. The UI shows it as small chips the
 // visitor can correct in their next message ("She's 60, not 45").
@@ -37,6 +45,9 @@ export type FinderContext = {
   // gave one. The wrap step offers the party pop box for a birthday or a party
   // (lib/finder/wrap-templates.ts). Added for issue #59 (additive).
   occasion?: string
+  // The person's name, only if the visitor gave it. The wrap step prefills
+  // "Their name" with it. Added for issue #71 (additive).
+  name?: string
 }
 
 export type GiftOption = {
@@ -51,8 +62,16 @@ export type GiftOption = {
 }
 
 export type FinderLimitReason =
-  | "finder_daily" // 3 searches a day for one visitor
-  | "personalise_daily" // 2 personalised searches a day
+  // Today's finder sessions (FINDER_LIMITS.sessionsPerDay) have searched and none has searches left, so
+  // searching waits until tomorrow (the ideas shown can still be wrapped).
+  // Also a calendar's 2 idea pools a day. Changed for issue #70.
+  | "finder_daily"
+  // No longer sent (issue #70: personalising has no cap of its own); kept so
+  // older pages and lib/calendars/types.ts still type-check.
+  | "personalise_daily"
+  // This session's searches or messages (FINDER_LIMITS) are used; a new search can go on
+  // while one of today's sessions is left. Added for issue #70.
+  | "session_full"
   | "site_busy" // the site-wide daily cap
   | "signin_required" // e.g. an advent calendar
 
@@ -68,7 +87,14 @@ export type FinderEvent =
   | { type: "question"; text: string; suggestions?: string[] }
   | { type: "limit"; reason: FinderLimitReason; message: string }
   | { type: "error"; message: string }
+  // On the wrap step: what Majnu heard for the page (fill_wrap), filled into
+  // the wrap form for the visitor to check. Never wraps by itself. Added for
+  // issue #70 (additive).
+  | { type: "fill"; fields: WrapFill }
   | { type: "done" }
+
+// The wrap form's fields Majnu may fill in; only those it heard are present.
+export type WrapFill = { recipientName?: string; senderName?: string; note?: string; giftCode?: string }
 
 // Wrapping a chosen gift in a template: POST /api/finder/wrap answers JSON.
 // gift-box-3d and party-box were added in issue #50 (additive).
@@ -81,6 +107,10 @@ export type WrapRequest = {
   recipientName?: string
   senderName?: string
   note?: string // anything the sender wants to say; Majnu writes the rest
+  // A voucher code, gift-card code or order details the sender got from the
+  // shop, put in the page's gift as `code` and shown only once it is opened.
+  // Added for issue #71 (additive).
+  giftCode?: string
 }
 
 export type WrapResponse = { letterId: string; slug: string } | { error: string; reason?: FinderLimitReason }

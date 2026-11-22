@@ -14,11 +14,15 @@ import { getClient } from "@/lib/agents/client"
 import { ResearchIncomplete, ResearchRefusal, researchGiftReport, type ResearchReport } from "@/lib/agents/research"
 import {
   contextBlockText,
+  contextFor,
   FINDER_SYSTEM_PROMPT,
   FINDER_TOOL_CHOICE,
   FINDER_TOOLS,
+  FindGiftsInput,
   MAX_FINDER_REQUESTS,
+  parseFillWrap,
   runFinderTurn,
+  STARTED_OVER_LINE,
   toOptions,
   type FinderTurnState,
 } from "@/lib/finder/agent"
@@ -284,7 +288,7 @@ describe("personalising", () => {
       { type: "question", text: "Was arbeitet sie?" },
     ])
     // Checked, not claimed: the search comes with the answers.
-    expect(canSearch).toHaveBeenCalledWith("user-1", true, expect.any(Date), "de")
+    expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
     expect(claimSearch).not.toHaveBeenCalled()
     expect(requests).toHaveLength(1)
     expect(result.appended.at(-1)?.content).toEqual([expect.objectContaining({ tool_use_id: "ask-1" })])
@@ -301,10 +305,10 @@ describe("personalising", () => {
   })
 
   it("does not ask questions that would only lead to a refused search", async () => {
-    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "personalise_daily", message: "Zwei am Tag." })
+    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "session_full", message: "Zehn pro Suche." })
     scriptModel(reply([askCall([{ text: "Wie alt?", suggestions: ["60"] }])]))
     await runFinderTurn({ history: [], message: "Personalisieren", state: state({ lastOptions: shown }) })
-    expect(events).toEqual([{ type: "limit", reason: "personalise_daily", message: "Zwei am Tag." }])
+    expect(events).toEqual([{ type: "limit", reason: "session_full", message: "Zehn pro Suche." }])
   })
 })
 
@@ -418,9 +422,13 @@ describe("reading a public profile", () => {
       (block) => block.tool_use_id === id,
     )!
 
-  it("offers it once while personalising, and only for links the visitor gave", () => {
-    expect(FINDER_TOOLS.map((tool) => tool.name)).toEqual(["find_gifts", "ask_questions", "read_profile"])
-    expect(FINDER_SYSTEM_PROMPT).toContain("Once in a conversation, while personalising, you may offer")
+  it("may ask for a public profile once, whenever Majnu wants to know more, and only reads links the visitor gave", () => {
+    expect(FINDER_TOOLS.map((tool) => tool.name)).toEqual(["find_gifts", "ask_questions", "read_profile", "fill_wrap"])
+    expect(FINDER_SYSTEM_PROMPT).toContain("When you want to know more about the person, one of your questions may ask for a public Instagram, TikTok or LinkedIn profile")
+    expect(FINDER_SYSTEM_PROMPT).toContain('"No public profile"')
+    expect(FINDER_SYSTEM_PROMPT).toContain("Ask it once in a conversation at most")
+    expect(FINDER_SYSTEM_PROMPT).toContain("One profile per conversation.")
+    expect(FINDER_TOOLS[2].description).toContain("Instagram, TikTok or LinkedIn")
     expect(FINDER_SYSTEM_PROMPT).toContain("never guess one or look someone up")
     const schema = FINDER_TOOLS[2].input_schema as { properties: Record<string, unknown>; required: string[] }
     expect([...schema.required].sort()).toEqual(Object.keys(schema.properties).sort())
@@ -500,13 +508,13 @@ describe("reading a public profile", () => {
   })
 
   it("does not read a profile for a search the visitor could not run", async () => {
-    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "personalise_daily", message: "Zwei am Tag." })
+    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "session_full", message: "Zehn pro Suche." })
     const { requests } = scriptModel(reply([readCall()]))
     await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state({ lastOptions: { options: [], recommendedId: "x", why: "" } }) })
 
-    expect(canSearch).toHaveBeenCalledWith("user-1", true, expect.any(Date), "de")
+    expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
     expect(claimProfileRead).not.toHaveBeenCalled()
-    expect(events).toEqual([{ type: "limit", reason: "personalise_daily", message: "Zwei am Tag." }])
+    expect(events).toEqual([{ type: "limit", reason: "session_full", message: "Zehn pro Suche." }])
     expect(requests).toHaveLength(1)
   })
 
@@ -519,6 +527,30 @@ describe("reading a public profile", () => {
     expect(toolResult(requests[1], "read-1").content).toContain("instagram.com/name")
     expect(claimProfileRead).not.toHaveBeenCalled()
     expect(readProfileInterests).not.toHaveBeenCalled()
+  })
+
+  it("reads a LinkedIn profile link, and refuses a LinkedIn company page with the profile shapes it can read", async () => {
+    scriptModel(reply([readCall({ link: "https://de.linkedin.com/in/lena-example-1a2b3c/?originalSubdomain=de" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "linkedin.com/in/lena-example-1a2b3c", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example-1a2b3c" }, "de")
+    expect(claimProfileRead).toHaveBeenCalledWith(expect.objectContaining({ source: "linkedin" }))
+
+    vi.mocked(readProfileInterests).mockClear()
+    vi.mocked(claimProfileRead).mockClear()
+    const { requests } = scriptModel(
+      reply([readCall({ link: "https://www.linkedin.com/company/example-bikes/" })]),
+      reply([text("Schick mir den Link zu ihrem Profil.")], "end_turn"),
+    )
+    await runFinderTurn({ history: [], message: "https://www.linkedin.com/company/example-bikes/", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("linkedin.com/in/name")
+    expect(readProfileInterests).not.toHaveBeenCalled()
+    expect(claimProfileRead).not.toHaveBeenCalled()
+  })
+
+  it("reads a bare LinkedIn name when the visitor said it is on LinkedIn", async () => {
+    scriptModel(reply([readCall({ link: "lena-example-1a2b3c", platform: "linkedin" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "Auf LinkedIn: lena-example-1a2b3c", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example-1a2b3c" }, "de")
   })
 
   it("asks which platform a bare handle is on, and reads it once the visitor says", async () => {
@@ -546,5 +578,141 @@ describe("reading a public profile", () => {
     expect(toolResult(requests[1], "read-1").content).toContain("technical reason")
     expect(events.some((e) => e.type === "error")).toBe(false)
     expect(events.some((e) => e.type === "options")).toBe(true)
+  })
+})
+
+describe("searching now or asking first (issue #70)", () => {
+  it("lets Majnu decide: search at once when it knows enough, ask first when it matters", () => {
+    expect(FINDER_SYSTEM_PROMPT).not.toContain("Don't ask questions first")
+    expect(FINDER_SYSTEM_PROMPT).toContain("Search at once with find_gifts")
+    expect(FINDER_SYSTEM_PROMPT).toContain('"Find a gift for my mother" is enough')
+    expect(FINDER_SYSTEM_PROMPT).toContain("Ask first with ask_questions when a missing fact would change the gifts a lot, or when the visitor asks you to research the person")
+    expect(FINDER_SYSTEM_PROMPT).toContain("Don't ask again before you have shown options")
+    expect(FINDER_TOOLS[1].description).toContain("before a first search")
+  })
+
+  it("asks where the gift goes instead of assuming the connection's place, and has no city written in", () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain('"my friend is from Venezuela"')
+    expect(FINDER_SYSTEM_PROMPT).toContain("ask where the gift should be delivered or used")
+    expect(FINDER_SYSTEM_PROMPT + JSON.stringify(FINDER_TOOLS)).not.toContain("Berlin")
+  })
+
+  it("reads only links and handles, and never looks anyone up by name or email address", () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain("You can't look anyone up by name or email address")
+    expect(FINDER_SYSTEM_PROMPT).toContain("if the visitor gives an email address, say in one sentence")
+  })
+
+  it("asks questions before a first search, checked against this session's searches", async () => {
+    scriptModel(reply([askCall([{ text: "Wo soll das Geschenk hin?", suggestions: ["Deutschland", "Venezuela"] }])]))
+    const s = state()
+    await runFinderTurn({ history: [], message: "Mein Freund ist aus Venezuela, 30, mag Videospiele", state: s })
+    expect(events).toEqual([{ type: "question", text: "Wo soll das Geschenk hin?", suggestions: ["Deutschland", "Venezuela"] }])
+    expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
+    expect(claimSearch).not.toHaveBeenCalled()
+    expect(researchGiftReport).not.toHaveBeenCalled()
+  })
+
+  it("searches in the country the gift goes to, with its currency, when the visitor named another", async () => {
+    const s = state()
+    scriptModel(reply([findCall({ ...MOTHER, relationship: "Freund", kind: "friend", country: "ve" })]))
+    await runFinderTurn({ history: [], message: "Es soll nach Venezuela gehen", state: s })
+    expect(events[0]).toMatchObject({ type: "context", context: { country: "VE" } })
+    // No Berlin and no euros: the visitor's region and currency say nothing about Venezuela.
+    expect(s.context.region).toBeUndefined()
+    expect(s.context.currency).toBeUndefined()
+    expect(researchGiftReport).toHaveBeenCalledWith(expect.objectContaining({ countryCode: "VE", country: "Venezuela" }))
+  })
+
+  it("keeps the visitor's own place when the country is theirs, or not a country code", () => {
+    const base = { country: "DE", region: "Berlin", language: "de", currency: "EUR" }
+    const input = (country: unknown) => FindGiftsInput.parse({ ...MOTHER, country })
+    expect(contextFor(base, input("DE"))).toMatchObject({ country: "DE", region: "Berlin", currency: "EUR" })
+    expect(contextFor(base, input("Venezuela"))).toMatchObject({ country: "DE", region: "Berlin" })
+    expect(contextFor(base, input("ES"))).toMatchObject({ country: "ES", currency: "EUR" })
+    expect(contextFor(base, input("ES")).region).toBeUndefined()
+  })
+
+  it("keeps the person's name in the context, for the wrap step", async () => {
+    scriptModel(reply([findCall({ ...MOTHER, name: "Ana" })]))
+    await runFinderTurn({ history: [], message: "Für meine Mutter Ana", state: state() })
+    expect(events[0]).toMatchObject({ type: "context", context: { name: "Ana" } })
+  })
+
+  it("adds one follow-up question under the options, only while a search is left", async () => {
+    const followUp = { text: "Was macht sie in ihrer Freizeit?", suggestions: ["Garten", "Lesen", "Reisen"] }
+    const { requests } = scriptModel(reply([findCall({ ...MOTHER, followUp })]))
+    await runFinderTurn({ history: [], message: "Mama", state: state() })
+    expect(events.map((e) => e.type)).toEqual(["context", "status", "options", "question"])
+    expect(events[3]).toEqual({ type: "question", ...followUp })
+    expect(requests).toHaveLength(1)
+
+    events = []
+    vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "session_full", message: "Voll." })
+    scriptModel(reply([findCall({ ...MOTHER, followUp })]))
+    await runFinderTurn({ history: [], message: "Mama", state: state() })
+    expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
+  })
+
+  it("makes the model decide the country and the follow-up on every search", () => {
+    const schema = FINDER_TOOLS[0].input_schema as { required: string[] }
+    expect(schema.required).toEqual(expect.arrayContaining(["country", "followUp"]))
+  })
+})
+
+describe("on the wrap step (issue #70)", () => {
+  const option = { id: "o2", title: "Fotobuch <A4>", description: "40 Seiten.", reason: "Erinnerungen.", url: "https://fotobuch.example/a4" }
+  const onWrap = (overrides: Partial<FinderTurnState> = {}) => state({ wrap: { option, templateId: "gift-box-3d" }, ...overrides })
+  const fillCall = (input: Block, id = "fill-1"): Block => ({ type: "tool_use", id, name: "fill_wrap", input })
+
+  it("tells Majnu in the context block which gift and design the visitor chose", () => {
+    expect(contextBlockText(onWrap())).toBe(
+      '<context>Today is Saturday 2026-11-21 in Europe/Berlin (UTC+01:00). Browser language: de-DE. Connection from: Berlin, Germany (DE). Local currency: EUR. The visitor chose "Fotobuch A4" and the 3D gift box design and is filling in the page.</context>',
+    )
+    expect(contextBlockText(state())).not.toContain("The visitor chose")
+  })
+
+  it("says so when the visitor opened the finder again and sees nothing from before", () => {
+    expect(contextBlockText(state({ startedOver: true }))).toContain(STARTED_OVER_LINE)
+    expect(contextBlockText(state())).not.toContain(STARTED_OVER_LINE)
+  })
+
+  it("answers in that frame: the system prompt and tools stay the same", async () => {
+    const { requests } = scriptModel(reply([text("Schön, für Ana.")], "end_turn"))
+    await runFinderTurn({ history: [], message: "für Ana", state: onWrap() })
+    expect(requests[0].system).toBe(FINDER_SYSTEM_PROMPT)
+    expect(JSON.stringify(requests[0].tools)).toBe(JSON.stringify(FINDER_TOOLS))
+    expect(FINDER_SYSTEM_PROMPT).toContain("don't search again unless they ask for other gifts")
+  })
+
+  it("fills the form with what the visitor said, ends the turn, and never wraps", async () => {
+    const { requests } = scriptModel(
+      reply([text("Ich habe Ana und Javi eingetragen."), fillCall({ recipientName: "Ana", senderName: " Javi ", note: null, giftCode: null })]),
+    )
+    const result = await runFinderTurn({ history: [], message: "it's for my sister Ana, from Javi", state: onWrap() })
+    expect(events).toEqual([
+      { type: "text", delta: "Ich habe Ana und Javi eingetragen." },
+      { type: "fill", fields: { recipientName: "Ana", senderName: "Javi" } },
+    ])
+    expect(requests).toHaveLength(1)
+    expect(result.appended.at(-1)?.content).toEqual([expect.objectContaining({ tool_use_id: "fill-1", content: expect.stringContaining("not wrapped yet") })])
+    expect(claimSearch).not.toHaveBeenCalled()
+  })
+
+  it("refuses to fill a form when the visitor is not on the wrap step, and lets Majnu answer in words", async () => {
+    const { requests } = scriptModel(reply([fillCall({ recipientName: "Ana", senderName: null, note: null, giftCode: null })]), reply([text("Für wen?")], "end_turn"))
+    await runFinderTurn({ history: [], message: "für Ana", state: state() })
+    expect(events).toEqual([{ type: "text", delta: "Für wen?" }])
+    expect(requests).toHaveLength(2)
+  })
+
+  it("parses fill_wrap: trimmed, cut to the form's limits, nulls and blanks left out", () => {
+    expect(parseFillWrap({ recipientName: "  Ana ", senderName: null, note: "", giftCode: " GC-42 " })).toEqual({ recipientName: "Ana", giftCode: "GC-42" })
+    const long = parseFillWrap({ recipientName: "x".repeat(99), senderName: null, note: "n".repeat(900), giftCode: "c".repeat(400) })!
+    expect([long.recipientName?.length, long.note?.length, long.giftCode?.length]).toEqual([60, 600, 200])
+    expect(parseFillWrap({ recipientName: null, senderName: null, note: null, giftCode: null })).toBeNull()
+    expect(parseFillWrap({ recipientName: 42 })).toBeNull()
+    expect(parseFillWrap(null)).toBeNull()
+    const schema = FINDER_TOOLS[3].input_schema as { properties: Record<string, unknown>; required: string[] }
+    expect([...schema.required].sort()).toEqual(Object.keys(schema.properties).sort())
   })
 })

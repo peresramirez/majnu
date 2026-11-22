@@ -24,13 +24,13 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/hero-finder"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
-import { Conversation } from "./conversation"
+import { Conversation, MORE_PLACEHOLDER } from "./conversation"
 import { finderAnnouncement, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import { fetchTransport, type FinderTransport } from "./transport"
 import { useTypewriter } from "./typewriter"
 import { useFinder, type Finder } from "./use-finder"
-import { WrapFooter, WrapView } from "./wrap-view"
+import { WRAP_PLACEHOLDER, WrapFooter, WrapView } from "./wrap-view"
 
 const SharedFinder = createContext<Finder | null>(null)
 
@@ -65,7 +65,7 @@ type Props = {
 // moon filling as Majnu works, the conversation, and the message box pinned
 // to the bottom (the tab bar steps aside while it has focus on a phone).
 export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
-  const { state, wrap, send, reset, choose, chooseTemplate, wrapGift, backToIdeas, checkHostRef, transport } = finder
+  const { state, wrap, send, reset, choose, checkHostRef, transport } = finder
   const [draft, setDraft] = useState("")
   const composer = useRef<HTMLTextAreaElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -74,6 +74,9 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   const empty = state.items.length === 0
   const wrapping = wrap.stage !== "closed"
   const ready = wrap.stage === "ready"
+  // The message box stays while the visitor chooses a design and fills in the
+  // page: what they type there goes to Majnu with their choice (issue #70).
+  const composing = wrap.stage === "closed" || wrap.stage === "choose"
   const chips = contextChips(state.context)
   const placeholder = useTypewriter(EXAMPLES, empty && draft === "")
 
@@ -208,6 +211,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
 
       <div
         ref={scroller}
+        data-finder-scroller=""
         tabIndex={-1}
         className={`min-h-0 overflow-y-auto overscroll-contain outline-none ${empty ? "flex flex-1 flex-col md:flex-none" : "flex-1"}`}
       >
@@ -227,7 +231,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
             <div ref={checkHostRef} className="flex justify-start empty:hidden [&:not(:empty)]:mt-4" />
           </div>
         ) : (
-          <div className={`${column} pt-4 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-4" : "pb-6"}`}>
+          <div className={`${column} pt-4 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-3" : "pb-6"}`}>
             {chips.length > 0 && !wrapping && (
               <div className="mb-4">
                 <p className="text-xs text-night-lilac">Majnu assumed this. Tap one to change it.</p>
@@ -252,18 +256,9 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
             <div ref={checkHostRef} className="flex justify-center empty:hidden [&:not(:empty)]:mb-4" />
 
             {wrapping ? (
-              <WrapView
-                key={wrap.option.id}
-                wrap={wrap}
-                context={state.context}
-                onTemplate={chooseTemplate}
-                onWrap={wrapGift}
-                onBack={backToIdeas}
-                previewUrl={transport.previewUrl}
-                shareUrl={transport.shareUrl}
-              />
+              <WrapView key={wrap.option.id} finder={finder} wrap={wrap} />
             ) : (
-              <Conversation state={state} onSend={(text) => void send(text)} onChoose={choose} />
+              <Conversation state={state} onSend={(text) => void send(text)} onChoose={choose} onNewSearch={newSearch} />
             )}
           </div>
         )}
@@ -287,12 +282,12 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
       {(wrap.stage === "choose" || wrap.stage === "wrapping") && (
         <div className="flex-none border-t border-night-petal/10 bg-night-plum">
           <div className={`mx-auto w-full sm:px-1 ${ready ? "max-w-[960px]" : "max-w-[720px]"} [&>div]:border-t-0 [&>div]:pb-2.5`}>
-            <WrapFooter wrap={wrap} />
+            <WrapFooter wrap={wrap} onNext={finder.nextStep} onPrevious={finder.previousStep} />
           </div>
         </div>
       )}
 
-      {!wrapping && (
+      {composing && (
         <form
           onSubmit={submit}
           aria-label="Message to Majnu"
@@ -319,7 +314,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 onKeyDown={onKeyDown}
                 enterKeyHint="send"
                 maxLength={1000}
-                placeholder={empty ? placeholder : "Tell Majnu more about them"}
+                placeholder={empty ? placeholder : wrapping ? WRAP_PLACEHOLDER : MORE_PLACEHOLDER}
                 className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
               />
               {/* Speak instead of typing (issue #37): the words land in the box

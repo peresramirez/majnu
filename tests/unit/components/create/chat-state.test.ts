@@ -3,8 +3,11 @@ import {
   CUT_OFF,
   DEFAULT_ERROR,
   chatFrame,
+  canSendMessage,
   chatReducer,
   composeMessage,
+  sendsOnEnter,
+  withVoiceText,
   initialChatState,
   templateMessage,
   type ChatAction,
@@ -27,6 +30,39 @@ describe("composeMessage", () => {
 
   it("sends the typed text alone without a template", () => {
     expect(composeMessage(null, " Hello ")).toBe("Hello")
+  })
+})
+
+describe("the template chip on every send path (issue #70)", () => {
+  // The Create tab keeps the chip (template) next to what was typed (draft);
+  // every path sends composeMessage(template, text).
+  const template = "Classic envelope"
+  const sent = 'Use the "Classic envelope" template.'
+
+  it("goes with a message sent with Enter, and Enter only", () => {
+    expect(sendsOnEnter({ key: "Enter", shiftKey: false, isComposing: false })).toBe(true)
+    expect(sendsOnEnter({ key: "Enter", shiftKey: true, isComposing: false })).toBe(false)
+    expect(sendsOnEnter({ key: "Enter", shiftKey: false, isComposing: true })).toBe(false)
+    expect(sendsOnEnter({ key: "a", shiftKey: false, isComposing: false })).toBe(false)
+    expect(composeMessage(template, "For my sister")).toBe(`${sent} For my sister`)
+  })
+
+  it("goes with the send button, even with nothing typed", () => {
+    expect(canSendMessage(false, "", template)).toBe(true)
+    expect(canSendMessage(false, "  ", null)).toBe(false)
+    expect(canSendMessage(true, "For my sister", template)).toBe(false)
+    expect(composeMessage(template, "")).toBe(sent)
+  })
+
+  it("goes with a message dictated by voice, added to what was typed", () => {
+    expect(withVoiceText("", "a birthday letter")).toBe("a birthday letter")
+    expect(withVoiceText("For my sister  ", "she turns 30")).toBe("For my sister she turns 30")
+    expect(composeMessage(template, withVoiceText("For my sister", "she turns 30"))).toBe(`${sent} For my sister she turns 30`)
+  })
+
+  it("goes with a starter tapped in an empty chat, which used to drop it", () => {
+    expect(composeMessage(template, "A birthday letter for my sister")).toBe(`${sent} A birthday letter for my sister`)
+    expect(composeMessage(null, "A birthday letter for my sister")).toBe("A birthday letter for my sister")
   })
 })
 

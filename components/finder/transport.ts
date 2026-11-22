@@ -33,7 +33,7 @@ export function failureMessage(status: number): string {
   return "Something went wrong finding gifts. Try again."
 }
 
-const LIMIT_REASONS: FinderLimitReason[] = ["finder_daily", "personalise_daily", "site_busy", "signin_required"]
+const LIMIT_REASONS: FinderLimitReason[] = ["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required"]
 
 export const fetchTransport: FinderTransport = {
   ensureSession: ensureAnonymousSession,

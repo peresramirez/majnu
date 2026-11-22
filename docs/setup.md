@@ -26,7 +26,9 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` locally; production uses `https://majnu.app` from `.env.production` | Google sign-in redirect, share links |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | The agents. Server only |
 | `MAJNU_MODEL` | Optional | Defaults to `claude-opus-5-5` |
-| `TAVILY_API_KEY` | Optional, app.tavily.com → API keys | Web search for the gift research agent. Server only. When it is empty, research uses Anthropic's web search instead |
+| `TAVILY_API_KEY` | Optional, app.tavily.com → API keys | Web search for the gift research agent, and reading another public page the sender pastes into the finder. Server only. When it is empty, research uses Anthropic's web search instead |
+| `APIFY_API_TOKEN`, `APIFY_DAILY_CAP` | Optional, console.apify.com → Settings → API & Integrations | Reads a public Instagram or TikTok profile the sender pastes into the finder. Server only. `APIFY_DAILY_CAP` (default 20, `0` switches them off) is the number of paid profile reads, LinkedIn included, the whole site may run per UTC day ([features/social-profiles.md](features/social-profiles.md)) |
+| `BRIGHTDATA_API_KEY` | Optional, brightdata.com → Account settings → Users → API key | Reads a public LinkedIn profile, and an Instagram profile when Apify cannot, through Bright Data's Scraper API. Billed per record. Server only. Empty: LinkedIn links can't be read and Instagram has Apify alone ([features/social-profiles.md](features/social-profiles.md)) |
 | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API keys | Checkout. Use test keys until the account is live |
 | `STRIPE_PRICE_WRAPPER` | Stripe Dashboard → Product catalog → Majnu personalised wrapper → the €2.99 one-time price's id (test mode: `price_1UeMy7Ieh8tCba0kv2rSa9af`) | The price Checkout charges. Test and live mode have different ids; `npm run test:smoke` checks it matches `lib/plans.ts` |
 | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → the endpoint for `https://majnu.app/api/stripe/webhook`, subscribed to `checkout.session.completed`, `.async_payment_succeeded`, `.async_payment_failed` and `.expired` | Verifies that webhook calls come from Stripe |
@@ -42,7 +44,7 @@ Ask a teammate for the `.env.local` values over a private channel. Never commit 
 Production values come from two places:
 
 - **Public values** (site URL, Supabase URL and publishable key, tip link) are in `.env.production`, which is committed. They ship in the browser bundle anyway.
-- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `DAYTONA_ANTHROPIC_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`, `OPENAI_API_KEY`, `APIFY_API_TOKEN`, `ANTHROPIC_API_KEY_FALLBACK`, `OPENAI_API_KEY_FALLBACK`, `DAYTONA_API_KEY_FALLBACK`, `FALLBACK_CAP_USD`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
+- **Secrets** are Worker secrets on Cloudflare. `npm run cf:secrets` copies the filled-in secret keys from `.env.local` (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `DAYTONA_ANTHROPIC_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`, `OPENAI_API_KEY`, `APIFY_API_TOKEN`, `BRIGHTDATA_API_KEY`, `ANTHROPIC_API_KEY_FALLBACK`, `OPENAI_API_KEY_FALLBACK`, `DAYTONA_API_KEY_FALLBACK`, `FALLBACK_CAP_USD`) to the Worker in one step. Run it again after changing a key. They never go in a file that is committed or deployed.
 
 ## Services
 
@@ -53,6 +55,12 @@ Production values come from two places:
 - Database changes go in `supabase/migrations/` and are applied through the Supabase MCP server or the SQL editor.
 - `0001_init.sql` creates `letters`, `profiles` and `letter_events`, the `letter_summaries` view the dashboard reads, and a trigger that gives every new user a free profile. Row-level security is on for all three tables and the `anon` role has no access at all; public pages and `/api/open` read through the service-role client by exact slug. Signed-in users can read their own rows and change only the content columns of their own letters (`kind`, `template_id`, `title`, `content`). The slug, owner, chat and plan are written by server code only.
 - After applying it, check with the anon key alone: `select` on `letters` fails or returns no rows, and a signed-in user cannot change `profiles.plan` or `letters.chat` from the browser console.
+
+**Bright Data**
+
+- The account uses two scrapers from the Scraper API library: LinkedIn people profiles (`gd_l1viktl72bvl7bjuj0`) and Instagram profiles (`gd_l1vikfch901nx3by4`). Both must be usable by the API key. On 21 November the Instagram one answered 400 "Customer is not active" (the app reports that as `blocked`); on 22 November it worked.
+- Pay as you go is $1.50 per 1,000 records, with 5,000 free records a month; failed records are not billed. Set a monthly spend limit in the Bright Data billing settings: the app's own guard is `APIFY_DAILY_CAP`.
+- Each job's snapshot stays in the account for 30 days; see "Open questions" in [features/social-profiles.md](features/social-profiles.md).
 
 **Anthropic**
 

@@ -83,7 +83,7 @@ function addSession(id: string, profile?: Row, ownerId = "someone") {
   rows.push({ id, owner_id: ownerId, context: { ...CONTEXT, ...(profile ? { profile } : {}) } })
 }
 
-function claim(source: "instagram" | "tiktok" | "web" = "instagram") {
+function claim(source: "instagram" | "tiktok" | "linkedin" | "web" = "instagram") {
   return claimProfileRead({ session: SESSION, context: CONTEXT, source, now: NOW })
 }
 
@@ -138,7 +138,23 @@ describe("claimProfileRead", () => {
     addSession("c", { source: "web", readAt: "2026-11-21T09:00:00.000Z", interests: [] }) // not Apify
     expect(await claim()).toMatchObject({ ok: true })
     expect(queries).toContainEqual({ method: "gte", args: ["context->profile->>readAt", "2026-11-21T00:00:00.000Z"] })
-    expect(queries).toContainEqual({ method: "in", args: ["context->profile->>source", ["instagram", "tiktok"]] })
+    expect(queries).toContainEqual({ method: "in", args: ["context->profile->>source", ["instagram", "tiktok", "linkedin"]] })
+  })
+
+  it("counts LinkedIn reads (Bright Data, paid per record) against the same cap, both ways", async () => {
+    vi.stubEnv("APIFY_DAILY_CAP", "2")
+    addSession("a", { source: "linkedin", readAt: "2026-11-21T08:00:00.000Z", interests: [] })
+    addSession("b", { source: "instagram", readAt: "2026-11-21T09:00:00.000Z", interests: [] })
+    // Two paid reads today: a third, Instagram or LinkedIn, is refused and its record taken back.
+    expect(await claim("linkedin")).toEqual({ ok: false, reason: "daily_cap" })
+    expect(rows[0].context).toEqual(CONTEXT)
+    expect(await claim("instagram")).toEqual({ ok: false, reason: "daily_cap" })
+
+    vi.stubEnv("APIFY_DAILY_CAP", "3")
+    expect(await claim("linkedin")).toEqual({ ok: true, profile: { source: "linkedin", readAt: NOW.toISOString(), interests: [] } })
+    vi.stubEnv("APIFY_DAILY_CAP", "0")
+    rows[0].context = CONTEXT
+    expect(await claim("linkedin")).toEqual({ ok: false, reason: "daily_cap" })
   })
 
   it("refuses at the cap and takes its own record back", async () => {
@@ -180,6 +196,14 @@ describe("the profile marker in a stored session", () => {
     expect(parseContext(stored)).toEqual({ ...CONTEXT, interests: ["Bouldern"] })
     expect(parseProfile(CONTEXT)).toBeNull()
     expect(parseProfile({ profile: { source: "facebook", readAt: "x" } })).toBeNull()
+  })
+
+  it("round-trips a LinkedIn read, so the session keeps its interests and its one read", async () => {
+    const linkedin = { source: "linkedin" as const, readAt: NOW.toISOString(), interests: ["Lastenräder", "Trailrunning"] }
+    await saveFinderSession(SESSION, { chat: [], context: CONTEXT, lastOptions: null, profile: linkedin })
+    const saved = queries.find((q) => q.method === "update")?.args[0] as { context: unknown }
+    expect(parseProfile(JSON.parse(JSON.stringify(saved.context)))).toEqual(linkedin)
+    expect(parseContext(saved.context)).toEqual(CONTEXT)
     expect(parseProfile(null)).toBeNull()
   })
 })

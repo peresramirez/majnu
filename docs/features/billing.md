@@ -87,7 +87,7 @@ The Stripe account has **Managed Payments** (Stripe as merchant of record) switc
 | Piece | Job |
 |---|---|
 | [`lib/plans.ts`](../../lib/plans.ts) | The free tier and the wrapper: names, €2.99 (`priceCents: 299`, `eur`), features, the consent sentence. The landing page, Purchases tab, dialog and terms read it |
-| [`lib/limits.ts`](../../lib/limits.ts) | The spending guard (5 letters a day, 40 chat turns per letter) and "calendars need a real account". No plan gating |
+| [`lib/limits.ts`](../../lib/limits.ts) | The spending guard (100 letters a day, 200 chat turns per letter since 22 November) and "calendars need a real account". No plan gating |
 | [`lib/billing/service.ts`](../../lib/billing/service.ts) | Opening Checkout, the return confirmation, the webhook events |
 | [`lib/billing/purchases.ts`](../../lib/billing/purchases.ts) | Reads and conditional writes of `purchases` |
 | [`lib/billing/refunds.ts`](../../lib/billing/refunds.ts) | The automatic refund |

@@ -1,26 +1,34 @@
 // POST /api/finder: one visitor message to the gift finder, answered as a
 // stream of newline-delimited FinderEvents (lib/finder/events.ts), always
-// ending with `done`. The first message of a search creates a finder session
-// and sends `session` before anything else.
+// ending with `done`. A message without a session id continues today's open
+// session, if there is one (a reload or the finder opened again must not use
+// up one of the day's sessions, issue #70), or else creates a session; either
+// way `session` comes before anything else.
 //
 // Every request needs a Supabase session; anonymous accounts count (docs/plan.md,
 // "Accounts and limits"). Before the stream starts, failures are plain HTTP
 // errors with a JSON body: 401 { "error": "session_required" }, and otherwise
 // { error } with a short message in the visitor's language: 400 bad body,
-// 413 a message over 2,000 characters, 404 not your session, 500 the session
-// could not be loaded or created.
+// 413 a message over 2,000 characters, 404 not your session (or, on the wrap
+// step, an option that is not among the session's last options), 500 the
+// session could not be loaded or created.
+//
+// On the wrap step the body carries `wrap: { optionId, templateId }` (issue
+// #70). The option is looked up in the session's own last options, never taken
+// from the browser, and Majnu hears the choice in the context block.
 // Limits reached before any model call (sessions or searches for the day,
 // messages in this session) are a stream of `limit` and `done`.
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import * as z from "zod/v4"
 import { describeError } from "@/lib/agents/errors"
-import { runFinderTurn, type FinderTurnState } from "@/lib/finder/agent"
+import { runFinderTurn, type FinderTurnState, type WrapFrame } from "@/lib/finder/agent"
 import { baseContext, canonicalLocale, localeTimezone, requestLocation } from "@/lib/finder/context"
 import type { FinderEvent } from "@/lib/finder/events"
-import { canStartSession, sessionMessagesResult } from "@/lib/finder/limits"
+import { canStartSession, findOpenSession, sessionMessagesResult } from "@/lib/finder/limits"
 import { textsFor } from "@/lib/finder/messages"
 import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession } from "@/lib/finder/sessions"
 import { NDJSON_CONTENT_TYPE, createFinderStream } from "@/lib/finder/stream"
+import { WRAP_TEMPLATE_IDS } from "@/lib/finder/wrap-templates"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -41,6 +49,14 @@ const FinderRequestBody = z.object({
     })
     .optional()
     .catch(undefined),
+  // Strict: a choice that does not parse is refused, not dropped, so Majnu
+  // never answers a wrap-step message as if the visitor had chosen nothing.
+  wrap: z
+    .object({
+      optionId: z.string().min(1).max(64),
+      templateId: z.enum(WRAP_TEMPLATE_IDS),
+    })
+    .optional(),
 })
 
 const NO_STORE = { "Cache-Control": "no-store" }
@@ -102,20 +118,37 @@ export async function POST(request: Request): Promise<Response> {
   const timezone = localeTimezone(locale)
   const texts = textsFor(base.language)
 
+  // A wrap choice needs the session whose options it chose from.
+  if (body.data.wrap && !body.data.sessionId) return json(404, { error: texts.requests.optionNotFound })
+
   let session: FinderSession
-  let isNew = false
+  // Majnu hears that the visitor started over when an open session is
+  // continued for a request that had no id: they see none of it any more.
+  let startedOver = false
+  let wrap: WrapFrame | null = null
   try {
     if (body.data.sessionId) {
       const existing = await getMyFinderSession(body.data.sessionId)
       if (!existing) return json(404, { error: texts.requests.sessionNotFound })
+      if (body.data.wrap) {
+        const { optionId, templateId } = body.data.wrap
+        const option = existing.lastOptions?.options.find((o) => o.id === optionId)
+        if (!option) return json(404, { error: texts.requests.optionNotFound })
+        wrap = { option, templateId }
+      }
       const turns = sessionMessagesResult(existing.chat, base.language)
       if (!turns.ok) return fixedEvents([{ type: "limit", reason: turns.reason, message: turns.message }])
       session = existing
     } else {
-      const allowed = await canStartSession(user.id, now, base.language)
-      if (!allowed.ok) return fixedEvents([{ type: "limit", reason: allowed.reason, message: allowed.message }])
-      session = await createFinderSession(user.id, base, timezone)
-      isNew = true
+      const open = await findOpenSession(user.id, now)
+      if (open) {
+        session = open
+        startedOver = open.chat.length > 0
+      } else {
+        const allowed = await canStartSession(user.id, now, base.language)
+        if (!allowed.ok) return fixedEvents([{ type: "limit", reason: allowed.reason, message: allowed.message }])
+        session = await createFinderSession(user.id, base, timezone)
+      }
     }
   } catch (error) {
     console.error("[finder] could not load or create the session", describeError(error))
@@ -133,6 +166,8 @@ export async function POST(request: Request): Promise<Response> {
     context: session.context,
     lastOptions: session.lastOptions,
     profile: session.profile,
+    wrap,
+    startedOver,
     emit: out.emit,
   }
 
@@ -141,7 +176,7 @@ export async function POST(request: Request): Promise<Response> {
   const turnWork = (async () => {
     try {
       // First, so the client can send the id with every later message.
-      if (isNew) out.emit({ type: "session", sessionId: session.id })
+      if (!body.data.sessionId) out.emit({ type: "session", sessionId: session.id })
 
       const result = await runFinderTurn({ history: session.chat, message: body.data.message, state })
 
