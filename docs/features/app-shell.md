@@ -122,14 +122,14 @@ flowchart LR
 ## Data and privacy
 
 - No new tables, routes or environment variables. The panel talks to the same routes as the landing page's finder (`POST /api/finder`, `POST /api/finder/wrap`, `POST /api/transcribe`); what they store is described in [gift-finder-api.md](gift-finder-api.md) and [voice-input.md](voice-input.md).
-- The conversation is kept in memory in the app shell only, never in `localStorage`, so it is gone after a reload or sign-out.
+- The conversation is kept in memory in the app shell only, never in `localStorage`, so it is gone from the screen after a reload or sign-out. Since issue #70 the finder session on the server is not: the next message continues today's open session, so a reload uses up none of the day's two (see [gift-finder-api.md](gift-finder-api.md)).
 - Every destination after sign-in is a path on this site; `next` from a URL can never send someone elsewhere.
 - The Back links' trail is the list of paths (with their query) this tab visited on this site, in `sessionStorage`: it belongs to one tab, is gone when the tab closes, is never sent to the server, and leaves out `/auth`, `/api`, `/billing` and `/dev` (sign-in tokens and Stripe session ids are never kept). A Back link only ever leads to a path on this site.
 - Recipient names are unchanged in the database; only My gifts and the Tracker capitalise a single lower-case word when they show it.
 
 ## Limits and costs
 
-- The inline finder has the finder's own limits (3 searches a day, 2 of them personalised for members, plus the site-wide cap) and costs the same per search. Keeping the conversation in the shell adds no requests; a reply that is still streaming when the sender switches tab simply finishes.
+- The inline finder has the finder's own limits (since 22 November: 2 finder sessions a day, counted from their first search, each with 10 searches, personalised or not and without an account, plus the site-wide cap) and costs the same per search. Keeping the conversation in the shell adds no requests; a reply that is still streaming when the sender switches tab simply finishes.
 - At 375 px the four tabs are 94 × 64 px each. In an iPhone browser tab the bar is 32 px taller (the toolbar's room), so it is 96 px from the bottom edge.
 
 ## How it was checked
