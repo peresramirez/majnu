@@ -35,13 +35,15 @@ Three migrations in [`supabase/migrations/`](../../supabase/migrations/):
 | [`0002_billing.sql`](../../supabase/migrations/0002_billing.sql) | `profiles.plan_cancel_at`, a nullable column without a default, so adding it is catalogue-only with no table rewrite |
 | [`0003_letter_designs.sql`](../../supabase/migrations/0003_letter_designs.sql) | `letter_designs` for Daytona pages |
 | [`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql) | `coupons` (hashed codes for the personalised wrapper), `purchases.coupon_id` with the constraints a free purchase needs, one redemption per user, and the service-role functions `redeem_coupon()` and `return_coupon_use()` ([coupons.md](coupons.md)) |
+| [`0012_free_designs.sql`](../../supabase/migrations/0012_free_designs.sql) | `free_design_days` (the day's free designs per keyed, daily hash of an IP address), `purchases.free_day` and `free_ip_hash` with the constraints a free purchase needs, and the service-role functions `claim_free_design()`, `free_designs_left()`, `return_free_design()` and `sweep_free_design_days()` ([free-designs.md](free-designs.md)) |
 
 | Table | Columns | Notes |
 |---|---|---|
 | `letters` | `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` or `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, timestamps | `slug` must match `^[A-Za-z0-9_-]{6,64}$`; `title` at most 200 characters; `content` an object of at most 200,000 bytes (it is fed back to the model on edits); `chat` an array. Index on `(owner_id, created_at desc)` for the dashboard and the limits |
 | `profiles` | `user_id` → `auth.users`, `plan` (`free` or `full-moon`), `stripe_customer_id` unique, `stripe_subscription_id`, `plan_renews_at`, `plan_cancel_at`, timestamps | One row per user, created by `handle_new_user()`, a `security definer` trigger function with an empty `search_path` whose execute right is revoked from the API roles. The billing columns are left from the retired subscription; no code reads or writes them |
-| `purchases` | `owner_id`, `letter_id` (null if the letter is deleted), `status` (`pending`, `paid`, `designing`, `done`, `failed`, `refunded`), the request, `consent_at` and `consent_text`, amount, the Stripe session, payment intent and refund ids, `receipt_url`, `design_id`, `failure_reason`, timestamps ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per personalised wrapper ([billing.md](billing.md)). Owners read their own rows except `failure_reason`; only the service role writes. A partial unique index allows one `paid` or `designing` purchase per letter. Since `0011`, `coupon_id` marks a wrapper paid with a coupon code: such a row has amount 0, no consent and no Stripe ids, and another partial unique index allows one live redemption of a code per user |
+| `purchases` | `owner_id`, `letter_id` (null if the letter is deleted), `status` (`pending`, `paid`, `designing`, `done`, `failed`, `refunded`), the request, `consent_at` and `consent_text`, amount, the Stripe session, payment intent and refund ids, `receipt_url`, `design_id`, `failure_reason`, timestamps ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per personalised wrapper ([billing.md](billing.md)). Owners read their own rows except `failure_reason`; only the service role writes. A partial unique index allows one `paid` or `designing` purchase per letter. Since `0011`, `coupon_id` marks a wrapper paid with a coupon code: such a row has amount 0, no consent and no Stripe ids, and another partial unique index allows one live redemption of a code per user. Since `0012`, `free_day` marks one of the day's free designs (amount 0, no consent, no coupon, no Stripe ids), and `free_ip_hash`, which owners cannot read, links it to its counter only while the design is on its way |
 | `coupons` | `code_hash` (SHA-256 hex of the normalised code, unique), `label`, `max_uses`, `uses`, `expires_at`, `active`, `created_at` ([`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql)) | The codes themselves are never stored. Uses are taken and given back only by `redeem_coupon()` and `return_coupon_use()`, one transaction each ([coupons.md](coupons.md)) |
+| `free_design_days` | `day` (UTC), `ip_hash` (HMAC-SHA-256 under `OPEN_HASH_SECRET` of the day and the address, IPv6 by its /64), `used`; primary key `(day, ip_hash)` ([`0012_free_designs.sql`](../../supabase/migrations/0012_free_designs.sql)) | Never an IP address. Rows older than yesterday are deleted, and the hash cleared from purchases of those days, whenever the dialog asks how many are left or a free design is claimed ([free-designs.md](free-designs.md)) |
 | `letter_events` | `letter_id`, `type` (`open`, `door_open`, `gift_click`), `day` 0 to 366, `visitor_id`, `user_agent`, `country`, `city`, `language`, `device` (added in `0009_open_details.sql` for the Tracker, nullable), `created_at` | Unique on `(letter_id, type, day, visitor_id)`, so repeat visits add nothing; that index also serves lookups by letter |
 | `letter_designs` | `letter_id`, `html` (1 to 512,000 bytes), `request` (1 to 2,000 characters), `created_at` | Index on `(letter_id, created_at desc)` for the newest design |
 | `letter_summaries` (view) | Each letter with `recipient_name`, `has_content` and its open statistics | `security_invoker`, so it runs under the caller's row-level security |
@@ -61,8 +63,9 @@ Row-level security is turned on explicitly for every table (tables created by SQ
 | `letter_events` | nothing | `select` events of own letters, every column except `visitor_id` and `user_agent` (a column grant since `0009`; the visitor count comes from `private.letter_unique_visitors()`) | everything |
 | `letter_designs` | nothing | `select` designs of own letters | everything |
 | `letter_summaries` | nothing | `select`, filtered by the policies above | `select` |
-| `purchases` | nothing | `select` own rows, every column except `failure_reason` (`coupon_id` added in `0011`) | everything |
+| `purchases` | nothing | `select` own rows, every column except `failure_reason` and `free_ip_hash` (`coupon_id` added in `0011`, `free_day` in `0012`) | everything |
 | `coupons` | nothing | nothing | everything; `redeem_coupon()` and `return_coupon_use()` are executable by the service role only |
+| `free_design_days` | nothing | nothing | everything; `claim_free_design()`, `free_designs_left()`, `return_free_design()` and `sweep_free_design_days()` are executable by the service role only |
 
 There is no insert or delete policy for users anywhere. Policies use `(select auth.uid())`, so the function is evaluated once per query rather than once per row.
 
@@ -74,8 +77,9 @@ These values are never taken from the browser:
 |---|---|---|
 | `letters.slug`, `letters.owner_id` | `createLetter()` after checking the session, with the admin client | A link and its owner always come from the server |
 | `letters.chat` | `saveChat()` after an ownership check through RLS | The turn limit counts it; a browser that could rewrite it could reset the count or replay a huge forged history at our cost |
-| Every column of `purchases` | Checkout, the return page, the Stripe webhook and the design job ([billing.md](billing.md)), each status change a conditional update; a coupon purchase only through `redeem_coupon()` ([coupons.md](coupons.md)) | A user must not be able to mark a design paid or done, or read why a run failed |
+| Every column of `purchases` | Checkout, the return page, the Stripe webhook and the design job ([billing.md](billing.md)), each status change a conditional update; a coupon purchase only through `redeem_coupon()` ([coupons.md](coupons.md)), a free one only through `claim_free_design()` ([free-designs.md](free-designs.md)) | A user must not be able to mark a design paid or done, or read why a run failed |
 | Every column of `coupons` | `npm run coupon` and the two coupon functions, with the service-role key | A browser must not be able to list codes or change their uses |
+| Every column of `free_design_days` | The free-design functions, with the hash computed on the server ([free-designs.md](free-designs.md)) | A browser must not be able to reset its count, read the hashes, or have a free design counted against someone else's address |
 | `letter_events` | `POST /api/open` ([sharing-and-tracking.md](sharing-and-tracking.md)) | Statistics come only from the beacon route's rules |
 | `letter_designs` | The Daytona job ([daytona-redesign.md](daytona-redesign.md)) | The HTML is served from our domain |
 
@@ -151,7 +155,7 @@ Deploy only with `npm run deploy` ([`scripts/deploy.sh`](../../scripts/deploy.sh
 
 - **Stored:** accounts (Supabase Auth: email, and a password hash for email sign-ups), letters with their content and conversation, open events with hashed visitor ids, plans, and Daytona designs. Supabase runs in eu-central-1 (Frankfurt).
 - **Retention:** letters, their events and designs stay until the letter or the account is deleted. There is no way for a user to delete a gift in the app yet; the privacy page offers deletion on request.
-- **Never stored:** a recipient's IP address, card numbers, or anything on a recipient's device.
+- **Never stored:** a recipient's IP address, any visitor's IP address (free designs are counted by a keyed hash of the address and the day, deleted after two days), card numbers, or anything on a recipient's device.
 
 ## Limits and costs
 
@@ -168,4 +172,4 @@ Deploy only with `npm run deploy` ([`scripts/deploy.sh`](../../scripts/deploy.sh
 
 - A way for senders to delete a gift, and their account, in the app.
 - The gift finder brings anonymous accounts ([#33](https://github.com/peresramirez/majnu/issues/33)), protected by Turnstile. Per-user limits are then easy to multiply, so the planned site-wide daily caps matter.
-- There is no per-IP rate limit on any route; Cloudflare's own rules could add one.
+- There is no per-IP rate limit on any route; Cloudflare's own rules could add one. The one per-address count is the three free designs a day ([free-designs.md](free-designs.md)), which is a quota, not a rate limit.

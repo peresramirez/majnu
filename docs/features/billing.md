@@ -6,7 +6,7 @@ Majnu is free: finding a gift, wrapping it in our designs, letters, invitations,
 
 There is no subscription. The Full moon subscription built earlier (issue #14) and its code are removed.
 
-A **coupon code** makes the wrapper free: "Have a code?" in the same dialog skips Stripe, the consent box and (for guests) the account step, and a failed run gives the code its use back instead of a refund. That path is described in [coupons.md](coupons.md); everything below is the paid path, which it leaves unchanged.
+A **coupon code** makes the wrapper free: "Have a code?" in the same dialog skips Stripe, the consent box and (for guests) the account step, and a failed run gives the code its use back instead of a refund. That path is described in [coupons.md](coupons.md). Since issue #85, everyone also gets **three free designs per internet connection per day**: while some are left, the dialog offers only those, without an account step, consent or code ([free-designs.md](free-designs.md)). Everything below is the paid path, which both leave unchanged.
 
 ## How it works
 
@@ -77,6 +77,10 @@ A message whose consumer threw or died goes (with `max_retries: 0`) to `majnu-de
 ### Paid with a coupon code
 
 Since issue #72 a purchase can also be paid with a coupon code ([coupons.md](coupons.md)): `POST /api/coupons/redeem` records it as `paid` with `amount_cents = 0` and `coupon_id`, without consent or Stripe ids, and hands it to the same queue. The design job treats it like any other purchase until a run fails: then `giveBack()` in [`refunds.ts`](../../lib/billing/refunds.ts) marks it `failed` and returns the code's use (`return_coupon_use()`), and never calls Stripe. The status card and the Purchases tab word it accordingly ("Code accepted, starting soon", "Your code works again", "Free with a code").
+
+### Free designs
+
+Since issue #85 a purchase can also be one of the day's three free designs ([free-designs.md](free-designs.md)): `POST /api/designs/free` records it as `paid` with `amount_cents = 0` and `free_day`, without consent, coupon or Stripe ids, and hands it to the same queue. A failed run marks it `failed` and gives the free design back (`return_free_design()`), never calling Stripe. The status card and the Purchases tab say "Free design, starting soon", "it didn't count" and "Free".
 
 ### Managed Payments
 
