@@ -102,10 +102,13 @@ export default function PrivacyPage() {
 
       <h3>When a gift is opened</h3>
       <p>
-        When someone opens one of your gifts, we record the time, which door or gift they opened, the type of browser
-        and device, and a visitor number. The visitor number is calculated on our server from the network address,
-        the browser and the gift, so it cannot be linked across gifts; the network address itself is not stored, and
-        nothing is saved on the visitor&apos;s device. This lets you see that your gift arrived. Our legal basis is the
+        When someone opens one of your gifts, we record the time, which door or gift they opened, the approximate
+        place (the city and country of their network as Cloudflare reports it, never an address or exact location),
+        the language their browser is set to, the type of device (phone, tablet or computer) and browser, and a
+        visitor number. The visitor number is calculated on our server from the network address, the browser and the
+        gift, so it cannot be linked across gifts; the network address itself is not stored, and nothing is saved on
+        the visitor&apos;s device. Only the gift&apos;s sender sees these records, in the Tracker and My gifts tabs, and
+        never the visitor number or the full browser details. This lets you see that your gift arrived. Our legal basis is the
         legitimate interest of the sender and of Majnu in confirming delivery (Art. 6 (1) (f) GDPR). Recipients can
         object by emailing us.
       </p>
