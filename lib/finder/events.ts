@@ -44,7 +44,11 @@ export type WrapChoice = { optionId: string; templateId: WrapTemplateId }
 // visitor can correct in their next message ("She's 60, not 45").
 export type FinderContext = {
   country?: string // ISO 3166-1 alpha-2, e.g. "DE"
-  region?: string // e.g. "Berlin"
+  region?: string // e.g. "Berlin": the connection's region, or the place below when the visitor named one
+  // The city or region the visitor said the gift is for ("Nürnberg"). It stays
+  // for every later search until they name another, so a question about the
+  // budget never sends the search back to where the connection comes from.
+  place?: string
   language: string // the language Majnu answers and searches in, e.g. "de"
   currency?: string // ISO 4217, e.g. "EUR"
   relationship?: string // as the visitor said it: "mother", "girlfriend", "best friend"
