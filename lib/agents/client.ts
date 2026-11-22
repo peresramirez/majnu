@@ -4,9 +4,16 @@
 // environment when the client is created, so an AI gateway can be put in front
 // later by setting that variable, with no code change. We pass both explicitly
 // anyway, so the behaviour does not depend on the SDK's defaults.
+//
+// It is also the one place that chooses the Anthropic key (issue #67): with
+// ANTHROPIC_API_KEY_FALLBACK set, a middleware moves a request to the fallback
+// key when the primary is refused for its key, billing, spend limit or tier
+// threshold, within FALLBACK_CAP_USD a month (lib/providers/anthropic.ts).
+// Without a fallback key the client is created exactly as before.
 import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
 import type { AnthropicBeta, BetaThinkingConfigParam } from "@anthropic-ai/sdk/resources/beta"
+import { anthropicKeyFallback, hasAnthropicFallback } from "@/lib/providers/anthropic"
 
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -27,6 +34,7 @@ export function getClient(): Anthropic {
       baseURL: process.env.ANTHROPIC_BASE_URL?.trim() || undefined,
       // Retries 408, 409, 429 and 5xx (overloaded included) with backoff.
       maxRetries: 2,
+      ...(hasAnthropicFallback() ? { middleware: [anthropicKeyFallback()] } : {}),
     })
   }
   return client
