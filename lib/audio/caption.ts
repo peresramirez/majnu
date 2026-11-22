@@ -4,7 +4,8 @@
 // recording sent from the message box. Anything that goes wrong means no
 // caption, never a failed upload. Neither the audio nor the text is logged.
 import "server-only"
-import { TranscriptionError, transcribeAudio, transcribeModel } from "@/lib/voice/openai"
+import { ProviderUnavailableError } from "@/lib/providers/fallback"
+import { TranscriptionError, hasTranscriptionKey, transcribe, transcribeModel } from "@/lib/voice/openai"
 import { audioExtension, languageHints } from "@/lib/voice/rules"
 import { claimTranscription, releaseTranscription, settleTranscription } from "@/lib/voice/usage"
 import { cleanCaption } from "./rules"
@@ -12,8 +13,8 @@ import { cleanCaption } from "./rules"
 export type CaptionInput = { userId: string; audio: Blob; mimeType: string; seconds: number; languages: unknown[] }
 
 export async function transcribeCaption({ userId, audio, mimeType, seconds, languages }: CaptionInput): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
+  // OPENAI_API_KEY, or its fallback (lib/providers), chosen in transcribe().
+  if (!hasTranscriptionKey()) return null
   // OpenAI reads webm, mp4 and mp3, not ogg.
   const extension = audioExtension(mimeType)
   if (!extension) return null
@@ -29,13 +30,7 @@ export async function transcribeCaption({ userId, audio, mimeType, seconds, lang
   }
 
   try {
-    const result = await transcribeAudio({
-      audio,
-      filename: `note.${extension}`,
-      languages: languageHints(languages),
-      apiKey,
-      model: transcribeModel(),
-    })
+    const result = await transcribe({ audio, filename: `note.${extension}`, languages: languageHints(languages), model: transcribeModel() }, seconds)
     try {
       await settleTranscription(claimId, result.seconds ?? seconds)
     } catch (error) {
@@ -43,7 +38,8 @@ export async function transcribeCaption({ userId, audio, mimeType, seconds, lang
     }
     return cleanCaption(result.text)
   } catch (error) {
-    const detail = error instanceof TranscriptionError ? `${error.status} ${error.code}` : "unexpected error"
+    const detail =
+      error instanceof TranscriptionError ? `${error.status} ${error.code}` : error instanceof ProviderUnavailableError ? error.message : "unexpected error"
     console.error("[audio] caption failed:", detail)
     try {
       await releaseTranscription(claimId)

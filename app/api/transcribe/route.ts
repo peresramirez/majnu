@@ -12,10 +12,13 @@
 // 429 daily_limit or site_busy, 503 unavailable, 502 failed.
 //
 // The audio goes to OpenAI and nowhere else: it is never stored, and neither
-// it nor the text is ever logged.
+// it nor the text is ever logged. The key is OPENAI_API_KEY, or
+// OPENAI_API_KEY_FALLBACK when the primary is refused for its key or quota
+// (lib/providers); when neither can be used the answer is 429 site_busy.
 import { isSameOriginPost } from "@/lib/billing/http"
 import { createClient } from "@/lib/supabase/server"
-import { TranscriptionError, transcribeAudio, transcribeModel } from "@/lib/voice/openai"
+import { ProviderUnavailableError } from "@/lib/providers/fallback"
+import { TranscriptionError, hasTranscriptionKey, transcribe, transcribeModel } from "@/lib/voice/openai"
 import {
   MAX_AUDIO_BYTES,
   MAX_RECORDING_SECONDS,
@@ -75,8 +78,7 @@ export async function POST(request: Request): Promise<Response> {
   } = await supabase.auth.getUser()
   if (!user) return fail(401, "session_required")
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
+  if (!hasTranscriptionKey()) {
     console.error("[transcribe] OPENAI_API_KEY is not set")
     return fail(503, "unavailable")
   }
@@ -121,22 +123,19 @@ export async function POST(request: Request): Promise<Response> {
   let text: string
   let seconds: number | null
   try {
-    ;({ text, seconds } = await transcribeAudio({
-      audio,
-      filename: `recording.${extension}`,
-      languages,
-      apiKey,
-      model: transcribeModel(),
-    }))
+    ;({ text, seconds } = await transcribe({ audio, filename: `recording.${extension}`, languages, model: transcribeModel() }, duration))
   } catch (error) {
     // Only the status and OpenAI's error code: never the audio or any text.
-    const detail = error instanceof TranscriptionError ? `${error.status} ${error.code}` : "unexpected error"
+    const detail =
+      error instanceof TranscriptionError ? `${error.status} ${error.code}` : error instanceof ProviderUnavailableError ? error.message : "unexpected error"
     console.error("[transcribe] transcription failed:", detail)
     try {
       await releaseTranscription(claim.id)
     } catch (releaseError) {
       console.error("[transcribe] could not release the claim", releaseError instanceof Error ? releaseError.message : "")
     }
+    // Both keys refused, or the fallback's monthly cap reached.
+    if (error instanceof ProviderUnavailableError) return fail(429, "site_busy")
     return fail(502, "failed")
   }
 

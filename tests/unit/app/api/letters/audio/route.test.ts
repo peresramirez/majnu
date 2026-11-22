@@ -59,6 +59,7 @@ beforeEach(() => {
   vi.unstubAllEnvs()
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
   vi.stubEnv("OPENAI_API_KEY", "sk-test-key")
+  vi.stubEnv("OPENAI_API_KEY_FALLBACK", "")
   vi.stubEnv("MAJNU_TRANSCRIBE_MODEL", "")
   vi.stubEnv("MAJNU_DAILY_VOICE_CAP", "")
   user = { id: OWNER }
