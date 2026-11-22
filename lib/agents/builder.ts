@@ -69,9 +69,9 @@ Writing
 Gifts
 - Include only gifts the brief names. Copy codes, links and prices exactly, character for character. Never invent a code, a link, a price or an image.
 - Links must start with https://. Leave out any link that does not.
-- A gift reveal or a 3D gift box (gift-reveal, gift-box-3d) needs at least one gift. A party pop box (party-box) needs one when the brief gives a gift. Other letters usually have none: an empty list.
+- A gift reveal, a 3D gift box or a 3D gift tin (gift-reveal, gift-box-3d, gift-3d) needs at least one gift. A party pop box (party-box) needs one when the brief gives a gift. Other letters usually have none: an empty list.
 
-Invitations (wedding-invite, party-invite, wedding-envelope-3d)
+Invitations (wedding-invite, party-invite, wedding-envelope-3d, wedding-invite-3d, party-invite-3d)
 - Fill event: a title, startsAt as local ISO 8601 with the UTC offset that applies on that date in that timezone (for example 2026-12-24T19:00:00+01:00), locationName, and a street address a map can find.
 - Use the date, time and place from the brief. If the time is missing, pick a sensible one for the occasion.
 - recipientName may be a group ("Everyone", "Friends") when the invitation is for several people.
@@ -157,12 +157,12 @@ function sanitizeGift<T extends GiftLike>(gift: T): T {
 
 // Templates whose page is built around the event: without it there is nothing
 // to invite to. The builder prompt's "Invitations" section names the same ids.
-export const EVENT_TEMPLATES = ["wedding-invite", "party-invite", "wedding-envelope-3d"] as const satisfies readonly TemplateId[]
+export const EVENT_TEMPLATES = ["wedding-invite", "party-invite", "wedding-envelope-3d", "wedding-invite-3d", "party-invite-3d"] as const satisfies readonly TemplateId[]
 
 // Templates whose reveal ends on a gift card: without a gift they open on nothing.
 // party-box shows a gift only when it has one, so it needs one only when it is
 // given as a gift (BuildInput.giftRequired).
-export const GIFT_TEMPLATES = ["gift-reveal", "gift-box-3d"] as const satisfies readonly TemplateId[]
+export const GIFT_TEMPLATES = ["gift-reveal", "gift-box-3d", "gift-3d"] as const satisfies readonly TemplateId[]
 
 function isOneOf(list: readonly TemplateId[], id: TemplateId): boolean {
   return list.includes(id)
@@ -181,6 +181,7 @@ export function checkContent(templateId: TemplateId, built: BuiltContent, option
     if (c.gifts.length === 0) {
       if (templateId === "gift-reveal") problems.push("a gift reveal needs at least one gift")
       else if (templateId === "gift-box-3d") problems.push("a 3D gift box needs at least one gift")
+      else if (templateId === "gift-3d") problems.push("a 3D gift tin needs at least one gift")
       else if (options.giftRequired) problems.push("this page is given as a gift, so it needs the gift from the brief")
     }
   } else {
@@ -284,11 +285,14 @@ export function titleFor(templateId: TemplateId, recipientName: string): string 
   switch (templateId) {
     case "gift-reveal":
     case "gift-box-3d":
+    case "gift-3d":
     case "party-box":
       return `A gift for ${name}`
     case "wedding-invite":
     case "party-invite":
     case "wedding-envelope-3d":
+    case "wedding-invite-3d":
+    case "party-invite-3d":
       return `An invitation for ${name}`
     case "postcard":
       return `A postcard for ${name}`
