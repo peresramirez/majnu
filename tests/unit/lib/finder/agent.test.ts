@@ -7,7 +7,14 @@ vi.mock("@/lib/agents/research", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/agents/research")>()),
   researchGiftReport: vi.fn(),
 }))
-vi.mock("@/lib/finder/limits", () => ({ claimSearch: vi.fn(), releaseSearch: vi.fn(), canSearch: vi.fn(), claimProfileRead: vi.fn() }))
+vi.mock("@/lib/finder/limits", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/finder/limits")>()),
+  claimSearch: vi.fn(),
+  releaseSearch: vi.fn(),
+  canSearch: vi.fn(),
+  claimProfileAttempt: vi.fn(),
+  finishProfileAttempt: vi.fn(),
+}))
 vi.mock("@/lib/social/read", () => ({ canReadSource: vi.fn(), readProfileInterests: vi.fn() }))
 
 import { getClient } from "@/lib/agents/client"
@@ -28,8 +35,9 @@ import {
   type FinderTurnState,
 } from "@/lib/finder/agent"
 import type { FinderEvent } from "@/lib/finder/events"
-import { canSearch, claimProfileRead, claimSearch, releaseSearch } from "@/lib/finder/limits"
-import type { ProfileRead, StoredOptions } from "@/lib/finder/sessions"
+import { attemptResult, canSearch, claimProfileAttempt, claimSearch, finishProfileAttempt, releaseSearch } from "@/lib/finder/limits"
+import type { ProfileAttempt, ProfileReads, StoredOptions } from "@/lib/finder/sessions"
+import { linkFingerprint } from "@/lib/social/links"
 import { canReadSource, readProfileInterests } from "@/lib/social/read"
 
 type Block = Record<string, unknown>
@@ -103,11 +111,13 @@ function state(overrides: Partial<FinderTurnState> = {}): FinderTurnState {
     browserLanguage: "de-DE",
     context: { country: "DE", region: "Berlin", language: "de", currency: "EUR" },
     lastOptions: null,
-    profile: null,
+    profiles: { day: "", paid: 0, reads: [] },
     emit: (event) => events.push(event),
     ...overrides,
   }
 }
+
+let row: ProfileReads = { day: "", paid: 0, reads: [] }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -116,7 +126,22 @@ beforeEach(() => {
   vi.mocked(canSearch).mockResolvedValue({ ok: true })
   vi.mocked(researchGiftReport).mockResolvedValue(REPORT)
   vi.mocked(canReadSource).mockReturnValue(true)
-  vi.mocked(claimProfileRead).mockImplementation(async ({ source, now }) => ({ ok: true, profile: { source, readAt: now.toISOString(), interests: [] } }))
+  // The session row's attempts, claimed and finished with the real session rules.
+  row = { day: "", paid: 0, reads: [] }
+  vi.mocked(claimProfileAttempt).mockImplementation(async ({ source, key, now }) => {
+    const refusal = attemptResult(row, key)
+    if (refusal) return refusal
+    const attempt: ProfileAttempt = { source, readAt: now.toISOString(), key, status: "claimed", interests: [] }
+    row = { ...row, reads: [...row.reads, attempt] }
+    return { ok: true, attempt }
+  })
+  vi.mocked(finishProfileAttempt).mockImplementation(async (_session, attempt, outcome) => {
+    const done: ProfileAttempt = outcome.ok
+      ? { ...attempt, status: "read", interests: outcome.interests }
+      : { ...attempt, status: "failed", reason: outcome.reason }
+    row = { ...row, reads: row.reads.map((read) => (read.key === attempt.key && read.status === "claimed" ? done : read)) }
+    return row
+  })
   vi.mocked(readProfileInterests).mockResolvedValue({ ok: true, interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
@@ -430,7 +455,11 @@ describe("reading a public profile", () => {
     expect(FINDER_SYSTEM_PROMPT).toContain("Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn")
     expect(FINDER_SYSTEM_PROMPT).toContain('"No public profile"')
     expect(FINDER_SYSTEM_PROMPT).toContain("don't ask for a profile in your questions")
-    expect(FINDER_SYSTEM_PROMPT).toContain("One profile per conversation.")
+    expect(FINDER_SYSTEM_PROMPT).not.toContain("One profile per conversation")
+    expect(FINDER_SYSTEM_PROMPT).toContain("You can read several profiles and pages in one conversation, each link once.")
+    expect(FINDER_SYSTEM_PROMPT).toContain("With several links, call read_profile once for each")
+    expect(FINDER_SYSTEM_PROMPT).toContain("Never say you can't try again while read_profile says more links can be read.")
+    expect(FINDER_TOOLS[2].description).not.toContain("One per conversation")
     expect(FINDER_TOOLS[2].description).toContain("Instagram, TikTok or LinkedIn")
     expect(FINDER_SYSTEM_PROMPT).toContain("never guess one or look someone up")
     const schema = FINDER_TOOLS[2].input_schema as { properties: Record<string, unknown>; required: string[] }
@@ -443,10 +472,10 @@ describe("reading a public profile", () => {
     const result = await runFinderTurn({ history: [], message: "Hier ist ihr Insta: https://www.instagram.com/natgeo/", state: s })
 
     expect(readProfileInterests).toHaveBeenCalledWith({ source: "instagram", username: "natgeo" }, "de")
-    expect(claimProfileRead).toHaveBeenCalledWith({
+    expect(claimProfileAttempt).toHaveBeenCalledWith({
       session: { id: "session-1", ownerId: "user-1" },
-      context: state().context,
       source: "instagram",
+      key: await linkFingerprint({ source: "instagram", username: "natgeo" }),
       now: expect.any(Date),
     })
     expect(events.map((e) => e.type)).toEqual(["status", "context", "status", "options"])
@@ -460,7 +489,7 @@ describe("reading a public profile", () => {
     const read = toolResult(requests[1], "read-1")
     expect(JSON.parse(read.content)).toMatchObject({ interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
     expect(read.is_error).toBeUndefined()
-    expect(s.profile).toEqual({ source: "instagram", readAt: "2026-11-21T15:00:00.000Z", interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
+    expect(s.profiles.reads).toEqual([expect.objectContaining({ source: "instagram", status: "read", interests: ["Bouldern", "Kaffee", "Analogfotografie"] })])
     expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant", "user"])
     expect(requests).toHaveLength(2)
   })
@@ -483,30 +512,143 @@ describe("reading a public profile", () => {
     expect(events.some((e) => e.type === "error")).toBe(false)
     expect(events.map((e) => e.type)).toEqual(["status", "text", "context", "status", "options"])
     expect(events.find((e) => e.type === "context")).toMatchObject({ context: { interests: ["Lesen"] } })
-    // The read still counts: the session cannot read another profile.
-    expect(s.profile).toEqual({ source: "instagram", readAt: "2026-11-21T15:00:00.000Z", interests: [] })
+    // It counts as an attempt only, and the model is told a retry is possible.
+    expect(read.content).toContain("make the profile public")
+    expect(read.content).toContain("5 more links can be read in this conversation")
+    expect(s.profiles.reads).toEqual([expect.objectContaining({ status: "failed", reason: "private" })])
   })
 
-  it("reads one profile per session", async () => {
-    const profile: ProfileRead = { source: "tiktok", readAt: "2026-11-21T10:00:00.000Z", interests: ["Kaffee"] }
-    const { requests } = scriptModel(reply([readCall({ link: "https://www.tiktok.com/@other" })]), reply([findCall(SISTER)]))
-    await runFinderTurn({ history: [], message: "tiktok.com/@other", state: state({ profile }) })
+  it("reads a corrected link after a failed one in the same session (issue #89)", async () => {
+    vi.mocked(readProfileInterests).mockResolvedValueOnce({ ok: false, reason: "not_found" })
+    const s = state()
+    const first = scriptModel(reply([readCall({ link: "https://www.linkedin.com/in/lena-exampel" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "linkedin.com/in/lena-exampel", state: s })
+    expect(toolResult(first.requests[1], "read-1").content).toContain("check the link")
 
-    expect(claimProfileRead).not.toHaveBeenCalled()
+    events = []
+    const second = scriptModel(reply([readCall({ link: "https://www.linkedin.com/in/lena-example" }, "read-2")]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "Sorry: linkedin.com/in/lena-example", state: s })
+    expect(JSON.parse(toolResult(second.requests[1], "read-2").content)).toMatchObject({ interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
+    expect(readProfileInterests).toHaveBeenLastCalledWith({ source: "linkedin", username: "lena-example" }, "de")
+    expect(s.profiles.reads.map((r) => r.status)).toEqual(["failed", "read"])
+  })
+
+  it("reads a typo'd LinkedIn link as linkedin.com and tells Majnu what it read", async () => {
+    const { requests } = scriptModel(reply([readCall({ link: "linked.com/in/lena-example" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "linked.com/in/lena-example", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example" }, "de")
+    const read = JSON.parse(toolResult(requests[1], "read-1").content)
+    expect(read).toMatchObject({ read: "linkedin.com/in/lena-example", interests: ["Bouldern", "Kaffee", "Analogfotografie"] })
+    expect(read.corrected).toContain("Mention that in a few words")
+  })
+
+  it("asks about an ambiguous typo instead of reading a guess", async () => {
+    const { requests } = scriptModel(reply([readCall({ link: "linked.com/lena-example" })]), reply([text("Meintest du das?")], "end_turn"))
+    await runFinderTurn({ history: [], message: "linked.com/lena-example", state: state() })
+    const content = toolResult(requests[1], "read-1").content
+    expect(content).toContain("ask_questions")
+    expect(content).toContain('"linkedin.com/in/lena-example"')
+    expect(claimProfileAttempt).not.toHaveBeenCalled()
     expect(readProfileInterests).not.toHaveBeenCalled()
-    expect(toolResult(requests[1], "read-1").content).toContain("one profile per conversation")
-    expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
+  })
+
+  it("reads two profiles in one message, merges their interests newest first, then searches once", async () => {
+    vi.mocked(readProfileInterests)
+      .mockResolvedValueOnce({ ok: true, interests: ["Bouldern", "Kaffee"] })
+      .mockResolvedValueOnce({ ok: true, interests: ["Kaffee", "Jazz"] })
+    const { requests } = scriptModel(
+      reply([readCall({}, "read-1")]),
+      reply([readCall({ link: "https://www.tiktok.com/@natgeo" }, "read-2")]),
+      reply([findCall({ ...SISTER, interests: [] })]),
+    )
+    const s = state()
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo tiktok.com/@natgeo", state: s })
+    expect(requests).toHaveLength(3)
+    expect(events.find((e) => e.type === "context")).toMatchObject({ context: { interests: ["Kaffee", "Jazz", "Bouldern"] } })
+    expect(s.profiles.reads.map((r) => [r.source, r.status])).toEqual([["instagram", "read"], ["tiktok", "read"]])
+    expect(researchGiftReport).toHaveBeenCalledTimes(1)
+  })
+
+  it("lets a message with three links read all three before the search", async () => {
+    const links = ["https://www.instagram.com/a.one/", "https://www.tiktok.com/@b.two", "https://www.linkedin.com/in/c-three"]
+    const { requests } = scriptModel(...links.map((link, i) => reply([readCall({ link }, `read-${i}`)])), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: links.join(" "), state: state() })
+    expect(readProfileInterests).toHaveBeenCalledTimes(3)
+    expect(requests).toHaveLength(4)
+    expect(events.some((e) => e.type === "options")).toBe(true)
+  })
+
+  it("does not read the same link twice, however it is written", async () => {
+    const s = state()
+    scriptModel(reply([readCall({ link: "https://www.tiktok.com/@other" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "tiktok.com/@other", state: s })
+    vi.mocked(readProfileInterests).mockClear()
+
+    const { requests } = scriptModel(reply([readCall({ link: "tiktok.com/@Other/" }, "read-2")]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "tiktok.com/@Other/", state: s })
+    expect(readProfileInterests).not.toHaveBeenCalled()
+    const content = toolResult(requests[1], "read-2").content
+    expect(content).toContain("already read in this conversation")
+    expect(content).toContain("Bouldern")
+  })
+
+  it("keeps the profile field under the questions until the session can read no more", async () => {
+    const full = (n: number, status: ProfileAttempt["status"]): ProfileReads => ({
+      day: "2026-11-21",
+      paid: n,
+      reads: Array.from({ length: n }, (_, i) => ({ source: "instagram" as const, readAt: `2026-11-21T10:0${i}:00.000Z`, key: `k${i}`, status, interests: [] })),
+    })
+    const ask = () => scriptModel(reply([{ type: "tool_use", id: "ask-1", name: "ask_questions", input: { questions: [{ text: "Was mag sie?", suggestions: ["Lesen", "Garten"] }] } }]))
+    for (const [profiles, closed] of [
+      [full(1, "read"), false],
+      [full(4, "read"), false],
+      [full(5, "read"), true],
+      [full(7, "failed"), false],
+      [full(8, "failed"), true],
+    ] as const) {
+      events = []
+      ask()
+      await runFinderTurn({ history: [], message: "Für meine Schwester", state: state({ profiles }) })
+      expect(events.find((e) => e.type === "question")).toMatchObject({ profileRead: closed })
+    }
+  })
+
+  it("stops at five reads and eight attempts in a session", async () => {
+    const reads = (statuses: ProfileAttempt["status"][]): ProfileReads => ({
+      day: "2026-11-21",
+      paid: statuses.length,
+      reads: statuses.map((status, i) => ({ source: "instagram" as const, readAt: `2026-11-21T10:0${i}:00.000Z`, key: `k${i}`, status, interests: [] })),
+    })
+    row = reads(["read", "read", "read", "read", "read"])
+    let script = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state({ profiles: row }) })
+    expect(toolResult(script.requests[1], "read-1").content).toContain("already read 5 profiles")
+
+    row = reads(["failed", "failed", "failed", "failed", "failed", "failed", "failed", "read"])
+    script = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state({ profiles: row }) })
+    expect(toolResult(script.requests[1], "read-1").content).toContain("already tried 8 links")
+    expect(readProfileInterests).not.toHaveBeenCalled()
+  })
+
+  it("reads at most three links in one message", async () => {
+    const links = ["instagram.com/a.one", "instagram.com/b.two", "instagram.com/c.three", "instagram.com/d.four"]
+    const { requests } = scriptModel(...links.map((link, i) => reply([readCall({ link }, `read-${i}`)])), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: links.join(" "), state: state() })
+    expect(readProfileInterests).toHaveBeenCalledTimes(3)
+    expect(toolResult(requests[4], "read-3").content).toContain("at most 3 links are read in one message")
+    expect(events.some((e) => e.type === "options")).toBe(true)
   })
 
   it("stops at the site-wide daily cap, and searches without the profile", async () => {
-    vi.mocked(claimProfileRead).mockResolvedValue({ ok: false, reason: "daily_cap" })
+    vi.mocked(claimProfileAttempt).mockResolvedValue({ ok: false, reason: "daily_cap" })
     const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
     const s = state()
     await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: s })
 
     expect(readProfileInterests).not.toHaveBeenCalled()
     expect(toolResult(requests[1], "read-1").content).toContain("no more profiles can be read today")
-    expect(s.profile).toBeNull()
+    expect(s.profiles.reads).toEqual([])
     expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
   })
 
@@ -516,7 +658,7 @@ describe("reading a public profile", () => {
     await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state({ lastOptions: { options: [], recommendedId: "x", why: "" } }) })
 
     expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
-    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(claimProfileAttempt).not.toHaveBeenCalled()
     expect(events).toEqual([{ type: "limit", reason: "session_full", message: "Zehn pro Suche." }])
     expect(requests).toHaveLength(1)
   })
@@ -528,7 +670,7 @@ describe("reading a public profile", () => {
     )
     await runFinderTurn({ history: [], message: "https://www.instagram.com/p/DNQuxufAih9/", state: state() })
     expect(toolResult(requests[1], "read-1").content).toContain("instagram.com/name")
-    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(claimProfileAttempt).not.toHaveBeenCalled()
     expect(readProfileInterests).not.toHaveBeenCalled()
   })
 
@@ -536,10 +678,10 @@ describe("reading a public profile", () => {
     scriptModel(reply([readCall({ link: "https://de.linkedin.com/in/lena-example-1a2b3c/?originalSubdomain=de" })]), reply([findCall(SISTER)]))
     await runFinderTurn({ history: [], message: "linkedin.com/in/lena-example-1a2b3c", state: state() })
     expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example-1a2b3c" }, "de")
-    expect(claimProfileRead).toHaveBeenCalledWith(expect.objectContaining({ source: "linkedin" }))
+    expect(claimProfileAttempt).toHaveBeenCalledWith(expect.objectContaining({ source: "linkedin" }))
 
     vi.mocked(readProfileInterests).mockClear()
-    vi.mocked(claimProfileRead).mockClear()
+    vi.mocked(claimProfileAttempt).mockClear()
     const { requests } = scriptModel(
       reply([readCall({ link: "https://www.linkedin.com/company/example-bikes/" })]),
       reply([text("Schick mir den Link zu ihrem Profil.")], "end_turn"),
@@ -547,7 +689,7 @@ describe("reading a public profile", () => {
     await runFinderTurn({ history: [], message: "https://www.linkedin.com/company/example-bikes/", state: state() })
     expect(toolResult(requests[1], "read-1").content).toContain("linkedin.com/in/name")
     expect(readProfileInterests).not.toHaveBeenCalled()
-    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(claimProfileAttempt).not.toHaveBeenCalled()
   })
 
   it("reads a bare LinkedIn name when the visitor said it is on LinkedIn", async () => {
@@ -571,11 +713,11 @@ describe("reading a public profile", () => {
     const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
     await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state() })
     expect(toolResult(requests[1], "read-1").content).toContain("can't be read at the moment")
-    expect(claimProfileRead).not.toHaveBeenCalled()
+    expect(claimProfileAttempt).not.toHaveBeenCalled()
   })
 
   it("searches without the profile when the claim cannot be recorded", async () => {
-    vi.mocked(claimProfileRead).mockRejectedValue(new Error("Could not record the profile read: timeout"))
+    vi.mocked(claimProfileAttempt).mockRejectedValue(new Error("Could not record the profile read: timeout"))
     const { requests } = scriptModel(reply([readCall()]), reply([findCall(SISTER)]))
     await runFinderTurn({ history: [], message: "instagram.com/natgeo", state: state() })
     expect(toolResult(requests[1], "read-1").content).toContain("technical reason")

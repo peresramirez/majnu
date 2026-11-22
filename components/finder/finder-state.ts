@@ -223,9 +223,10 @@ export function openQuestions(items: FinderItem[]): Extract<FinderItem, { role: 
   return items.slice(lastUser + 1).filter((item): item is Extract<FinderItem, { role: "question" }> => item.role === "question")
 }
 
-// Whether the open questions end with the profile field: always, until a
-// public profile has been read in this session or the visitor said they have
-// none, so Majnu does not have to remember to ask.
+// Whether the open questions end with the profile field: always, until the
+// session can read no more profiles (issue #89: 5 reads or 8 attempts) or the
+// visitor said they have none, so Majnu does not have to remember to ask. The
+// field takes one link or several; Majnu reads each one.
 export function showsProfileField(state: Pick<FinderState, "items" | "profileDeclined">): boolean {
   const open = openQuestions(state.items)
   return open.length > 0 && !state.profileDeclined && !open.some((q) => q.profileRead)

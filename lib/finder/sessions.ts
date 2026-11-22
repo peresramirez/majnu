@@ -7,11 +7,15 @@
 // change a session, because its conversation is replayed to the model and its
 // options are what the wrap route trusts.
 //
-// A public profile read for the session (issue #34) is recorded inside the
-// `context` column as `profile: { source, readAt, interests }`, so the limits
-// (one read per session, APIFY_DAILY_CAP a day) need no table of their own.
-// It is server-only: parseContext() leaves it out, so the browser never sees
-// it. Only the interests are kept, never what was read.
+// Public profile reads (issues #34 and #89) are recorded inside the `context`
+// column as `profiles: { v, day, paid, reads }`: every attempt in the session
+// (where from, when, a fingerprint of the link, how it went, the interests it
+// gave) and the paid attempts made on `day` (UTC), so the limits (5 reads and
+// 8 attempts a session, APIFY_DAILY_CAP paid attempts a day for the site)
+// need no table of their own. Sessions saved before issue #89 carry one
+// `profile: { source, readAt, interests }` instead; it is read as one attempt.
+// Both are server-only: parseContext() leaves them out, so the browser never
+// sees them. Only the interests are kept, never what was read or the link.
 //
 // Files the visitor shares (issue #77) are counted the same way, as
 // `uploads: { v, total, day, today }` in the context: files read in the
@@ -30,16 +34,34 @@ import { resolveTimezone } from "@/lib/agents/context"
 import { startOfUtcDay } from "@/lib/limits"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import type { ReadFailure } from "@/lib/social/apify"
 import type { ProfileSource } from "@/lib/social/links"
 import type { FinderContext, GiftOption } from "./events"
 import { DEFAULT_LANGUAGE } from "./context"
 
 export type StoredOptions = { options: GiftOption[]; recommendedId: string; why: string }
 
-// The one public profile or page read in a session: where from, when (ISO
-// 8601, UTC), and the interests it gave. A read that failed has no interests
-// but still counts.
+// One attempt to read a public profile or page in a session: where from, when
+// (ISO 8601, UTC), a fingerprint of the link (linkFingerprint in
+// lib/social/links.ts; empty for a session saved before issue #89), and how it
+// went: "claimed" while the read runs (it counts as a read until it ends),
+// "read" with the interests it gave, "failed" with the reason.
+export type ProfileAttempt = {
+  source: ProfileSource
+  readAt: string
+  key: string
+  status: "claimed" | "read" | "failed"
+  interests: string[]
+  reason?: ReadFailure
+}
+
+// A calendar's one read (lib/calendars), still in the shape from before issue
+// #89: where from, when, and the interests it gave.
 export type ProfileRead = { source: ProfileSource; readAt: string; interests: string[] }
+
+// A session's attempts, oldest first. `paid` counts the attempts read by a
+// paid scraper on `day` (YYYY-MM-DD, UTC), for the site's daily cap.
+export type ProfileReads = { day: string; paid: number; reads: ProfileAttempt[] }
 
 export type FinderSession = {
   id: string
@@ -49,7 +71,7 @@ export type FinderSession = {
   // Exactly as the API returned it; replayed append-only.
   chat: BetaMessageParam[]
   lastOptions: StoredOptions | null
-  profile: ProfileRead | null
+  profiles: ProfileReads
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -101,14 +123,31 @@ const StoredOptionsSchema = z.object({
   why: z.string(),
 })
 
-const StoredProfile = z.object({
-  source: z.enum(["instagram", "tiktok", "linkedin", "web"]),
+const SOURCES = z.enum(["instagram", "tiktok", "linkedin", "web"])
+const StoredInterests = z
+  .array(z.string())
+  .transform((items) => items.slice(0, 6))
+  .catch([])
+
+// Before issue #89: the session's one read.
+const LegacyProfile = z.object({ source: SOURCES, readAt: z.string(), interests: StoredInterests })
+
+const StoredAttempt = z.object({
+  source: SOURCES,
   readAt: z.string(),
-  interests: z
-    .array(z.string())
-    .transform((items) => items.slice(0, 6))
-    .catch([]),
+  key: z.string().catch(""),
+  status: z.enum(["claimed", "read", "failed"]),
+  interests: StoredInterests,
+  reason: z.enum(["private", "not_found", "empty", "blocked", "timeout", "failed"]).optional().catch(undefined),
 })
+
+const StoredProfiles = z.object({
+  day: z.string(),
+  paid: z.number().int().min(0).catch(0),
+  reads: z.array(StoredAttempt).catch([]),
+})
+
+export const NO_PROFILE_READS: ProfileReads = { day: "", paid: 0, reads: [] }
 
 function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
@@ -119,16 +158,34 @@ export function parseContext(value: unknown): FinderContext {
   return parsed.success ? withoutUndefined(parsed.data) : { language: DEFAULT_LANGUAGE }
 }
 
+// A calendar's one read, or a finder session's from before issue #89.
 export function parseProfile(context: unknown): ProfileRead | null {
   if (!context || typeof context !== "object") return null
-  const parsed = StoredProfile.safeParse((context as { profile?: unknown }).profile)
+  const parsed = LegacyProfile.safeParse((context as { profile?: unknown }).profile)
   return parsed.success ? parsed.data : null
 }
 
-// What goes into the context column: the visitor-facing context plus the
-// server-only profile marker.
+// A calendar's context column: the visitor-facing context plus its one read.
 export function storedContext(context: FinderContext, profile: ProfileRead | null | undefined): Record<string, unknown> {
   return profile ? { ...context, profile } : { ...context }
+}
+
+// The session's profile attempts. A session saved before issue #89 has one
+// `profile` marker: it is read as one attempt, "read" when it gave interests
+// and "failed" when not, and its paid read counts on its own day.
+export function parseProfiles(context: unknown): ProfileReads {
+  if (!context || typeof context !== "object") return NO_PROFILE_READS
+  const record = context as { profiles?: unknown; profile?: unknown }
+  const parsed = StoredProfiles.safeParse(record.profiles)
+  if (parsed.success) return { ...parsed.data, reads: parsed.data.reads.map(withoutUndefined) }
+  const legacy = LegacyProfile.safeParse(record.profile)
+  if (!legacy.success) return NO_PROFILE_READS
+  const { source, readAt, interests } = legacy.data
+  return {
+    day: readAt.slice(0, 10),
+    paid: source === "web" ? 0 : 1,
+    reads: [{ source, readAt, key: "", status: interests.length > 0 ? "read" : "failed", interests }],
+  }
 }
 
 export function parseOptions(value: unknown): StoredOptions | null {
@@ -145,7 +202,7 @@ function toSession(row: SessionRow): FinderSession {
     timezone: resolveTimezone(row.timezone),
     chat: Array.isArray(row.chat) ? (row.chat as BetaMessageParam[]) : [],
     lastOptions: parseOptions(row.last_options),
-    profile: parseProfile(row.context),
+    profiles: parseProfiles(row.context),
   }
 }
 
@@ -249,25 +306,45 @@ export async function writeContext(
 
 // Saves a turn. `chat` must be what was loaded with this turn's messages
 // appended; the owner check keeps a write from ever landing on another user's
-// row. The visitor-facing context is the turn's; the server-only markers are
-// the row's own, except the profile read this turn made.
+// row. The visitor-facing context is the turn's; the server-only markers
+// (profile reads, files) are the row's own: each was written when it happened.
 export async function saveFinderSession(
   session: Pick<FinderSession, "id" | "ownerId">,
-  update: { chat: BetaMessageParam[]; context: FinderContext; lastOptions: StoredOptions | null; profile?: ProfileRead | null },
+  update: { chat: BetaMessageParam[]; context: FinderContext; lastOptions: StoredOptions | null },
 ): Promise<void> {
-  await writeContext(
-    session,
-    (current) => ({ ...serverMarkers(current), ...update.context, ...(update.profile ? { profile: update.profile } : {}) }),
-    { chat: update.chat, last_options: update.lastOptions },
-  )
+  await writeContext(session, (current) => ({ ...serverMarkers(current), ...update.context }), {
+    chat: update.chat,
+    last_options: update.lastOptions,
+  })
 }
 
-// ---------- Public profile reads (issue #34) ----------
+// ---------- Public profile reads (issues #34 and #89) ----------
 
-// Records a profile read on the session, unless one is already recorded. The
-// write is conditional on the revision it read, and on there being no profile
-// yet, so two messages at the same moment cannot both read a profile. False
-// when the session already has one.
+// Changes the session's profile attempts with `change`, from what the row
+// holds now, and writes them only if no other write came in between
+// (writeContext), so two reads at the same moment both see each other.
+// `change` returns null to write nothing. A legacy `profile` marker is folded
+// into the list on the first write. Returns what was written, or null.
+export async function changeProfileReads(
+  session: Pick<FinderSession, "id" | "ownerId">,
+  change: (reads: ProfileReads) => ProfileReads | null,
+): Promise<ProfileReads | null> {
+  let result: ProfileReads | null = null
+  await writeContext(session, (current) => {
+    // Reset on every try: a retry that writes nothing must not return an earlier try's result.
+    result = null
+    const next = change(parseProfiles(current))
+    if (!next) return null
+    result = next
+    const { profile: _legacy, ...rest } = current
+    void _legacy
+    return { ...rest, profiles: next }
+  })
+  return result
+}
+
+// A calendar's one read (lib/calendars/pool.ts), unless one is already
+// recorded; conditional on the revision, so two requests cannot both read.
 export async function markProfileRead(
   session: Pick<FinderSession, "id" | "ownerId">,
   context: FinderContext,
@@ -279,8 +356,7 @@ export async function markProfileRead(
   return written !== null
 }
 
-// Takes a recorded read back (it was over the daily cap). Never throws; a
-// marker left behind only means this session cannot read a profile.
+// Takes a calendar's recorded read back (it was over the daily cap). Never throws.
 export async function clearProfileRead(session: Pick<FinderSession, "id" | "ownerId">, context: FinderContext): Promise<void> {
   try {
     await writeContext(session, (current) => {
@@ -343,6 +419,8 @@ export async function changeUploads(
 ): Promise<UploadsRecord | null> {
   let result: UploadsRecord | null = null
   await writeContext(session, (current) => {
+    // Reset on every try: a retry that writes nothing must not return an earlier try's result.
+    result = null
     if (current.calendar) return null
     const uploads = parseUploads(current)
     const next = change(uploads, current)
@@ -353,14 +431,27 @@ export async function changeUploads(
   return result
 }
 
-// Profile reads from these sources recorded on any session since `since`.
-// readAt is always written by toISOString(), so comparing the text compares the time.
-export async function countProfileReadsSince(since: Date, sources: readonly ProfileSource[]): Promise<number> {
-  const { count, error } = await createAdminClient()
-    .from("finder_sessions")
-    .select("id", { count: "exact", head: true })
-    .gte("context->profile->>readAt", since.toISOString())
-    .in("context->profile->>source", [...sources])
-  if (error) throw new Error(`Could not count today's profile reads: ${error.message}`)
-  return count ?? 0
+// Paid profile attempts on the whole site on `now`'s UTC day: the sum of each
+// session's `paid` for that day, plus sessions saved before issue #89 whose one
+// paid read was made that day. Rows are the sessions that read a profile
+// today: a few hundred at most.
+export async function countPaidProfileReadsToday(now: Date, sources: readonly ProfileSource[]): Promise<number> {
+  const admin = createAdminClient()
+  const day = utcDay(now)
+  const [lists, legacy] = await Promise.all([
+    admin.from("finder_sessions").select("profiles:context->profiles").eq("context->profiles->>day", day),
+    admin
+      .from("finder_sessions")
+      .select("id", { count: "exact", head: true })
+      .is("context->profiles", null)
+      .gte("context->profile->>readAt", startOfUtcDay(now).toISOString())
+      .in("context->profile->>source", [...sources]),
+  ])
+  if (lists.error) throw new Error(`Could not count today's profile reads: ${lists.error.message}`)
+  if (legacy.error) throw new Error(`Could not count today's profile reads: ${legacy.error.message}`)
+  const paid = (Array.isArray(lists.data) ? lists.data : []).reduce((total: number, row) => {
+    const reads = parseProfiles(row)
+    return total + (reads.day === day ? reads.paid : 0)
+  }, 0)
+  return paid + (legacy.count ?? 0)
 }

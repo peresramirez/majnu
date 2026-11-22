@@ -61,7 +61,7 @@ function ProfileField({
           maxLength={300}
           value={link}
           disabled={state.streaming}
-          placeholder="instagram.com/name or @name"
+          placeholder="instagram.com/name, linkedin.com/in/name"
           onChange={(e) => onProfile({ link: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) {

@@ -253,7 +253,7 @@ export async function POST(request: Request): Promise<Response> {
     browserLanguage: canonicalLocale(locale?.language) ?? base.language,
     context: session.context,
     lastOptions: session.lastOptions,
-    profile: session.profile,
+    profiles: session.profiles,
     wrap,
     startedOver,
     emit: out.emit,
@@ -291,7 +291,6 @@ export async function POST(request: Request): Promise<Response> {
             chat: [...session.chat, ...result.appended],
             context: state.context,
             lastOptions: state.lastOptions,
-            profile: state.profile,
           })
         } catch (error) {
           console.error("[finder] could not save the session", describeError(error))

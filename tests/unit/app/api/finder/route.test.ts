@@ -55,7 +55,7 @@ const fresh: FinderSession = {
   timezone: "Europe/Berlin",
   chat: [],
   lastOptions: null,
-  profile: null,
+  profiles: { day: "", paid: 0, reads: [] },
 }
 
 const existing: FinderSession = {
@@ -208,24 +208,21 @@ describe("POST /api/finder", () => {
       chat: [...existing.chat, userTurn, assistantTurn],
       context: { ...fresh.context, relationship: "Mama" },
       lastOptions: existing.lastOptions,
-      profile: null,
     })
   })
 
-  it("carries the session's profile read into the turn and saves the one the turn ended with", async () => {
-    const before = { source: "instagram" as const, readAt: "2026-11-21T10:00:00.000Z", interests: [] }
-    vi.mocked(getMyFinderSession).mockResolvedValue({ ...existing, profile: before })
+  it("carries the session's profile attempts into the turn and leaves the marker to the row (issue #89)", async () => {
+    const before = { day: "2026-11-21", paid: 1, reads: [{ source: "instagram" as const, readAt: "2026-11-21T10:00:00.000Z", key: "k1", status: "failed" as const, interests: [] }] }
+    vi.mocked(getMyFinderSession).mockResolvedValue({ ...existing, profiles: before })
     vi.mocked(runFinderTurn).mockImplementation(async ({ state }) => {
-      expect(state.profile).toEqual(before)
-      state.profile = { ...before, interests: ["Bouldern", "Kaffee", "Fotografie"] }
+      expect(state.profiles).toEqual(before)
       return { appended: [userTurn, assistantTurn], outcome: "done" }
     })
     const events = await eventsOf(await POST(post({ sessionId: existing.id, message: "instagram.com/natgeo", locale })))
     expect(events.at(-1)).toEqual({ type: "done" })
-    expect(saveFinderSession).toHaveBeenCalledWith(
-      expect.objectContaining({ id: existing.id }),
-      expect.objectContaining({ profile: { ...before, interests: ["Bouldern", "Kaffee", "Fotografie"] } }),
-    )
+    // Each attempt was written when it happened: the turn's save never carries (or wipes) it.
+    const saved = vi.mocked(saveFinderSession).mock.calls[0][1] as Record<string, unknown>
+    expect(Object.keys(saved).sort()).toEqual(["chat", "context", "lastOptions"])
     // The marker is the server's: no event carries it to the browser.
     expect(JSON.stringify(events)).not.toContain("readAt")
   })

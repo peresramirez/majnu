@@ -33,11 +33,14 @@
 // rows are read and written with the service-role client, because the browser
 // must never be able to change what the limits count.
 //
-// Public profile reads (issue #34) have their own limits: one per finder
-// session, and APIFY_DAILY_CAP Instagram and TikTok reads a UTC day for the
-// whole site (default 20), because the Apify credit is $5. They are recorded
-// in the session's context (lib/finder/sessions.ts) and claimed the same way
-// as searches: record first, count second, take back when over the cap.
+// Public profile reads (issues #34 and #89) have their own limits, generous
+// guards against scripts only: in one finder session, 5 successful reads and
+// 8 attempts, each distinct link once; and APIFY_DAILY_CAP paid attempts
+// (Instagram, TikTok, LinkedIn) a UTC day for the whole site (default 20).
+// A failed attempt counts as an attempt, not as a read. They are recorded in
+// the session's context (lib/finder/sessions.ts) and claimed the same way as
+// searches: record first, count second, take back when over the cap. A
+// calendar keeps its one read (claimProfileRead).
 //
 // Files the visitor shares (issue #77): at most 6 read in one finder session
 // and 12 per visitor per UTC day, and MAJNU_DAILY_FILE_CAP reader calls a UTC
@@ -48,21 +51,25 @@
 // moment can go a few files over; the session's own count cannot.
 import "server-only"
 import { countChatTurns, startOfUtcDay } from "@/lib/limits"
+import type { ReadFailure } from "@/lib/social/apify"
 import { PAID_SOURCES, usesApify, type ProfileSource } from "@/lib/social/links"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { FinderContext, FinderLimitReason } from "./events"
 import { textsFor } from "./messages"
 import { FILE_LIMITS } from "./file-rules"
 import {
+  changeProfileReads,
   changeUploads,
   clearProfileRead,
   countFileReadsToday,
-  countProfileReadsSince,
+  countPaidProfileReadsToday,
   utcDay,
   listTodaysFinderSessions,
   markProfileRead,
   type FinderSession,
+  type ProfileAttempt,
   type ProfileRead,
+  type ProfileReads,
 } from "./sessions"
 
 export const FINDER_LIMITS = {
@@ -303,10 +310,127 @@ export function apifyDailyCap(): number {
   return Number.isInteger(cap) && cap >= 0 ? cap : DEFAULT_APIFY_DAILY_CAP
 }
 
+// Profile reads in one finder session (issue #89).
+export const PROFILE_LIMITS = {
+  // Reads that gave interests; a read still running counts until it ends.
+  readsPerSession: 5,
+  // Attempts, failed ones included.
+  attemptsPerSession: 8,
+} as const
+
+// Reads that gave (or may still give) interests, and attempts.
+export function profileCounts(reads: ProfileReads): { reads: number; attempts: number } {
+  return { reads: reads.reads.filter((read) => read.status !== "failed").length, attempts: reads.reads.length }
+}
+
+// Whether the session may try another link: the finder's profile field stays
+// under the questions while it may.
+export function canReadMoreProfiles(reads: ProfileReads): boolean {
+  const counts = profileCounts(reads)
+  return counts.reads < PROFILE_LIMITS.readsPerSession && counts.attempts < PROFILE_LIMITS.attemptsPerSession
+}
+
+export type AttemptRefusal =
+  // The same link was tried before in this session: `previous` says how it went.
+  | { ok: false; reason: "same_link"; previous: ProfileAttempt }
+  | { ok: false; reason: "session_reads" | "session_attempts" | "daily_cap" }
+
+export type AttemptClaim = { ok: true; attempt: ProfileAttempt } | AttemptRefusal
+
+// Whether one more attempt at the link with this fingerprint may run, from the
+// session's attempts as stored. The same link first, so the model hears what
+// came of it.
+export function attemptResult(reads: ProfileReads, key: string): AttemptRefusal | null {
+  const previous = key ? reads.reads.find((read) => read.key === key) : undefined
+  if (previous) return { ok: false, reason: "same_link", previous }
+  const counts = profileCounts(reads)
+  if (counts.reads >= PROFILE_LIMITS.readsPerSession) return { ok: false, reason: "session_reads" }
+  if (counts.attempts >= PROFILE_LIMITS.attemptsPerSession) return { ok: false, reason: "session_attempts" }
+  return null
+}
+
+// Claims one attempt to read a public profile or page in a finder session,
+// before the read runs. The session's limits are checked on what the row holds
+// and written in the same conditional write (writeContext), so two attempts at
+// the same moment never go past them. A paid attempt also claims the site's
+// daily cap: recorded first, counted second, taken back when over it. It
+// counts even when the read then fails, because Apify or Bright Data may
+// already have charged for it.
+export async function claimProfileAttempt(input: {
+  session: Pick<FinderSession, "id" | "ownerId">
+  source: ProfileSource
+  key: string
+  now: Date
+}): Promise<AttemptClaim> {
+  const paid = usesApify(input.source)
+  const cap = apifyDailyCap()
+  if (paid && cap === 0) return { ok: false, reason: "daily_cap" }
+
+  const day = utcDay(input.now)
+  const attempt: ProfileAttempt = { source: input.source, readAt: input.now.toISOString(), key: input.key, status: "claimed", interests: [] }
+  let refusal: AttemptRefusal | null = null
+  const written = await changeProfileReads(input.session, (reads) => {
+    refusal = attemptResult(reads, input.key)
+    if (refusal) return null
+    const paidToday = reads.day === day ? reads.paid : 0
+    return { day, paid: paidToday + (paid ? 1 : 0), reads: [...reads.reads, attempt] }
+  })
+  if (!written) return refusal ?? { ok: false, reason: "session_attempts" }
+  if (!paid) return { ok: true, attempt }
+
+  let count: number
+  try {
+    count = await countPaidProfileReadsToday(input.now, PAID_SOURCES)
+  } catch (error) {
+    await releaseProfileAttempt(input.session, attempt)
+    throw error
+  }
+  // The count includes this claim; the cap is about the attempts before it.
+  if (count - 1 >= cap) {
+    await releaseProfileAttempt(input.session, attempt)
+    return { ok: false, reason: "daily_cap" }
+  }
+  return { ok: true, attempt }
+}
+
+// Records how a claimed attempt went: "read" with its interests, or "failed"
+// with the reason. Only that attempt changes; everything else in the context
+// stays as the row holds it.
+export async function finishProfileAttempt(
+  session: Pick<FinderSession, "id" | "ownerId">,
+  attempt: ProfileAttempt,
+  outcome: { ok: true; interests: string[] } | { ok: false; reason: ReadFailure },
+): Promise<ProfileReads | null> {
+  return changeProfileReads(session, (reads) => {
+    const index = reads.reads.findIndex((read) => read.readAt === attempt.readAt && read.key === attempt.key && read.status === "claimed")
+    if (index < 0) return null
+    const done: ProfileAttempt = outcome.ok
+      ? { ...reads.reads[index], status: "read", interests: outcome.interests.slice(0, 6) }
+      : { ...reads.reads[index], status: "failed", interests: [], reason: outcome.reason }
+    return { ...reads, reads: reads.reads.map((read, i) => (i === index ? done : read)) }
+  })
+}
+
+// Takes a claimed attempt back (it was over the daily cap, or the count
+// failed), with its paid claim. Never throws; an attempt left behind only
+// costs the session one of its 8.
+export async function releaseProfileAttempt(session: Pick<FinderSession, "id" | "ownerId">, attempt: ProfileAttempt): Promise<void> {
+  try {
+    await changeProfileReads(session, (reads) => {
+      const kept = reads.reads.filter((read) => !(read.readAt === attempt.readAt && read.key === attempt.key && read.status === "claimed"))
+      if (kept.length === reads.reads.length) return null
+      const paid = usesApify(attempt.source) && reads.day === attempt.readAt.slice(0, 10) ? Math.max(0, reads.paid - 1) : reads.paid
+      return { ...reads, paid, reads: kept }
+    })
+  } catch (error) {
+    console.error("[finder] could not give back a profile read", { message: error instanceof Error ? error.message : String(error) })
+  }
+}
+
 export type ProfileClaim = { ok: true; profile: ProfileRead } | { ok: false; reason: "session" | "daily_cap" }
 
-// Claims this session's one profile read. A read that then fails still counts,
-// because Apify or Bright Data may already have charged for it.
+// A calendar's one profile read (lib/calendars/pool.ts). A read that then
+// fails still counts, because Apify or Bright Data may already have charged.
 export async function claimProfileRead(input: {
   session: Pick<FinderSession, "id" | "ownerId">
   context: FinderContext
@@ -323,7 +447,7 @@ export async function claimProfileRead(input: {
 
   let count: number
   try {
-    count = await countProfileReadsSince(startOfUtcDay(input.now), PAID_SOURCES)
+    count = await countPaidProfileReadsToday(input.now, PAID_SOURCES)
   } catch (error) {
     await clearProfileRead(input.session, input.context)
     throw error

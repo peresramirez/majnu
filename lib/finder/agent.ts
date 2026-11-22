@@ -14,10 +14,11 @@
 //   sub-agent (lib/agents/research.ts) in the visitor's language and country
 //   (or the country the gift goes to, when the visitor named another);
 // - ask_questions: questions before a first search, or to personalise;
-// - read_profile (issue #34): a public Instagram, TikTok or LinkedIn profile,
-//   or another public page, that the visitor pasted, read once per session and
-//   turned into a few interests (lib/social/). Only the interests reach the
-//   conversation; they are merged into the next search's context;
+// - read_profile (issues #34 and #89): a public Instagram, TikTok or LinkedIn
+//   profile, or another public page, that the visitor pasted, turned into a
+//   few interests (lib/social/). Several links may be read in one session,
+//   each once, one call per link; only the interests reach the conversation,
+//   and they are merged into the next search's context;
 // - fill_wrap (issue #70): on the wrap step, the names, note and gift code the
 //   visitor told Majnu, filled into the wrap form for them to check. The app
 //   never wraps by itself.
@@ -45,7 +46,7 @@ import { CONTEXT_TAG, describeToday } from "@/lib/agents/context"
 import { describeError } from "@/lib/agents/errors"
 import { echoableContent } from "@/lib/agents/history"
 import { ResearchRefusal, researchGiftReport, type ResearchReport } from "@/lib/agents/research"
-import { parseProfileLink, type LinkProblem } from "@/lib/social/links"
+import { linkFingerprint, parseProfileLink, type LinkProblem, type ParsedLink } from "@/lib/social/links"
 import { canReadSource, readProfileInterests } from "@/lib/social/read"
 import type { ReadFailure } from "@/lib/social/apify"
 import { getTemplate } from "@/lib/letters/templates"
@@ -61,13 +62,26 @@ import {
 } from "./context"
 import { MAX_CONTEXT_NOTES, mergeNotes } from "./attachments"
 import type { FinderContext, FinderEvent, GiftOption, WrapFill, WrapTemplateId } from "./events"
-import { canSearch, claimProfileRead, claimSearch, releaseSearch } from "./limits"
+import {
+  canReadMoreProfiles,
+  canSearch,
+  claimProfileAttempt,
+  claimSearch,
+  finishProfileAttempt,
+  PROFILE_LIMITS,
+  profileCounts,
+  releaseSearch,
+} from "./limits"
 import { textsFor } from "./messages"
-import type { ProfileRead, StoredOptions } from "./sessions"
+import type { ProfileAttempt, ProfileReads, StoredOptions } from "./sessions"
 
 // Model requests per visitor message, not counting the research sub-agent's own
-// (at most 4): enough to retry a tool call the model got wrong once.
+// (at most 4): enough to retry a tool call the model got wrong once. Each
+// read_profile call that tries a link adds one, so several links in one
+// message can all be read before the search (issue #89).
 export const MAX_FINDER_REQUESTS = 3
+// Links read in one visitor message, one read_profile call each.
+export const MAX_PROFILE_CALLS_PER_TURN = 3
 const MAX_TOKENS = 8192
 export const OPTIONS_PER_SEARCH = 3
 const MAX_QUESTIONS = 3
@@ -91,7 +105,7 @@ Search now or ask first
 - Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you, and never ask again the followUp question you put under the options: if they didn't answer it, ask about something else.
 - Once the visitor has answered, search with what you know. Don't ask again before you have shown options.
 - Your questions can invite the visitor to tell you more in their own words: what the person loves, what they talk about, what they do all day.
-- Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn, with "No public profile" to tap, until a profile has been read. So don't ask for a profile in your questions.
+- Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn, with "No public profile" to tap. The visitor can put one link or several in it. So don't ask for a profile in your questions.
 - The visitor answers all your questions in one message, such as "Free time: video games. Occasion: birthday.", sometimes with a profile link or their own words after it.
 
 Where the gift goes
@@ -113,10 +127,11 @@ Personalising
 - When the visitor answers, call find_gifts again with everything you now know.
 
 Public profiles
-- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram, TikTok or LinkedIn, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
+- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram, TikTok or LinkedIn, or a link to a public page about the person, call read_profile with it, then find_gifts. With several links, call read_profile once for each, one after another, then find_gifts once. Only for a link or handle the visitor gave: never guess one or look someone up.
 - read_profile gives back a few of the person's interests. Put them in find_gifts' interests next to what the visitor said. Don't list them in your reply: the app shows them as chips.
-- If the profile could not be read, say so kindly in one short sentence (it may be private) and search with what you know.
-- One profile per conversation. Never describe or quote what is on someone's profile.
+- If read_profile says it read a corrected link because of a typo, mention the link it read in a few words. If it says a link may be a typo, ask once with ask_questions whether they meant the corrected link, with it as an answer to tap.
+- If a profile could not be read, say why in one short sentence and offer the next step: check the link, make the profile public, or tell you about the person. Then search with what you know. Never say you can't try again while read_profile says more links can be read.
+- You can read several profiles and pages in one conversation, each link once. Never describe or quote what is on someone's profile.
 - You read only links and handles the visitor gives you. You can't look anyone up by name or email address: if the visitor gives an email address, say in one sentence that you can't look people up that way, and ask for a link to a public profile or what they know about the person.
 
 Files the visitor shares
@@ -247,7 +262,7 @@ const ASK_QUESTIONS_TOOL: BetaTool = {
 const READ_PROFILE_TOOL: BetaTool = {
   name: "read_profile",
   description:
-    "Read a public Instagram, TikTok or LinkedIn profile, or another public web page about the person, that the visitor shared, and get back a few of the person's interests. Only for a link or handle the visitor gave. One per conversation; call find_gifts afterwards.",
+    "Read a public Instagram, TikTok or LinkedIn profile, or another public web page about the person, that the visitor shared, and get back a few of the person's interests. Only for a link or handle the visitor gave. One call per link, each link once; call find_gifts after the last one.",
   strict: true,
   input_schema: {
     type: "object",
@@ -408,9 +423,10 @@ export type FinderTurnState = {
   // The options last shown; set by each search. A search in a session that has
   // already shown options is a personalised one.
   lastOptions: StoredOptions | null
-  // The public profile read in this session, if any (one per session). Set
-  // by read_profile and saved with the session.
-  profile: ProfileRead | null
+  // The session's profile attempts (issue #89), as loaded and as each
+  // read_profile call left them. Each attempt is written to the row when it
+  // happens, not with the turn.
+  profiles: ProfileReads
   // Set while the visitor is on the wrap step (issue #70): the option, already
   // checked against lastOptions by the route, and the design they chose.
   wrap?: WrapFrame | null
@@ -596,7 +612,8 @@ function questionEvent(question: { text: string; label?: string; suggestions: st
     text: question.text,
     ...(question.label ? { label: question.label } : {}),
     ...(question.suggestions.length ? { suggestions: question.suggestions } : {}),
-    profileRead: state.profile !== null,
+    // The app's profile field stays while the session can read another link.
+    profileRead: !canReadMoreProfiles(state.profiles),
   }
 }
 
@@ -621,8 +638,9 @@ function failureMessage(error: unknown, language: string): string {
 
 type TurnFlags = {
   searched: boolean
-  // read_profile ran in this turn; its interests, if it found any.
-  readProfile?: boolean
+  // read_profile calls that tried a link in this turn, and the interests of
+  // the reads that worked, newest first.
+  profileCalls?: number
   profileInterests?: string[]
 }
 
@@ -735,12 +753,19 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
 
 // What the model is told when a link cannot be read. Each ends with what to do
 // next, so the search goes on without the profile.
-const LINK_PROBLEMS: Record<LinkProblem, string> = {
+const LINK_PROBLEMS: Record<Exclude<LinkProblem, "maybe_typo">, string> = {
   not_a_profile:
     "Nothing was read: that link is a post, a short link, a company page or another page on Instagram, TikTok or LinkedIn that is not a person's profile. In one short sentence, say you can read a profile link such as instagram.com/name, tiktok.com/@name or linkedin.com/in/name, and search with what you know.",
   needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram, TikTok or LinkedIn.",
   unsupported:
     "Nothing was read: that is not a link to a public profile or page that can be read. Say so in one short sentence and search with what you know.",
+}
+
+function linkProblemText(link: Extract<ParsedLink, { ok: false }>): string {
+  if (link.problem === "maybe_typo" && link.suggestion) {
+    return `Nothing was read: the link may have a typo, and the visitor probably meant ${link.suggestion}. Ask them once with ask_questions whether they meant it, with "${link.suggestion}" as an answer to tap. Don't read a guess.`
+  }
+  return LINK_PROBLEMS[link.problem === "maybe_typo" ? "unsupported" : link.problem]
 }
 
 const READ_FAILURES: Record<ReadFailure, string> = {
@@ -752,20 +777,68 @@ const READ_FAILURES: Record<ReadFailure, string> = {
   failed: "it could not be read for a technical reason",
 }
 
-const SEARCH_WITHOUT_IT = "Tell the visitor kindly in one short sentence, then call find_gifts with what you know."
+// The next step to offer after a failed read (issue #89).
+const NEXT_STEPS: Record<ReadFailure, string> = {
+  private: "the visitor can make the profile public and send it again, or tell you about the person",
+  not_found: "the visitor can check the link and send it again, or tell you about the person",
+  empty: "the visitor can send another link or tell you about the person",
+  blocked: "the visitor can send another link or tell you about the person",
+  timeout: "the visitor can send it again later, send another link, or tell you about the person",
+  failed: "the visitor can send it again later, send another link, or tell you about the person",
+}
 
-function profileSummary(interests: string[]): string {
+const SEARCH_WITHOUT_IT = "Tell the visitor kindly in one short sentence. If they gave other links, read those first. Then call find_gifts with what you know."
+
+// How many more links the session can read, so the model never refuses a retry it could make.
+function linksLeftLine(reads: ProfileReads): string {
+  const counts = profileCounts(reads)
+  const left = Math.min(PROFILE_LIMITS.readsPerSession - counts.reads, PROFILE_LIMITS.attemptsPerSession - counts.attempts)
+  return left > 0
+    ? `${left} more ${left === 1 ? "link" : "links"} can be read in this conversation, so a corrected or another link can still be tried.`
+    : "No more links can be read in this conversation."
+}
+
+function correctedLine(corrected: string | undefined): string {
+  return corrected ? `The visitor's link had a typo, so ${corrected} was read instead. Mention that in a few words. ` : ""
+}
+
+function profileSummary(interests: string[], corrected: string | undefined): string {
   return JSON.stringify({
+    ...(corrected ? { read: corrected, corrected: correctedLine(corrected).trim() } : {}),
     interests,
-    note: "Interests from the public profile the visitor shared. Call find_gifts now with these in interests, next to what the visitor said. Don't list them in your reply; the app shows them.",
+    note: "Interests from the public profile the visitor shared. If they gave other links, read those first. Then call find_gifts with these in interests, next to what the visitor said. Don't list them in your reply; the app shows them.",
   })
 }
 
+function refusalText(claim: Exclude<Awaited<ReturnType<typeof claimProfileAttempt>>, { ok: true }>): string {
+  switch (claim.reason) {
+    case "same_link": {
+      const previous: ProfileAttempt = claim.previous
+      if (previous.status === "read") {
+        const known = previous.interests.length ? ` Interests it gave: ${previous.interests.join(", ")}.` : ""
+        return `Not read again: this link was already read in this conversation.${known} Use them. If the visitor gave other links, read those. Then call find_gifts with what you know.`
+      }
+      if (previous.status === "failed" && previous.reason) {
+        return `Not read again: this link was already tried in this conversation and ${READ_FAILURES[previous.reason]}. Say so in one short sentence: ${NEXT_STEPS[previous.reason]}. Then call find_gifts with what you know.`
+      }
+      return `Not read again: this link is being read already. ${SEARCH_WITHOUT_IT}`
+    }
+    case "session_reads":
+      return `Not read: this conversation has already read ${PROFILE_LIMITS.readsPerSession} profiles, as many as it can. ${SEARCH_WITHOUT_IT}`
+    case "session_attempts":
+      return `Not read: this conversation has already tried ${PROFILE_LIMITS.attemptsPerSession} links, as many as it can. ${SEARCH_WITHOUT_IT}`
+    case "daily_cap":
+      return `Not read: no more profiles can be read today. ${SEARCH_WITHOUT_IT}`
+  }
+}
+
 async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
-  if (flags.readProfile || state.profile) {
-    const known = state.profile?.interests.length ? ` Interests it gave: ${state.profile.interests.join(", ")}.` : ""
+  if ((flags.profileCalls ?? 0) >= MAX_PROFILE_CALLS_PER_TURN) {
     return {
-      result: result(call, `Not read: one profile per conversation, and one was already read.${known} ${SEARCH_WITHOUT_IT}`),
+      result: result(
+        call,
+        `Not read: at most ${MAX_PROFILE_CALLS_PER_TURN} links are read in one message. Call find_gifts now with what you know; the visitor can send the other links in their next message.`,
+      ),
       terminal: false,
     }
   }
@@ -773,7 +846,7 @@ async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
   const input = parsed.data
   const link = parseProfileLink(input.link, input.platform)
-  if (!link.ok) return { result: result(call, LINK_PROBLEMS[link.problem]), terminal: false }
+  if (!link.ok) return { result: result(call, linkProblemText(link)), terminal: false }
   const target = link.target
   if (!canReadSource(target.source)) {
     return { result: result(call, `Not read: profiles can't be read at the moment. ${SEARCH_WITHOUT_IT}`), terminal: false }
@@ -790,33 +863,47 @@ async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags
     }
   }
 
-  let claim: Awaited<ReturnType<typeof claimProfileRead>>
+  // Counted before the claim, so the turn's extra requests stay bounded however the claim goes.
+  flags.profileCalls = (flags.profileCalls ?? 0) + 1
+  const session = { id: state.sessionId, ownerId: state.ownerId }
+  let claim: Awaited<ReturnType<typeof claimProfileAttempt>>
   try {
-    claim = await claimProfileRead({
-      session: { id: state.sessionId, ownerId: state.ownerId },
-      context: state.context,
-      source: target.source,
-      now: state.now,
-    })
+    claim = await claimProfileAttempt({ session, source: target.source, key: await linkFingerprint(target), now: state.now })
   } catch (error) {
     // The database failed: no read, but the search can still go ahead.
     console.error("[finder] could not claim a profile read", describeError(error))
     return { result: result(call, `The profile could not be read: ${READ_FAILURES.failed}. ${SEARCH_WITHOUT_IT}`), terminal: false }
   }
-  if (!claim.ok) {
-    const why = claim.reason === "daily_cap" ? "no more profiles can be read today" : "one profile per conversation, and one was already read"
-    return { result: result(call, `Not read: ${why}. ${SEARCH_WITHOUT_IT}`), terminal: false }
-  }
-  flags.readProfile = true
+  if (!claim.ok) return { result: result(call, refusalText(claim)), terminal: false }
   state.emit({ type: "status", label: input.status ?? textsFor(language).profileStatus })
 
   const read = await readProfileInterests(target, language)
-  state.profile = { ...claim.profile, interests: read.ok ? read.interests : [] }
-  if (!read.ok) {
-    return { result: result(call, `The profile could not be read: ${READ_FAILURES[read.reason]}. Nothing from it is used. ${SEARCH_WITHOUT_IT}`), terminal: false }
+  const outcome = read.ok ? { ok: true as const, interests: read.interests } : { ok: false as const, reason: read.reason }
+  const attempt = claim.attempt
+  let written: ProfileReads | null = null
+  try {
+    written = await finishProfileAttempt(session, attempt, outcome)
+  } catch (error) {
+    // The claim stays as "claimed": it counts as a read, never as more than one.
+    console.error("[finder] could not record a profile read", describeError(error))
   }
-  flags.profileInterests = read.interests
-  return { result: result(call, profileSummary(read.interests)), terminal: false }
+  const done: ProfileAttempt = read.ok
+    ? { ...attempt, status: "read", interests: read.interests }
+    : { ...attempt, status: "failed", reason: read.reason }
+  state.profiles = written ?? { ...state.profiles, reads: [...state.profiles.reads, done] }
+
+  if (!read.ok) {
+    return {
+      result: result(
+        call,
+        `${correctedLine(link.corrected)}The profile could not be read: ${READ_FAILURES[read.reason]}. Nothing from it is used. Next step: ${NEXT_STEPS[read.reason]}. ${linksLeftLine(state.profiles)} ${SEARCH_WITHOUT_IT}`,
+      ),
+      terminal: false,
+    }
+  }
+  // Newest first, so this read's interests come before an earlier one's.
+  flags.profileInterests = mergeInterests(read.interests, flags.profileInterests ?? [])
+  return { result: result(call, profileSummary(read.interests, link.corrected)), terminal: false }
 }
 
 // fill_wrap ends the turn: the visitor's next move is to check the form.
@@ -883,7 +970,7 @@ export async function runFinderTurn(opts: {
   let lastBlockWasText = false
 
   try {
-    for (let request = 0; request < MAX_FINDER_REQUESTS; request++) {
+    for (let request = 0; request < MAX_FINDER_REQUESTS + (flags.profileCalls ?? 0); request++) {
       const stream = getClient().beta.messages.stream({
         ...agentRequestBase(),
         max_tokens: MAX_TOKENS,
