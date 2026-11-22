@@ -23,13 +23,18 @@
 //   "Free today: 2 of 3 left" and "Make my design, free". No account step,
 //   no consent box and no code. It posts to POST /api/designs/free and closes
 //   on the status card. Once they are used up, the dialog is as above.
+// * Personalisations bought in advance (issue #96): after the free designs,
+//   a member with some left gets "Use 1 of your N personalisations": the
+//   design request and a consent box for starting at once (as the paid one
+//   has), no payment. It posts to POST /api/credits/use and closes on the
+//   status card. Then the code, then paying for one, as above.
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Sparkles, X } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { focusRing, primaryButton, secondaryButton } from "@/components/app/styles"
-import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
+import { CREDIT_CONSENT_TEXT, WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
 import { normaliseCouponCode } from "@/lib/billing/coupon-code"
 import type { FreeDesigns, PurchaseView, WrapperState } from "@/lib/billing/view"
 import { PurchaseStatusCard } from "./purchase-status"
@@ -47,6 +52,8 @@ const EXAMPLES = ["A 1950s cinema ticket by the sea", "Pressed flowers on old pa
 
 // The button while today's free designs last, instead of "Make it unique, €2.99".
 const FREE_CTA = "Make it unique, free today"
+// The button while the member has personalisations bought in advance.
+const CREDIT_CTA = "Make it unique, use a personalisation"
 
 export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }: Props) {
   const [state, setState] = useState<WrapperState | null>(null)
@@ -92,6 +99,8 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
 
   const freeDesigns = state.freeDesigns ?? null
   const freeLeft = freeDesigns !== null && freeDesigns.left > 0
+  const credits = state.credits ?? null
+  const creditsLeft = credits !== null && credits > 0
 
   // A code was redeemed, or a free design claimed (which also says how many
   // are left today).
@@ -118,6 +127,11 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
     setState((current) => (current ? { ...current, freeDesigns: next } : current))
   }
 
+  // The balance after using one, or 0 when the server found none left.
+  function creditsChanged(next: number | null) {
+    setState((current) => (current ? { ...current, credits: next } : current))
+  }
+
   return (
     <div className={className}>
       {purchase && (purchase.status === "refunded" || purchase.status === "failed") && (
@@ -126,7 +140,9 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
             ? "Your last design could not be made. Your code works again, so you can try once more."
             : purchase.freeDesign
               ? "Your last design could not be made, so it didn't count. You can try again."
-              : `Your last design could not be made${purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.`}
+              : purchase.paidWithCredit
+                ? "Your last design could not be made, so your personalisation is back. You can try again."
+                : `Your last design could not be made${purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.`}
         </p>
       )}
       <WrapperDialog
@@ -136,14 +152,16 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
         account={state.account}
         rememberedCode={state.rememberedCode ?? null}
         freeDesigns={freeDesigns}
+        credits={credits}
         returnTo={returnTo}
         onRedeemed={redeemed}
         onFreeGone={freeGone}
+        onCreditsChange={creditsChanged}
       >
         {/* A Dialog.Trigger, so focus comes back to it when the dialog closes. */}
         <button type="button" className={`w-full ${secondaryButton} ring-night-rose/50 hover:ring-night-rose`}>
           <Sparkles className="h-4 w-4 text-night-rose" aria-hidden="true" />
-          {freeLeft ? FREE_CTA : wrapper.cta}
+          {freeLeft ? FREE_CTA : creditsLeft ? CREDIT_CTA : wrapper.cta}
         </button>
       </WrapperDialog>
     </div>
@@ -157,9 +175,11 @@ function WrapperDialog({
   account,
   rememberedCode,
   freeDesigns,
+  credits,
   returnTo,
   onRedeemed,
   onFreeGone,
+  onCreditsChange,
   children,
 }: {
   open: boolean
@@ -168,9 +188,11 @@ function WrapperDialog({
   account: WrapperState["account"]
   rememberedCode: string | null
   freeDesigns: FreeDesigns | null
+  credits: number | null
   returnTo?: string
   onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
   onFreeGone: (freeDesigns: FreeDesigns | null) => void
+  onCreditsChange: (credits: number | null) => void
   children: ReactNode
 }) {
   return (
@@ -184,9 +206,11 @@ function WrapperDialog({
               account={account}
               rememberedCode={rememberedCode}
               freeDesigns={freeDesigns}
+              credits={credits}
               returnTo={returnTo}
               onRedeemed={onRedeemed}
               onFreeGone={onFreeGone}
+              onCreditsChange={onCreditsChange}
             />
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
@@ -202,17 +226,21 @@ function DialogBody({
   account,
   rememberedCode,
   freeDesigns,
+  credits,
   returnTo,
   onRedeemed,
   onFreeGone,
+  onCreditsChange,
 }: {
   letterId: string
   account: WrapperState["account"]
   rememberedCode: string | null
   freeDesigns: FreeDesigns | null
+  credits: number | null
   returnTo?: string
   onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
   onFreeGone: (freeDesigns: FreeDesigns | null) => void
+  onCreditsChange: (credits: number | null) => void
 }) {
   // While one of today's free designs is left, the dialog offers only that.
   const free = freeDesigns !== null && freeDesigns.left > 0 ? freeDesigns : null
@@ -233,6 +261,12 @@ function DialogBody({
   function freeRefused(next: FreeDesigns | null, message: string) {
     setNotice(message)
     onFreeGone(next)
+  }
+
+  // The server found none left (used in another tab): fall back to a code or payment.
+  function creditsRefused(message: string) {
+    setNotice(message)
+    onCreditsChange(0)
   }
 
   return (
@@ -268,12 +302,17 @@ function DialogBody({
           letterId={letterId}
           returnTo={returnTo}
           free={free}
+          credits={account === "member" && credits !== null && credits > 0 ? credits : null}
           withCode={withCode}
           initialCode={rememberedCode ?? ""}
           onWithCodeChange={setWithCode}
-          noCodeLabel={account === "guest" ? "I don't have a code" : "Pay instead"}
+          noCodeLabel={
+            account === "guest" ? "I don't have a code" : credits !== null && credits > 0 ? "Use a personalisation instead" : "Pay instead"
+          }
           onRedeemed={onRedeemed}
           onFreeRefused={freeRefused}
+          onCreditUsed={onCreditsChange}
+          onCreditsRefused={creditsRefused}
         />
       )}
     </>
@@ -317,23 +356,31 @@ function RequestStep({
   letterId,
   returnTo,
   free,
+  credits,
   withCode,
   initialCode,
   onWithCodeChange,
   noCodeLabel,
   onRedeemed,
   onFreeRefused,
+  onCreditUsed,
+  onCreditsRefused,
 }: {
   letterId: string
   returnTo?: string
   // Today's free designs, while one is left: the form then makes a free one.
   free: FreeDesigns | null
+  // Personalisations the member bought in advance, while one is left (and
+  // no free design): the form then uses one.
+  credits: number | null
   withCode: boolean
   initialCode: string
   onWithCodeChange: (withCode: boolean) => void
   noCodeLabel: string
   onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
   onFreeRefused: (freeDesigns: FreeDesigns | null, message: string) => void
+  onCreditUsed: (credits: number | null) => void
+  onCreditsRefused: (message: string) => void
 }) {
   const [request, setRequest] = useState("")
   const [consent, setConsent] = useState(false)
@@ -368,6 +415,17 @@ function RequestStep({
     if (refocusCode > 0) codeInput.current?.focus()
   }, [refocusCode])
 
+  // Which way this design is paid for: free today, then a personalisation
+  // bought in advance, then a code (when asked for), then Stripe.
+  const mode: "free" | "code" | "credit" | "pay" = free ? "free" : withCode ? "code" : credits !== null ? "credit" : "pay"
+  // The credit and the payment consent are different sentences: a box ticked
+  // for one is not ticked for the other.
+  const [consentFor, setConsentFor] = useState(mode)
+  if (consentFor !== mode) {
+    setConsentFor(mode)
+    setConsent(false)
+  }
+
   const trimmed = request.trim()
   // Nothing to pay: free and code designs need no consent.
   const ready = trimmed.length >= 3 && (free ? true : withCode ? code.trim().length > 0 : consent) && !busy
@@ -393,6 +451,7 @@ function RequestStep({
       setError("Tick the box to agree that we start your design straight away.")
       return
     }
+    if (mode === "credit") return spendCredit()
     setBusy(true)
     setError(null)
     try {
@@ -447,6 +506,35 @@ function RequestStep({
     setBusy(false)
   }
 
+  // A personalisation bought in advance: no Checkout, but the consent box, as
+  // for a payment.
+  async function spendCredit() {
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/credits/use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ letterId, request: trimmed, consent: true }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { purchase?: PurchaseView; credits?: number | null } & Refusal
+      if (response.ok && body.purchase) {
+        onCreditUsed(typeof body.credits === "number" ? body.credits : null)
+        onRedeemed(body.purchase)
+        return
+      }
+      if (body.reason === "none_left") {
+        setBusy(false)
+        onCreditsRefused(body.error ?? "You have no personalisations left.")
+        return
+      }
+      setError(body.error ?? "Something went wrong starting your design. Try again.")
+    } catch {
+      setError("We couldn't reach Majnu just now. Check your connection and try again.")
+    }
+    setBusy(false)
+  }
+
   // With a code nothing is paid: no Checkout and no consent, straight to the design.
   async function redeem() {
     if (!code.trim()) {
@@ -490,7 +578,14 @@ function RequestStep({
     <form onSubmit={submit} noValidate aria-busy={busy}>
       <DialogPrimitive.Description className="mt-3 text-[15px] leading-relaxed text-night-lilac">
         Instead of one of our designs, Majnu makes a page for this gift alone, around the person and what you want to say. It is ready in
-        about two minutes{free ? ", and free today." : withCode ? ". Free with your code." : `. ${wrapper.price} once, VAT included.`}
+        about two minutes
+        {free
+          ? ", and free today."
+          : withCode
+            ? ". Free with your code."
+            : credits !== null
+              ? `. It uses 1 of your ${credits} personalisation${credits === 1 ? "" : "s"}, nothing to pay.`
+              : `. ${wrapper.price} once, VAT included.`}
       </DialogPrimitive.Description>
 
       <label htmlFor={requestId} className="mt-5 block text-sm font-semibold text-night-petal">
@@ -578,7 +673,7 @@ function RequestStep({
             className={`mt-0.5 h-5 w-5 flex-none cursor-pointer rounded accent-night-rose ${focusRing}`}
           />
           <label htmlFor={consentId} className="cursor-pointer text-[14px] leading-relaxed text-night-petal">
-            {WRAPPER_CONSENT_TEXT}
+            {mode === "credit" ? CREDIT_CONSENT_TEXT : WRAPPER_CONSENT_TEXT}
           </label>
         </div>
       )}
@@ -599,12 +694,14 @@ function RequestStep({
         {busy ? (
           <>
             <MoonPhase lit={0.5} size={18} className="motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]" />
-            {free || withCode ? "Starting your design…" : "Opening the payment page…"}
+            {free || withCode || mode === "credit" ? "Starting your design…" : "Opening the payment page…"}
           </>
         ) : free ? (
           "Make my design, free"
         ) : withCode ? (
           "Make my design"
+        ) : credits !== null ? (
+          `Use 1 of your ${credits} personalisation${credits === 1 ? "" : "s"}`
         ) : (
           `Pay ${wrapper.price}`
         )}
@@ -614,7 +711,9 @@ function RequestStep({
           ? "Nothing to pay. If the design cannot be made, it doesn't count."
           : withCode
             ? "Nothing to pay. If the design cannot be made, your code works again."
-            : "Paid securely through Stripe. If the design cannot be made, you get every cent back."}{" "}
+            : credits !== null
+              ? "Nothing to pay now. If the design cannot be made, you get the personalisation back."
+              : "Paid securely through Stripe. If the design cannot be made, you get every cent back."}{" "}
         <Link href="/terms#wrapper" className={`rounded underline underline-offset-4 ${focusRing}`} target="_blank">
           Terms
         </Link>
