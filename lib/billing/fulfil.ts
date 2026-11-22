@@ -6,15 +6,19 @@
 //   2. Run the redesign (lib/daytona/redesign.ts), which stores the page in
 //      letter_designs and returns its id.
 //   3. Mark the purchase done with the design, or, if anything failed, refund
-//      the payment through Stripe and mark it refunded.
+//      the payment through Stripe and mark it refunded. A purchase paid with
+//      a coupon code is marked failed and its code gets the use back instead;
+//      Stripe is never called for it (./refunds.ts, giveBack).
 import "server-only"
 import { redesignLetter, type RedesignResult } from "@/lib/daytona/redesign"
 import { claimForDesign, getPurchase, markDone } from "./purchases"
-import { refundPurchase } from "./refunds"
+import { giveBack } from "./refunds"
 
 export type JobOutcome =
   | { outcome: "done"; designId: string; seconds: number }
   | { outcome: "refunded" | "refund_failed"; reason: string }
+  // A coupon purchase: failed, and its code has the use back.
+  | { outcome: "code_returned"; reason: string }
   | { outcome: "skipped"; reason: string }
 
 export type JobDeps = {
@@ -64,11 +68,19 @@ export async function refundAbandonedPurchase(purchaseId: string, deps: Partial<
 }
 
 async function refundAfterFailure(
-  purchase: { id: string; paymentIntentId: string | null },
+  purchase: { id: string; paymentIntentId: string | null; couponId: string | null },
   reason: string,
   log: (line: string) => void,
 ): Promise<JobOutcome> {
-  const refund = await refundPurchase(purchase, reason)
+  const refund = await giveBack(purchase, reason)
+  if (refund.outcome === "code_returned") {
+    log(`${purchase.id}: failed, the coupon code has its use back`)
+    return { outcome: "code_returned", reason }
+  }
+  if (refund.outcome === "nothing_to_return") {
+    // Someone else (the dead-letter queue, or the job itself) got there first.
+    return { outcome: "skipped", reason: "the coupon purchase was already settled" }
+  }
   if (refund.outcome === "refunded") {
     log(`${purchase.id}: refunded (${refund.refundId})`)
     return { outcome: "refunded", reason }

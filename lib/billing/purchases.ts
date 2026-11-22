@@ -19,9 +19,14 @@ export type Purchase = {
   letterId: string | null
   status: PurchaseStatus
   request: string
-  consentAt: string
+  // Null for a purchase paid with a coupon: nothing was paid, so no
+  // withdrawal consent was asked for.
+  consentAt: string | null
   amountCents: number
   currency: string
+  // The coupon that paid for it (supabase/migrations/0011_coupons.sql), or
+  // null when Stripe did. A coupon purchase has amount 0 and no Stripe ids.
+  couponId: string | null
   checkoutSessionId: string | null
   paymentIntentId: string | null
   refundId: string | null
@@ -40,9 +45,10 @@ export type Row = {
   letter_id: string | null
   status: string
   request: string
-  consent_at: string
+  consent_at: string | null
   amount_cents: number
   currency: string
+  coupon_id: string | null
   stripe_checkout_session_id: string | null
   stripe_payment_intent_id: string | null
   stripe_refund_id: string | null
@@ -57,7 +63,7 @@ export type Row = {
 
 // Every column owners may read (failure_reason is left out on purpose).
 export const COLUMNS =
-  "id, owner_id, letter_id, status, request, consent_at, amount_cents, currency, stripe_checkout_session_id, stripe_payment_intent_id, stripe_refund_id, receipt_url, design_id, paid_at, design_started_at, finished_at, refunded_at, created_at"
+  "id, owner_id, letter_id, status, request, consent_at, amount_cents, currency, coupon_id, stripe_checkout_session_id, stripe_payment_intent_id, stripe_refund_id, receipt_url, design_id, paid_at, design_started_at, finished_at, refunded_at, created_at"
 
 const STATUSES: readonly PurchaseStatus[] = ["pending", "paid", "designing", "done", "failed", "refunded"]
 
@@ -71,6 +77,7 @@ export function toPurchase(row: Row): Purchase {
     consentAt: row.consent_at,
     amountCents: row.amount_cents,
     currency: row.currency,
+    couponId: row.coupon_id ?? null,
     checkoutSessionId: row.stripe_checkout_session_id,
     paymentIntentId: row.stripe_payment_intent_id,
     refundId: row.stripe_refund_id,
@@ -240,4 +247,14 @@ export async function markFailed(purchaseId: string, reason: string): Promise<vo
     .eq("id", purchaseId)
     .in("status", ["pending", "paid", "designing"])
   if (error) throw new Error(`Could not mark the purchase failed: ${error.message}`)
+}
+
+// A coupon purchase whose design could not be made: marks it failed and gives
+// its code one use back, once (return_coupon_use in 0011_coupons.sql), in one
+// transaction. False when there was nothing to give back: not a coupon
+// purchase, or no longer paid or designing (a second caller).
+export async function returnCouponUse(purchaseId: string, reason: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("return_coupon_use", { p_purchase_id: purchaseId, p_reason: reason.slice(0, 1000) })
+  if (error) throw new Error(`Could not give the code's use back: ${error.message}`)
+  return data === true
 }
