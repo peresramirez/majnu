@@ -7,14 +7,18 @@ import { vi } from "vitest"
 import type { WrapperLetter } from "@/lib/billing/my-purchases"
 import type { MarkPaidResult, NewPurchase, Payment, Purchase, PurchaseStatus } from "@/lib/billing/purchases"
 
-export type StoredPurchase = Purchase & { consentText: string | null; failureReason: string | null }
+export type StoredPurchase = Purchase & { consentText: string | null; failureReason: string | null; freeIpHash: string | null }
 
 export type StoredCoupon = { id: string; uses: number; maxUses: number }
+
+// free_design_days (0012_free_designs.sql), keyed `${day}|${ipHash}`.
+export type FreeCounter = { day: string; ipHash: string; used: number }
 
 export const db = {
   purchases: new Map<string, StoredPurchase>(),
   letters: new Map<string, WrapperLetter & { ownerId: string }>(),
   coupons: new Map<string, StoredCoupon>(),
+  freeDays: new Map<string, FreeCounter>(),
   // Whose session the user client reads with (row-level security).
   currentUser: "user-1",
   seq: 0,
@@ -24,6 +28,7 @@ export function resetDb() {
   db.purchases.clear()
   db.letters.clear()
   db.coupons.clear()
+  db.freeDays.clear()
   db.currentUser = "user-1"
   db.seq = 0
 }
@@ -42,6 +47,8 @@ export function addPurchase(overrides: Partial<StoredPurchase> & { letterId: str
     request: "A night sky",
     consentAt: "2026-11-21T20:00:00.000Z",
     couponId: null,
+    freeDay: null,
+    freeIpHash: null,
     consentText: "consent",
     amountCents: 299,
     currency: "eur",
@@ -64,7 +71,7 @@ export function addPurchase(overrides: Partial<StoredPurchase> & { letterId: str
 
 function strip(p: StoredPurchase | undefined): Purchase | null {
   if (!p) return null
-  const { consentText: _c, failureReason: _f, ...rest } = p
+  const { consentText: _c, failureReason: _f, freeIpHash: _h, ...rest } = p
   return { ...rest }
 }
 
@@ -112,13 +119,13 @@ export const purchasesModule = {
   }),
   claimForDesign: vi.fn(async (id: string) => strip(transition(id, ["paid"], { status: "designing", designStartedAt: now() }) ?? undefined)),
   markDone: vi.fn(async (id: string, designId: string) => {
-    transition(id, ["designing"], { status: "done", designId, finishedAt: now(), failureReason: null })
+    transition(id, ["designing"], { status: "done", designId, finishedAt: now(), failureReason: null, freeIpHash: null })
   }),
   markRefunded: vi.fn(async (id: string, refundId: string, reason: string) => {
     transition(id, ["pending", "paid", "designing", "failed"], { status: "refunded", refundId, refundedAt: now(), finishedAt: now(), failureReason: reason })
   }),
   markFailed: vi.fn(async (id: string, reason: string) => {
-    transition(id, ["pending", "paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason })
+    transition(id, ["pending", "paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason, freeIpHash: null })
   }),
   // return_coupon_use in 0011_coupons.sql: only a coupon purchase that is
   // paid or designing, once, and the coupon gets one use back.
@@ -130,6 +137,53 @@ export const purchasesModule = {
     if (coupon && coupon.uses > 0) coupon.uses--
     return true
   }),
+  // return_free_design in 0012_free_designs.sql: only a free purchase that is
+  // paid or designing, once; the hash is cleared and the day's use given back.
+  returnFreeDesign: vi.fn(async (id: string, reason: string) => {
+    const p = db.purchases.get(id)
+    if (!p?.freeDay) return false
+    const hash = p.freeIpHash
+    if (!transition(id, ["paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason, freeIpHash: null })) return false
+    const counter = hash ? db.freeDays.get(`${p.freeDay}|${hash}`) : undefined
+    if (counter && counter.used > 0) counter.used--
+    return true
+  }),
+}
+
+// claim_free_design and free_designs_left (0012_free_designs.sql) as the
+// database answers them, on db.freeDays and db.purchases: the letter check,
+// one run per letter, and used < limit.
+export function freeDesignRpc(name: string, args: Record<string, unknown>): { data: unknown; error: null } {
+  const key = `${args.p_day}|${args.p_ip_hash}`
+  const limit = args.p_limit as number
+  if (name === "free_designs_left") {
+    return { data: Math.max(limit - (db.freeDays.get(key)?.used ?? 0), 0), error: null }
+  }
+  if (name !== "claim_free_design") throw new Error(`unexpected rpc ${name}`)
+  const letter = db.letters.get(args.p_letter_id as string)
+  if (!letter || letter.ownerId !== args.p_owner_id || letter.kind !== "letter" || !letter.built) {
+    return { data: { outcome: "letter_not_found", purchase_id: null, uses_left: null }, error: null }
+  }
+  if ([...db.purchases.values()].some((p) => p.letterId === letter.id && (p.status === "paid" || p.status === "designing"))) {
+    return { data: { outcome: "in_progress", purchase_id: null, uses_left: null }, error: null }
+  }
+  const counter = db.freeDays.get(key) ?? { day: args.p_day as string, ipHash: args.p_ip_hash as string, used: 0 }
+  if (counter.used >= limit) return { data: { outcome: "used_up", purchase_id: null, uses_left: 0 }, error: null }
+  counter.used++
+  db.freeDays.set(key, counter)
+  const p = addPurchase({
+    ownerId: args.p_owner_id as string,
+    letterId: letter.id,
+    request: args.p_request as string,
+    status: "paid",
+    amountCents: 0,
+    consentAt: null,
+    consentText: null,
+    freeDay: args.p_day as string,
+    freeIpHash: args.p_ip_hash as string,
+    paidAt: now(),
+  })
+  return { data: { outcome: "claimed", purchase_id: p.id, uses_left: limit - counter.used }, error: null }
 }
 
 // The owner's reads (lib/billing/my-purchases.ts), through "row-level security".

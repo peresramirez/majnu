@@ -27,6 +27,10 @@ export type Purchase = {
   // The coupon that paid for it (supabase/migrations/0011_coupons.sql), or
   // null when Stripe did. A coupon purchase has amount 0 and no Stripe ids.
   couponId: string | null
+  // The UTC day (YYYY-MM-DD) whose free design paid for it
+  // (supabase/migrations/0012_free_designs.sql), or null. A free purchase has
+  // amount 0 and no Stripe ids either.
+  freeDay: string | null
   checkoutSessionId: string | null
   paymentIntentId: string | null
   refundId: string | null
@@ -49,6 +53,7 @@ export type Row = {
   amount_cents: number
   currency: string
   coupon_id: string | null
+  free_day: string | null
   stripe_checkout_session_id: string | null
   stripe_payment_intent_id: string | null
   stripe_refund_id: string | null
@@ -61,9 +66,10 @@ export type Row = {
   created_at: string
 }
 
-// Every column owners may read (failure_reason is left out on purpose).
+// Every column owners may read (failure_reason and free_ip_hash are left out
+// on purpose).
 export const COLUMNS =
-  "id, owner_id, letter_id, status, request, consent_at, amount_cents, currency, coupon_id, stripe_checkout_session_id, stripe_payment_intent_id, stripe_refund_id, receipt_url, design_id, paid_at, design_started_at, finished_at, refunded_at, created_at"
+  "id, owner_id, letter_id, status, request, consent_at, amount_cents, currency, coupon_id, free_day, stripe_checkout_session_id, stripe_payment_intent_id, stripe_refund_id, receipt_url, design_id, paid_at, design_started_at, finished_at, refunded_at, created_at"
 
 const STATUSES: readonly PurchaseStatus[] = ["pending", "paid", "designing", "done", "failed", "refunded"]
 
@@ -78,6 +84,7 @@ export function toPurchase(row: Row): Purchase {
     amountCents: row.amount_cents,
     currency: row.currency,
     couponId: row.coupon_id ?? null,
+    freeDay: row.free_day ?? null,
     checkoutSessionId: row.stripe_checkout_session_id,
     paymentIntentId: row.stripe_payment_intent_id,
     refundId: row.stripe_refund_id,
@@ -221,10 +228,12 @@ export async function claimForDesign(purchaseId: string): Promise<Purchase | nul
   return data ? toPurchase(data) : null
 }
 
+// A free purchase keeps its address hash only while its design is on its way
+// (0012_free_designs.sql); done and failed both clear it.
 export async function markDone(purchaseId: string, designId: string): Promise<void> {
   const { error } = await createAdminClient()
     .from("purchases")
-    .update({ status: "done", design_id: designId, finished_at: new Date().toISOString(), failure_reason: null })
+    .update({ status: "done", design_id: designId, finished_at: new Date().toISOString(), failure_reason: null, free_ip_hash: null })
     .eq("id", purchaseId)
     .eq("status", "designing")
   if (error) throw new Error(`Could not mark the purchase done: ${error.message}`)
@@ -243,7 +252,7 @@ export async function markRefunded(purchaseId: string, refundId: string, reason:
 export async function markFailed(purchaseId: string, reason: string): Promise<void> {
   const { error } = await createAdminClient()
     .from("purchases")
-    .update({ status: "failed", finished_at: new Date().toISOString(), failure_reason: reason.slice(0, 1000) })
+    .update({ status: "failed", finished_at: new Date().toISOString(), failure_reason: reason.slice(0, 1000), free_ip_hash: null })
     .eq("id", purchaseId)
     .in("status", ["pending", "paid", "designing"])
   if (error) throw new Error(`Could not mark the purchase failed: ${error.message}`)
@@ -256,5 +265,16 @@ export async function markFailed(purchaseId: string, reason: string): Promise<vo
 export async function returnCouponUse(purchaseId: string, reason: string): Promise<boolean> {
   const { data, error } = await createAdminClient().rpc("return_coupon_use", { p_purchase_id: purchaseId, p_reason: reason.slice(0, 1000) })
   if (error) throw new Error(`Could not give the code's use back: ${error.message}`)
+  return data === true
+}
+
+// A free purchase whose design could not be made: marks it failed, clears its
+// address hash and gives the day's free design back, once
+// (return_free_design in 0012_free_designs.sql), in one transaction. False
+// when there was nothing to give back: not a free purchase, or no longer paid
+// or designing (a second caller).
+export async function returnFreeDesign(purchaseId: string, reason: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("return_free_design", { p_purchase_id: purchaseId, p_reason: reason.slice(0, 1000) })
+  if (error) throw new Error(`Could not give the free design back: ${error.message}`)
   return data === true
 }

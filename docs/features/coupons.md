@@ -4,6 +4,8 @@
 
 A coupon code makes the €2.99 personalised wrapper free ([billing.md](billing.md)). In the "Make it unique" dialog a quiet **Have a code?** link reveals a code field. With a valid code nothing is paid: there is no Stripe Checkout, no card, no consent box, and guests (anonymous accounts from the gift finder) are not sent to create an account. The design starts straight away, and the dialog closes on the same status card a paid purchase shows after Checkout. The Purchases tab lists the wrapper as **Free with a code**.
 
+Since issue #85 the dialog offers the day's free designs first ([free-designs.md](free-designs.md)); "Have a code?" appears once a connection has used its three, and codes work as below.
+
 The developer uses codes to test the whole flow without paying (issue #72), and to hand out on a printed poster: a QR code opens `majnu.app/c/LAYLA100`, which remembers the code, so the dialog opens with it already filled in. Each code has a number of uses, may expire, can be switched off, and **each person can use a code once**. Codes are made, listed and switched off with `npm run coupon`.
 
 ## How it works

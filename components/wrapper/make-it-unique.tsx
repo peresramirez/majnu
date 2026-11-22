@@ -17,6 +17,12 @@
 //   same card the paid return shows. The paid path is unchanged. A code the
 //   browser brought from a poster's short link (/c/<code>) comes back from
 //   GET /api/purchases, and the dialog then opens with it filled in.
+// * Free designs (docs/features/free-designs.md, issue #85): while this
+//   connection has some of today's left (GET /api/purchases says how many),
+//   the button says so and the dialog leads with them: a design request,
+//   "Free today: 2 of 3 left" and "Make my design, free". No account step,
+//   no consent box and no code. It posts to POST /api/designs/free and closes
+//   on the status card. Once they are used up, the dialog is as above.
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
@@ -25,7 +31,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { focusRing, primaryButton, secondaryButton } from "@/components/app/styles"
 import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
 import { normaliseCouponCode } from "@/lib/billing/coupon-code"
-import type { PurchaseView, WrapperState } from "@/lib/billing/view"
+import type { FreeDesigns, PurchaseView, WrapperState } from "@/lib/billing/view"
 import { PurchaseStatusCard } from "./purchase-status"
 
 type Props = {
@@ -38,6 +44,9 @@ type Props = {
 }
 
 const EXAMPLES = ["A 1950s cinema ticket by the sea", "Pressed flowers on old paper", "A night sky with our two stars"]
+
+// The button while today's free designs last, instead of "Make it unique, €2.99".
+const FREE_CTA = "Make it unique, free today"
 
 export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }: Props) {
   const [state, setState] = useState<WrapperState | null>(null)
@@ -81,11 +90,32 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
     )
   }
 
-  function redeemed(next: PurchaseView) {
+  const freeDesigns = state.freeDesigns ?? null
+  const freeLeft = freeDesigns !== null && freeDesigns.left > 0
+
+  // A code was redeemed, or a free design claimed (which also says how many
+  // are left today).
+  function redeemed(next: PurchaseView, nextFree?: FreeDesigns | null) {
     focusCard.current = true
     setOpen(false)
-    // The server forgot a remembered code once it was redeemed.
-    setState((current) => (current ? { ...current, purchase: next, rememberedCode: null } : current))
+    setState((current) =>
+      current
+        ? {
+            ...current,
+            purchase: next,
+            // The server forgot a remembered code once it was redeemed.
+            rememberedCode: next.freeWithCode ? null : current.rememberedCode,
+            freeDesigns: nextFree === undefined ? current.freeDesigns : nextFree,
+          }
+        : current,
+    )
+  }
+
+  // Another tab (or someone else on this connection) used today's last free
+  // design, or they are not offered any more: the dialog falls back to a code
+  // and payment.
+  function freeGone(next: FreeDesigns | null) {
+    setState((current) => (current ? { ...current, freeDesigns: next } : current))
   }
 
   return (
@@ -94,7 +124,9 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
         <p className="mb-2.5 text-[13px] leading-relaxed text-night-lilac">
           {purchase.freeWithCode
             ? "Your last design could not be made. Your code works again, so you can try once more."
-            : `Your last design could not be made${purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.`}
+            : purchase.freeDesign
+              ? "Your last design could not be made, so it didn't count. You can try again."
+              : `Your last design could not be made${purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.`}
         </p>
       )}
       <WrapperDialog
@@ -103,13 +135,15 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
         letterId={letterId}
         account={state.account}
         rememberedCode={state.rememberedCode ?? null}
+        freeDesigns={freeDesigns}
         returnTo={returnTo}
         onRedeemed={redeemed}
+        onFreeGone={freeGone}
       >
         {/* A Dialog.Trigger, so focus comes back to it when the dialog closes. */}
         <button type="button" className={`w-full ${secondaryButton} ring-night-rose/50 hover:ring-night-rose`}>
           <Sparkles className="h-4 w-4 text-night-rose" aria-hidden="true" />
-          {wrapper.cta}
+          {freeLeft ? FREE_CTA : wrapper.cta}
         </button>
       </WrapperDialog>
     </div>
@@ -122,8 +156,10 @@ function WrapperDialog({
   letterId,
   account,
   rememberedCode,
+  freeDesigns,
   returnTo,
   onRedeemed,
+  onFreeGone,
   children,
 }: {
   open: boolean
@@ -131,8 +167,10 @@ function WrapperDialog({
   letterId: string
   account: WrapperState["account"]
   rememberedCode: string | null
+  freeDesigns: FreeDesigns | null
   returnTo?: string
-  onRedeemed: (purchase: PurchaseView) => void
+  onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
+  onFreeGone: (freeDesigns: FreeDesigns | null) => void
   children: ReactNode
 }) {
   return (
@@ -141,7 +179,15 @@ function WrapperDialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] flex items-end justify-center bg-night-deep/80 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 sm:items-center sm:p-6">
           <DialogPrimitive.Content className="max-h-[calc(100dvh-24px)] w-full overflow-y-auto rounded-t-[24px] bg-night-plum p-5 pb-[max(20px,var(--safe-bottom))] text-night-petal outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom-4 sm:max-w-[480px] sm:rounded-[24px] sm:p-7 sm:shadow-2xl sm:shadow-black/40">
-            <DialogBody letterId={letterId} account={account} rememberedCode={rememberedCode} returnTo={returnTo} onRedeemed={onRedeemed} />
+            <DialogBody
+              letterId={letterId}
+              account={account}
+              rememberedCode={rememberedCode}
+              freeDesigns={freeDesigns}
+              returnTo={returnTo}
+              onRedeemed={onRedeemed}
+              onFreeGone={onFreeGone}
+            />
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
@@ -155,17 +201,40 @@ function DialogBody({
   letterId,
   account,
   rememberedCode,
+  freeDesigns,
   returnTo,
   onRedeemed,
+  onFreeGone,
 }: {
   letterId: string
   account: WrapperState["account"]
   rememberedCode: string | null
+  freeDesigns: FreeDesigns | null
   returnTo?: string
-  onRedeemed: (purchase: PurchaseView) => void
+  onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
+  onFreeGone: (freeDesigns: FreeDesigns | null) => void
 }) {
-  const [withCode, setWithCode] = useState(rememberedCode !== null)
-  const accountStep = account === "guest" && !withCode
+  // While one of today's free designs is left, the dialog offers only that.
+  const free = freeDesigns !== null && freeDesigns.left > 0 ? freeDesigns : null
+  const [withCode, setWithCode] = useState(rememberedCode !== null && free === null)
+  // Why the free design was refused, once the dialog has fallen back.
+  const [notice, setNotice] = useState<string | null>(null)
+  const noticeRef = useRef<HTMLParagraphElement>(null)
+  const accountStep = account === "guest" && !withCode && free === null
+
+  // The free form's button is gone for a guest (the account step replaces
+  // it): put focus on the reason instead of losing it.
+  useEffect(() => {
+    if (!notice) return
+    const active = document.activeElement
+    if (!active || active === document.body || !active.isConnected) noticeRef.current?.focus()
+  }, [notice])
+
+  function freeRefused(next: FreeDesigns | null, message: string) {
+    setNotice(message)
+    onFreeGone(next)
+  }
+
   return (
     <>
       <div className="flex items-start justify-between gap-4">
@@ -182,17 +251,29 @@ function DialogBody({
           <X className="h-5 w-5" aria-hidden="true" />
         </DialogPrimitive.Close>
       </div>
+      {notice && (
+        <p
+          ref={noticeRef}
+          tabIndex={-1}
+          role="alert"
+          className="mt-3 rounded-2xl bg-night-velvet px-4 py-3 text-[14px] leading-relaxed text-night-petal outline-none ring-1 ring-inset ring-night-petal/10"
+        >
+          {notice}
+        </p>
+      )}
       {accountStep ? (
         <GuestStep letterId={letterId} onHaveCode={() => setWithCode(true)} />
       ) : (
         <RequestStep
           letterId={letterId}
           returnTo={returnTo}
+          free={free}
           withCode={withCode}
           initialCode={rememberedCode ?? ""}
           onWithCodeChange={setWithCode}
           noCodeLabel={account === "guest" ? "I don't have a code" : "Pay instead"}
           onRedeemed={onRedeemed}
+          onFreeRefused={freeRefused}
         />
       )}
     </>
@@ -235,19 +316,24 @@ type Refusal = { error?: string; reason?: string }
 function RequestStep({
   letterId,
   returnTo,
+  free,
   withCode,
   initialCode,
   onWithCodeChange,
   noCodeLabel,
   onRedeemed,
+  onFreeRefused,
 }: {
   letterId: string
   returnTo?: string
+  // Today's free designs, while one is left: the form then makes a free one.
+  free: FreeDesigns | null
   withCode: boolean
   initialCode: string
   onWithCodeChange: (withCode: boolean) => void
   noCodeLabel: string
-  onRedeemed: (purchase: PurchaseView) => void
+  onRedeemed: (purchase: PurchaseView, freeDesigns?: FreeDesigns | null) => void
+  onFreeRefused: (freeDesigns: FreeDesigns | null, message: string) => void
 }) {
   const [request, setRequest] = useState("")
   const [consent, setConsent] = useState(false)
@@ -283,7 +369,8 @@ function RequestStep({
   }, [refocusCode])
 
   const trimmed = request.trim()
-  const ready = trimmed.length >= 3 && (withCode ? code.trim().length > 0 : consent) && !busy
+  // Nothing to pay: free and code designs need no consent.
+  const ready = trimmed.length >= 3 && (free ? true : withCode ? code.trim().length > 0 : consent) && !busy
 
   function toggleCode(next: boolean) {
     prefilled.current = false
@@ -300,6 +387,7 @@ function RequestStep({
       textarea.current?.focus()
       return
     }
+    if (free) return claimFree()
     if (withCode) return redeem()
     if (!consent) {
       setError("Tick the box to agree that we start your design straight away.")
@@ -324,6 +412,35 @@ function RequestStep({
         return
       }
       setError(body.error ?? "Something went wrong opening the payment page. Try again.")
+    } catch {
+      setError("We couldn't reach Majnu just now. Check your connection and try again.")
+    }
+    setBusy(false)
+  }
+
+  // One of today's free designs: no Checkout, no consent and no code.
+  async function claimFree() {
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/designs/free", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ letterId, request: trimmed }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { purchase?: PurchaseView; freeDesigns?: FreeDesigns | null } & Refusal
+      if (response.ok && body.purchase) {
+        onRedeemed(body.purchase, body.freeDesigns ?? null)
+        return
+      }
+      if (body.reason === "free_used_up" || body.reason === "free_unavailable") {
+        // Fall back to a code or payment; what a member typed stays.
+        setBusy(false)
+        const next = body.reason === "free_used_up" ? (body.freeDesigns ?? { left: 0, perDay: free?.perDay ?? 0 }) : null
+        onFreeRefused(next, body.error ?? "Today's free designs are used up.")
+        return
+      }
+      setError(body.error ?? "Something went wrong starting your design. Try again.")
     } catch {
       setError("We couldn't reach Majnu just now. Check your connection and try again.")
     }
@@ -373,7 +490,7 @@ function RequestStep({
     <form onSubmit={submit} noValidate aria-busy={busy}>
       <DialogPrimitive.Description className="mt-3 text-[15px] leading-relaxed text-night-lilac">
         Instead of one of our designs, Majnu makes a page for this gift alone, around the person and what you want to say. It is ready in
-        about two minutes. {withCode ? "Free with your code." : `${wrapper.price} once, VAT included.`}
+        about two minutes{free ? ", and free today." : withCode ? ". Free with your code." : `. ${wrapper.price} once, VAT included.`}
       </DialogPrimitive.Description>
 
       <label htmlFor={requestId} className="mt-5 block text-sm font-semibold text-night-petal">
@@ -415,7 +532,7 @@ function RequestStep({
         ))}
       </div>
 
-      {withCode ? (
+      {free ? null : withCode ? (
         <div className="mt-5">
           <div className="flex items-end justify-between gap-3">
             <label htmlFor={codeId} className="block text-sm font-semibold text-night-petal">
@@ -472,12 +589,20 @@ function RequestStep({
         </p>
       )}
 
-      <button type="submit" aria-disabled={!ready} className={`mt-5 w-full ${primaryButton} aria-disabled:opacity-60`}>
+      {free && (
+        <p className="mt-5 text-[13px] leading-snug text-night-lilac">
+          Free today: {free.left} of {free.perDay} left
+        </p>
+      )}
+
+      <button type="submit" aria-disabled={!ready} className={`${free ? "mt-2.5" : "mt-5"} w-full ${primaryButton} aria-disabled:opacity-60`}>
         {busy ? (
           <>
             <MoonPhase lit={0.5} size={18} className="motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]" />
-            {withCode ? "Starting your design…" : "Opening the payment page…"}
+            {free || withCode ? "Starting your design…" : "Opening the payment page…"}
           </>
+        ) : free ? (
+          "Make my design, free"
         ) : withCode ? (
           "Make my design"
         ) : (
@@ -485,12 +610,16 @@ function RequestStep({
         )}
       </button>
       <p className="mt-3 text-center text-[12px] leading-relaxed text-night-lilac/80">
-        {withCode ? "Nothing to pay. If the design cannot be made, your code works again." : "Paid securely through Stripe. If the design cannot be made, you get every cent back."}{" "}
+        {free
+          ? "Nothing to pay. If the design cannot be made, it doesn't count."
+          : withCode
+            ? "Nothing to pay. If the design cannot be made, your code works again."
+            : "Paid securely through Stripe. If the design cannot be made, you get every cent back."}{" "}
         <Link href="/terms#wrapper" className={`rounded underline underline-offset-4 ${focusRing}`} target="_blank">
           Terms
         </Link>
       </p>
-      {!withCode && (
+      {!withCode && !free && (
         <p className="mt-1 text-center">
           <button ref={haveCode} type="button" onClick={() => toggleCode(true)} disabled={busy} className={quietLink}>
             Have a code?
