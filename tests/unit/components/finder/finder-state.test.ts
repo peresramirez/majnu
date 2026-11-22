@@ -52,6 +52,14 @@ describe("finderReducer", () => {
     expect(s.context).toEqual({ language: "de", relationship: "mother", ageRange: [60, 60] })
   })
 
+  it("clears the step when Majnu's words arrive, so the loader says 'Thinking…' or nothing", () => {
+    const searching = run([{ type: "send", text: "x" }, ev({ type: "text", delta: "Let me look." }), ev({ type: "status", label: "Searching shops…" })])
+    expect(searching.status).toBe("Searching shops…")
+    const writing = run([{ type: "send", text: "x" }, ev({ type: "status", label: "Searching shops…" }), ev({ type: "text", delta: "Found some." })])
+    expect(writing.status).toBeNull()
+    expect(writing.streaming).toBe(true)
+  })
+
   it("counts status steps and clears the status when done", () => {
     const s = run([{ type: "send", text: "x" }, ev({ type: "status", label: "Looking…" }), ev({ type: "status", label: "Comparing…" })])
     expect(s.status).toBe("Comparing…")

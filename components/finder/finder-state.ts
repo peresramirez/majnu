@@ -128,7 +128,8 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
     case "session":
       return { ...state, sessionId: event.sessionId }
     case "text":
-      return appendText(state, event.delta)
+      // Words arriving end the step that was running ("Searching shops…").
+      return { ...appendText(state, event.delta), status: null }
     case "status":
       return { ...state, status: event.label, steps: state.steps + 1 }
     case "context":

@@ -182,8 +182,13 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
   const open = openQuestions(items)
   const lastOpenId = open.length > 0 ? open[open.length - 1].id : null
   const picked = open.some((q) => pickedAnswer(state, q.id)) || (showsProfileField(state) && (state.profile.none || state.profile.link.trim() !== ""))
-  // Between sending and the first words: what Majnu is doing, beside its mark.
-  const waiting = streaming && items[items.length - 1]?.role === "user"
+  // While Majnu works, a small loader closes the conversation (developer's
+  // request, 22 November): before its first words, while it searches or reads
+  // a profile, and between messages while it thinks. With the step it is on
+  // ("Searching shops…"), "Thinking…" when there is none, and only the dots
+  // while its words are arriving.
+  const lastRole = items[items.length - 1]?.role
+  const loaderLabel = state.status ?? (lastRole === "user" ? "Reading your message…" : lastRole === "assistant" ? null : "Thinking…")
   return (
     <ol className="space-y-5" aria-label="Conversation with Majnu">
       {items.map((item, i) => {
@@ -363,11 +368,20 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
             )
         }
       })}
-      {waiting && (
-        <li aria-hidden="true">
+      {streaming && (
+        <li aria-hidden="true" data-finder-loader>
           <Said>
-            <span className="block text-[15px] text-night-lilac motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]">
-              {state.status ?? "Reading your message…"}
+            <span className="flex items-center gap-2.5 text-[15px] text-night-lilac">
+              <span className="flex h-5 items-center gap-1">
+                {[0, 1, 2].map((dot) => (
+                  <span
+                    key={dot}
+                    className="h-1.5 w-1.5 rounded-full bg-night-rose opacity-60 motion-safe:animate-[finder-dot_1.2s_ease-in-out_infinite]"
+                    style={{ animationDelay: `${dot * 0.16}s` }}
+                  />
+                ))}
+              </span>
+              {loaderLabel && <span className="motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]">{loaderLabel}</span>}
             </span>
           </Said>
         </li>
