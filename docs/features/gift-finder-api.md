@@ -62,6 +62,10 @@ flowchart TD
 - `find_gifts.followUp` is one question that would most improve the next search. It costs no extra request: it comes with the search call, and the server streams it after the options only when `canSearch()` says another search is allowed in the session. Majnu once asked it again as the first of its personalising questions (issue #82): the prompt now says never to repeat the followUp question, and the search's tool result names it ("…your follow-up question under them: "…". Don't ask that question again.").
 - `ask_questions` still checks `canSearch()` first, so it never asks questions whose answers could not be searched.
 
+### Photos and documents (issue #77)
+
+A message may carry up to three photos or documents, as `multipart/form-data` (the request as JSON in a `request` part, the files in `file` parts). The route checks each file's real type from its first bytes and refuses anything else before any session or model call (400, 413, 415). Inside the stream, before Majnu answers, the files are claimed (6 per session, 12 per visitor a day, `MAJNU_DAILY_FILE_CAP` for the site), read once each by a small reader call, and only short filtered notes are kept, in `context.notes`. Majnu's conversation gets a `<shared_files>` text block with the notes, never the file; `find_gifts.notes` carries the notes that still hold, and the researcher's brief and the wrap brief get them too. All of it, with the checks, is in [finder-files.md](finder-files.md).
+
 ### On the wrap step (issues #70 and #71)
 
 ```mermaid

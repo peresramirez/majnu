@@ -82,6 +82,10 @@ Layout:
 - **Finder dialog** (`finder-dialog.tsx`): from md up a panel 720 px wide, 8 % of the screen below the top, as tall as what it holds and at most 820 px or the screen; it grows downwards as a reply streams in. Ready to send has a fixed height and 960 px, because the preview fills it. On phones a bottom sheet 8 px below the top of the visible screen. `useVisualViewportVars` keeps `--vv-height` and `--vv-top` on `<html>` in step with `window.visualViewport` while a sheet is open, so when the keyboard opens the sheet shrinks to the space above it and the message box stays in view. The message box holds the microphone (`VoiceButton`, see [voice-input.md](voice-input.md)) and Send, both 40 px circles on its right.
 - **Preview dialog** (`preview-dialog.tsx`): a gift page in an iframe, with its title, "Open in a new tab" and a close button. A 1120 × 900 px panel from md up, a full-height sheet on phones. Escape, the close button and a click outside close it, and focus goes back to whatever opened it. On the landing page, `PreviewLinks` catches plain clicks on links marked `data-preview` (the three examples); a middle click or Cmd/Ctrl-click still opens the page in a new tab, and without JavaScript the links work as before.
 
+### Photos and documents (issue #77)
+
+Both message boxes (the landing dialog and the app's panel) have a paperclip button on the left (on an iPhone it offers the photo library, the camera and Files), take pasted images, and take files dropped anywhere on the finder on a desktop, with an overlay while dragging. Up to three files wait above the box as small previews, each with a remove button that keeps keyboard focus; photos are scaled to 1568 px and re-encoded as JPEG first. Sending puts the file names on the visitor's message, and Majnu's notes show as chips ("From what you shared: …") that put `About "…": ` in the box when tapped. The attach and send buttons keep focus in the box, so the phone's tab bar does not come back mid-tap. Details in [finder-files.md](finder-files.md).
+
 ## Pieces
 
 | Piece | Job |
