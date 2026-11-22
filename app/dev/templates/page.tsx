@@ -53,6 +53,7 @@ const STATES: { title: string; links: [string, string][] }[] = [
     title: "3D wedding envelope",
     links: [
       ["As a guest (gift list)", "/dev/templates/wedding-envelope-3d?guest=1"],
+      ["With a voice note", "/dev/templates/wedding-envelope-3d?audio=1"],
       ["No event", "/dev/templates/wedding-envelope-3d?event=0"],
       ["Rose", "/dev/templates/wedding-envelope-3d?palette=rose"],
       ["Ink", "/dev/templates/wedding-envelope-3d?palette=ink"],
