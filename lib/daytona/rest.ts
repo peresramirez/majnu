@@ -25,6 +25,10 @@ export class DaytonaApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    // Daytona's own error code and message, when it sent them, for deciding
+    // whether the fallback key should take over (lib/providers/classify.ts).
+    readonly code?: string,
+    readonly apiMessage: string = message,
   ) {
     super(message)
   }
@@ -51,15 +55,18 @@ export function restSandboxes(settings: RestSettings, fetchImpl: typeof fetch = 
     })
     if (!response.ok) {
       const text = await response.text().catch(() => "")
-      // Daytona answers {"message": "..."}; the job matches on that text (the tier fallback).
+      // Daytona answers {"message": "...", "code"?: "..."}; the job matches on
+      // that text (the tier fallback) and the code (the key fallback).
       let message = text.slice(0, 500)
+      let code: string | undefined
       try {
-        const parsed = JSON.parse(text) as { message?: unknown }
+        const parsed = JSON.parse(text) as { message?: unknown; code?: unknown }
         if (typeof parsed.message === "string") message = parsed.message
+        if (typeof parsed.code === "string") code = parsed.code
       } catch {
         // Not JSON: keep the text.
       }
-      throw new DaytonaApiError(`Daytona ${rest.method ?? "GET"} ${new URL(url).pathname} failed (${response.status}): ${message}`, response.status)
+      throw new DaytonaApiError(`Daytona ${rest.method ?? "GET"} ${new URL(url).pathname} failed (${response.status}): ${message}`, response.status, code, message)
     }
     return response
   }

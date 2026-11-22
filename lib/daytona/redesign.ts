@@ -22,12 +22,27 @@
 // lib/billing/fulfil.ts); a developer runs it from scripts/daytona/redesign.mts.
 // Daytona is reached with fetch (lib/daytona/rest.ts), because the SDK does
 // not bundle for Workers.
+//
+// Keys (lib/providers, issue #67): the sandbox starts with DAYTONA_API_KEY, or
+// DAYTONA_API_KEY_FALLBACK when Daytona refuses the primary for its key, quota
+// or billing. Claude Code gets DAYTONA_ANTHROPIC_API_KEY (else
+// ANTHROPIC_API_KEY), or ANTHROPIC_API_KEY_FALLBACK when a free token count
+// shows the primary refused. A run on a fallback key is counted against that
+// key's monthly cap: reserved before the sandbox starts, settled after it is
+// deleted with what Claude Code reported and how long the sandbox ran.
 import "server-only"
 import { getModel } from "@/lib/agents/client"
+import { chooseSandboxAnthropicKey, type SandboxKey } from "@/lib/providers/anthropic"
+import { daytonaSwitchReason } from "@/lib/providers/classify"
+import { daytonaCostUsd } from "@/lib/providers/costs"
+import { callWithFallbackKey, type KeySlot } from "@/lib/providers/fallback"
+import { fallbackKey, readKey } from "@/lib/providers/keys"
+import { reserveFallbackSpend, settleFallbackSpend, type Reservation } from "@/lib/providers/ledger"
 import { LetterContent, TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
+  CLAUDE_RUN_RESERVE_USD,
   DEFAULT_API_URL,
   DEFAULT_SNAPSHOT,
   DEFAULT_TARGET,
@@ -40,9 +55,10 @@ import {
   PROJECT_DIR,
   RUN_TIME_LIMIT_SECONDS,
   SANDBOX_DOMAIN_ALLOW_LIST,
+  SANDBOX_RESOURCES,
   SANDBOX_TTL_MINUTES,
 } from "./config"
-import { restSandboxes } from "./rest"
+import { DaytonaApiError, restSandboxes } from "./rest"
 import { checkDesignHtml } from "./validate"
 
 export class RedesignError extends Error {
@@ -86,7 +102,11 @@ export type Sandboxes = {
 type Db = ReturnType<typeof createAdminClient>
 
 export type RedesignDeps = {
+  // The Daytona API for one key. Tests pass `sandboxes` for every key.
+  sandboxesFor: (daytonaKey: string) => Sandboxes
   sandboxes: Sandboxes
+  // The Anthropic key for Claude Code (lib/providers/anthropic.ts).
+  chooseAnthropicKey: (model: string) => Promise<SandboxKey>
   db: Db
   log: (line: string) => void
 }
@@ -105,7 +125,7 @@ export type Settings = {
 // runs a model on text a stranger wrote, so its key should be cheap to lose.
 // Without it, the app's own ANTHROPIC_API_KEY is used.
 export function readSettings(env: Record<string, string | undefined> = process.env): Settings {
-  const daytonaKey = env.DAYTONA_API_KEY?.trim()
+  const daytonaKey = env.DAYTONA_API_KEY?.trim() || fallbackKey("daytona", env)
   const anthropicKey = env.DAYTONA_ANTHROPIC_API_KEY?.trim() || env.ANTHROPIC_API_KEY?.trim()
   if (!daytonaKey) throw new RedesignError("DAYTONA_API_KEY is not set")
   if (!anthropicKey) throw new RedesignError("Neither DAYTONA_ANTHROPIC_API_KEY nor ANTHROPIC_API_KEY is set")
@@ -266,52 +286,72 @@ export async function redesignLetter(letterId: string, request: string, deps: Pa
   if (!UUID.test(letterId)) throw new RedesignError("The letter id is not a UUID")
   const brief = cleanRequest(request)
   const settings = readSettings()
-  const secrets = [settings.anthropicKey, settings.daytonaKey, process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.STRIPE_SECRET_KEY]
+  const secrets = [
+    settings.anthropicKey,
+    settings.daytonaKey,
+    readKey("ANTHROPIC_API_KEY_FALLBACK"),
+    readKey("DAYTONA_API_KEY_FALLBACK"),
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.STRIPE_SECRET_KEY,
+  ]
     .map((s) => s?.trim() ?? "")
     .filter((s) => s.length >= 8)
   const write = deps.log ?? ((line: string) => console.log(`[redesign] ${line}`))
   const log = (line: string) => write(redact(line, secrets))
   const db = deps.db ?? createAdminClient()
-  const sandboxes = deps.sandboxes ?? daytonaSandboxes(settings)
+  const sandboxesFor = deps.sandboxesFor ?? (deps.sandboxes ? () => deps.sandboxes! : (daytonaKey: string) => daytonaSandboxes({ ...settings, daytonaKey }))
 
   const letter = await loadLetter(db, letterId)
   const gifts = letter.content.gifts
   const allowedLinks = gifts.map((g) => g.url).filter((u): u is string => typeof u === "string" && u.startsWith("https://"))
   const giftCodes = gifts.map((g) => g.code).filter((c): c is string => typeof c === "string" && c.trim() !== "")
 
+  // Claude Code's key first: without a usable one there is no point starting a sandbox.
+  let claude: SandboxKey
+  try {
+    claude = await (deps.chooseAnthropicKey ?? chooseSandboxAnthropicKey)(settings.model)
+  } catch (error) {
+    throw new RedesignError(`No Anthropic key for Claude Code: ${redact(errorText(error), secrets)}`)
+  }
+  let claudeReservation: Reservation | null = null
+  if (claude.slot === "fallback") {
+    claudeReservation = await reserveFallbackSpend("anthropic", CLAUDE_RUN_RESERVE_USD)
+    if (!claudeReservation) throw new RedesignError("The Anthropic fallback key has reached its monthly cap")
+    log(`Claude Code runs on ${claude.name}`)
+  }
+  const runSettings: Settings = { ...settings, anthropicKey: claude.key }
+
   // A label only this run carries, to find the sandbox if create fails late.
   const job = crypto.randomUUID()
   const labels = { app: "majnu", purpose: "redesign", job }
-  log(`starting a sandbox from ${settings.snapshot} in ${settings.target}`)
+  const sandboxStarted = Date.now()
   let sandbox: SandboxHandle
+  let daytonaSlot: KeySlot = "primary"
+  let daytonaReservation: Reservation | null = null
   try {
-    sandbox = await createSandbox(
-      sandboxes,
-      {
-        snapshot: settings.snapshot,
-        labels,
-        ephemeral: true,
-        ttlMinutes: SANDBOX_TTL_MINUTES,
-        domainAllowList: SANDBOX_DOMAIN_ALLOW_LIST,
-      },
-      log,
-    )
+    ;({ result: sandbox, slot: daytonaSlot, reservation: daytonaReservation } = await startSandbox(sandboxesFor, settings, labels, log))
   } catch (error) {
-    const removed = await sandboxes.deleteByLabels({ job }).catch(() => 0)
-    if (removed) log(`deleted ${removed} sandbox(es) left by the failed start`)
+    if (claudeReservation) await settleFallbackSpend(claudeReservation, 0)
     throw new RedesignError(`Could not start a sandbox: ${redact(errorText(error), secrets)}`)
   }
-  log(`sandbox ${sandbox.id} is up`)
+  log(`sandbox ${sandbox.id} is up${daytonaSlot === "fallback" ? " (on DAYTONA_API_KEY_FALLBACK)" : ""}`)
 
   let html = ""
   let run: ClaudeRun | null = null
   let failure: unknown = null
   try {
-    ;({ html, run } = await makePage(sandbox, letter, brief, settings, log, secrets))
+    ;({ html, run } = await makePage(sandbox, letter, brief, runSettings, log, secrets))
   } catch (error) {
     failure = error
   }
   const sandboxDeleted = await deleteSandbox(sandbox, log)
+  // A failed run keeps its whole reservation: it may have spent all of it.
+  if (claudeReservation) await settleFallbackSpend(claudeReservation, run?.costUsd ?? claudeReservation.usd)
+  if (daytonaReservation) {
+    // Not deleted means the TTL removes it: count it as running until then.
+    const seconds = sandboxDeleted ? (Date.now() - sandboxStarted) / 1000 : SANDBOX_TTL_MINUTES * 60
+    await settleFallbackSpend(daytonaReservation, daytonaCostUsd(seconds, SANDBOX_RESOURCES))
+  }
   if (failure) throw failure instanceof RedesignError ? failure : new RedesignError(redact(errorText(failure), secrets))
 
   const check = checkDesignHtml(html, { allowedLinks, giftCodes, secrets })
@@ -385,6 +425,39 @@ async function makePage(
 
   const html = (await sandbox.fs.downloadFile(OUTPUT_FILE, 60)).toString("utf8")
   return { html, run }
+}
+
+// Starts the sandbox with DAYTONA_API_KEY, or with DAYTONA_API_KEY_FALLBACK
+// when Daytona refuses the primary for its key, quota or billing
+// (lib/providers/fallback.ts). A start that fails leaves no sandbox behind:
+// whatever carries this job's label is deleted with the same key.
+async function startSandbox(
+  sandboxesFor: (daytonaKey: string) => Sandboxes,
+  settings: Settings,
+  labels: Record<string, string>,
+  log: (line: string) => void,
+) {
+  return callWithFallbackKey<SandboxHandle>({
+    provider: "daytona",
+    // Until the sandbox is deleted its cost is unknown; at most it runs until its TTL.
+    reserveUsd: daytonaCostUsd(SANDBOX_TTL_MINUTES * 60, SANDBOX_RESOURCES),
+    run: async (daytonaKey, slot) => {
+      const sandboxes = sandboxesFor(daytonaKey)
+      log(`starting a sandbox from ${settings.snapshot} in ${settings.target}${slot === "fallback" ? " with DAYTONA_API_KEY_FALLBACK" : ""}`)
+      try {
+        return await createSandbox(
+          sandboxes,
+          { snapshot: settings.snapshot, labels, ephemeral: true, ttlMinutes: SANDBOX_TTL_MINUTES, domainAllowList: SANDBOX_DOMAIN_ALLOW_LIST },
+          log,
+        )
+      } catch (error) {
+        const removed = await sandboxes.deleteByLabels({ job: labels.job }).catch(() => 0)
+        if (removed) log(`deleted ${removed} sandbox(es) left by the failed start`)
+        throw error
+      }
+    },
+    switchReason: (error) => (error instanceof DaytonaApiError ? daytonaSwitchReason(error.status, error.code, error.apiMessage) : null),
+  })
 }
 
 // Daytona's Tier 1 and 2 accounts refuse a per-sandbox allow list: their own

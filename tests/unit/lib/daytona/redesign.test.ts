@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+// The fallback keys' spend ledger (lib/providers/ledger.ts): only reached when
+// a fallback key is used.
+const ledger = vi.hoisted(() => ({
+  reserveFallbackSpend: vi.fn(async (provider: string, usd: number) => ({ provider, month: "2026-11-01", usd }) as { provider: string; month: string; usd: number } | null),
+  settleFallbackSpend: vi.fn(async () => {}),
+}))
+vi.mock("@/lib/providers/ledger", () => ledger)
+
 import { MAX_DESIGN_BYTES, OUTPUT_FILE, PROJECT_DIR, RUN_TIME_LIMIT_SECONDS } from "@/lib/daytona/config"
 import {
   buildClaudeCommand,
@@ -16,6 +24,9 @@ import {
   type Sandboxes,
 } from "@/lib/daytona/redesign"
 import type { LetterContent } from "@/lib/letters/schema"
+import { CLAUDE_RUN_RESERVE_USD } from "@/lib/daytona/config"
+import { DaytonaApiError } from "@/lib/daytona/rest"
+import { isCoolingOff, resetCoolingOff } from "@/lib/providers/keys"
 
 const LETTER_ID = "6e004a41-de61-4a68-addf-7aef8469fc9e"
 const ANTHROPIC_KEY = "sk-ant-api03-unit-test-anthropic-key"
@@ -166,7 +177,7 @@ function setup(script: SandboxScript = {}, row: Row = letterRow()) {
   const { sandbox, calls } = fakeSandbox(script)
   const { sandboxes, created, cleanups } = fakeSandboxes(sandbox)
   const logs: string[] = []
-  const deps = { db, sandboxes, log: (line: string) => logs.push(line) }
+  const deps: Partial<RedesignDeps> & Pick<RedesignDeps, "db" | "sandboxes" | "log"> = { db, sandboxes, log: (line: string) => logs.push(line) }
   return { deps, inserts, calls, created, cleanups, logs }
 }
 
@@ -175,6 +186,9 @@ beforeEach(() => {
   vi.stubEnv("DAYTONA_API_KEY", DAYTONA_KEY)
   vi.stubEnv("ANTHROPIC_API_KEY", ANTHROPIC_KEY)
   vi.stubEnv("DAYTONA_ANTHROPIC_API_KEY", "")
+  // No fallback keys: the job behaves exactly as without issue #67.
+  vi.stubEnv("ANTHROPIC_API_KEY_FALLBACK", "")
+  vi.stubEnv("DAYTONA_API_KEY_FALLBACK", "")
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-unit-test-key")
   vi.stubEnv("STRIPE_SECRET_KEY", "")
   vi.stubEnv("MAJNU_MODEL", "")
@@ -486,3 +500,115 @@ describe("redact", () => {
     expect(redact(`a ${DAYTONA_KEY} b sk-ant-other-key-123 c`, [DAYTONA_KEY])).toBe("a [redacted] b [redacted] c")
   })
 })
+
+// ---------- Fallback keys (issue #67) ----------
+
+describe("redesignLetter with fallback keys", () => {
+  const FALLBACK_DAYTONA_KEY = "dtn_unit_test_fallback_key"
+  const FALLBACK_ANTHROPIC_KEY = "sk-ant-api03-unit-test-fallback-key"
+  let warnings: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    resetCoolingOff()
+    ledger.reserveFallbackSpend.mockClear()
+    ledger.settleFallbackSpend.mockClear()
+    vi.stubEnv("DAYTONA_API_KEY_FALLBACK", FALLBACK_DAYTONA_KEY)
+    warnings = vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+  afterEach(() => warnings.mockRestore())
+
+  const primaryKeyChoice = async () => ({ key: ANTHROPIC_KEY, slot: "primary" as const, name: "ANTHROPIC_API_KEY" })
+
+  // A Daytona API per key: the primary refuses with `primaryError`.
+  function perKey(primaryError: Error) {
+    const { db, inserts } = fakeDb(letterRow())
+    const { sandbox, calls } = fakeSandbox()
+    const refusing = fakeSandboxes(primaryError)
+    const working = fakeSandboxes(sandbox)
+    const keys: string[] = []
+    const logs: string[] = []
+    const deps: Partial<RedesignDeps> = {
+      db,
+      sandboxesFor: (key) => {
+        keys.push(key)
+        return key === FALLBACK_DAYTONA_KEY ? working.sandboxes : refusing.sandboxes
+      },
+      chooseAnthropicKey: primaryKeyChoice,
+      log: (line) => logs.push(line),
+    }
+    return { deps, keys, calls, inserts, refusing, working, logs }
+  }
+
+  it("starts the sandbox with DAYTONA_API_KEY_FALLBACK when Daytona refuses the primary for its quota, and counts the sandbox's time", async () => {
+    const quota = new DaytonaApiError("Daytona POST /sandbox failed (403): Total CPU quota exceeded", 403, undefined, "Total CPU quota exceeded")
+    const { deps, keys, inserts, refusing, working, logs } = perKey(quota)
+    const result = await redesignLetter(LETTER_ID, REQUEST, deps)
+    expect(result.designId).toBe("design-1")
+    expect(inserts).toHaveLength(1)
+    expect(keys).toEqual([DAYTONA_KEY, FALLBACK_DAYTONA_KEY])
+    // The refused start left nothing behind, under the same key.
+    expect(refusing.cleanups).toHaveLength(1)
+    expect(working.created).toHaveLength(1)
+    expect(isCoolingOff("DAYTONA_API_KEY")).toBe(true)
+    // Reserved the 20-minute TTL's cost, settled with the run's own time.
+    const [provider, reserved] = ledger.reserveFallbackSpend.mock.calls[0]
+    expect(provider).toBe("daytona")
+    expect(reserved).toBeGreaterThan(0.05)
+    expect(reserved).toBeLessThan(0.06)
+    const [, cost] = ledger.settleFallbackSpend.mock.calls[0] as unknown as [unknown, number]
+    expect(cost).toBeLessThan(reserved)
+    expect(logs.join("\n")).toMatch(/with DAYTONA_API_KEY_FALLBACK/)
+    expect(logs.join("\n")).not.toContain(FALLBACK_DAYTONA_KEY)
+  })
+
+  it("switches on an organization limit (429 LIMIT_EXCEEDED) but not on a short rate limit", async () => {
+    const limit = new DaytonaApiError("Daytona POST /sandbox failed (429): limit", 429, "LIMIT_EXCEEDED", "organization limit reached")
+    await expect(redesignLetter(LETTER_ID, REQUEST, perKey(limit).deps)).resolves.toBeTruthy()
+
+    resetCoolingOff()
+    const rate = new DaytonaApiError("Daytona POST /sandbox failed (429): rate", 429, "RATE_LIMITED", "request rate limit exceeded")
+    const { deps, keys } = perKey(rate)
+    await expect(redesignLetter(LETTER_ID, REQUEST, deps)).rejects.toThrow(/Could not start a sandbox: .*429/)
+    expect(keys).toEqual([DAYTONA_KEY])
+  })
+
+  it("fails (and the purchase is refunded) when the fallback Daytona key is refused too", async () => {
+    const unauthorized = new DaytonaApiError("Daytona POST /sandbox failed (401): Unauthorized", 401, undefined, "Unauthorized")
+    const { deps } = perKey(unauthorized)
+    deps.sandboxesFor = () => fakeSandboxes(unauthorized).sandboxes
+    await expect(redesignLetter(LETTER_ID, REQUEST, deps)).rejects.toThrow(/Could not start a sandbox: No daytona key can be used right now/)
+    expect(ledger.settleFallbackSpend).toHaveBeenCalledWith(expect.anything(), 0)
+  })
+
+  it("gives Claude Code ANTHROPIC_API_KEY_FALLBACK when the primary is refused, reserving and settling the run on its cap", async () => {
+    vi.stubEnv("DAYTONA_API_KEY_FALLBACK", "")
+    vi.stubEnv("ANTHROPIC_API_KEY_FALLBACK", FALLBACK_ANTHROPIC_KEY)
+    const { deps, calls, logs } = setup()
+    deps.chooseAnthropicKey = async () => ({ key: FALLBACK_ANTHROPIC_KEY, slot: "fallback", name: "ANTHROPIC_API_KEY_FALLBACK" })
+    await redesignLetter(LETTER_ID, REQUEST, deps)
+    expect(calls.commands[0].env?.ANTHROPIC_API_KEY).toBe(FALLBACK_ANTHROPIC_KEY)
+    expect(ledger.reserveFallbackSpend).toHaveBeenCalledWith("anthropic", CLAUDE_RUN_RESERVE_USD)
+    // Claude Code reported $0.4321.
+    expect(ledger.settleFallbackSpend).toHaveBeenCalledWith(expect.objectContaining({ provider: "anthropic" }), 0.4321)
+    expect(logs.join("\n")).not.toContain(FALLBACK_ANTHROPIC_KEY)
+  })
+
+  it("starts no sandbox when the Anthropic fallback's cap is reached", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY_FALLBACK", FALLBACK_ANTHROPIC_KEY)
+    ledger.reserveFallbackSpend.mockResolvedValueOnce(null)
+    const { deps, created } = setup()
+    deps.chooseAnthropicKey = async () => ({ key: FALLBACK_ANTHROPIC_KEY, slot: "fallback", name: "ANTHROPIC_API_KEY_FALLBACK" })
+    await expect(redesignLetter(LETTER_ID, REQUEST, deps)).rejects.toThrow(/monthly cap/)
+    expect(created).toHaveLength(0)
+  })
+
+  it("starts no sandbox when no Anthropic key can be used", async () => {
+    const { deps, created } = setup()
+    deps.chooseAnthropicKey = async () => {
+      throw new Error("ANTHROPIC_API_KEY and ANTHROPIC_API_KEY_FALLBACK are both refused")
+    }
+    await expect(redesignLetter(LETTER_ID, REQUEST, deps)).rejects.toThrow(/No Anthropic key for Claude Code/)
+    expect(created).toHaveLength(0)
+  })
+})
+

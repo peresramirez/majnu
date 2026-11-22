@@ -131,6 +131,7 @@ The `sandbox` directive gives the document an opaque origin: its scripts run but
 | `letter_designs` table | Stored pages |
 | `DAYTONA_API_KEY` | Daytona access. A Worker secret, used by the queue consumer |
 | `DAYTONA_ANTHROPIC_API_KEY` | Optional key of its own for the sandbox, with a low spend limit; otherwise `ANTHROPIC_API_KEY` is used |
+| `DAYTONA_API_KEY_FALLBACK`, `ANTHROPIC_API_KEY_FALLBACK` | Optional fallbacks: the sandbox starts with the Daytona fallback when Daytona refuses the primary for its key, quota or billing, and Claude Code gets the Anthropic fallback when a free token count shows its primary refused. Both are counted against `FALLBACK_CAP_USD` a month ([provider-fallbacks.md](provider-fallbacks.md)) |
 | `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v1`, `eu`, `https://app.daytona.io/api` |
 
 The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`), used only by the snapshot script. Queues `majnu-designs` and `majnu-designs-dlq` are bound in [`wrangler.jsonc`](../../wrangler.jsonc) and created by `scripts/deploy.sh` if missing.

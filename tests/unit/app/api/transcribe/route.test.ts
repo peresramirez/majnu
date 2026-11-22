@@ -21,6 +21,7 @@ const { admin, rpc, update, remove, eqUpdate, eqDelete } = vi.hoisted(() => {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => admin }))
 
 import { POST } from "@/app/api/transcribe/route"
+import { isCoolingOff, resetCoolingOff } from "@/lib/providers/keys"
 import { MAX_AUDIO_BYTES, VOICE_LIMITS } from "@/lib/voice/rules"
 
 const TRANSCRIPT = "Find a gift for my mum, she loves gardening"
@@ -52,10 +53,13 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
   vi.stubEnv("OPENAI_API_KEY", "sk-test-key")
+  // No fallback key unless a test sets one (vitest loads .env.local).
+  vi.stubEnv("OPENAI_API_KEY_FALLBACK", "")
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
   vi.stubEnv("MAJNU_TRANSCRIBE_MODEL", "")
   vi.stubEnv("MAJNU_DAILY_VOICE_CAP", "")
   user = { id: "user-1" }
+  resetCoolingOff()
   rpc.mockResolvedValue({ data: [{ claim_id: "claim-1", refusal: null }], error: null })
   openai.mockImplementation(async () => okFromOpenAI())
   vi.stubGlobal("fetch", openai)
@@ -314,6 +318,85 @@ describe("POST /api/transcribe", () => {
       )
       expect(res.status).toBe(400)
       expectNoSpend()
+    })
+  })
+
+  // Issue #67: OPENAI_API_KEY_FALLBACK when the primary cannot be used.
+  describe("with a fallback key", () => {
+    const keyOf = (init?: RequestInit) => new Headers(init?.headers).get("authorization")
+    const quota = () =>
+      Response.json({ error: { message: "You exceeded your current quota", type: "insufficient_quota", code: "insufficient_quota" } }, { status: 429 })
+    const invalidKey = () => Response.json({ error: { message: "Incorrect API key", type: "invalid_request_error", code: "invalid_api_key" } }, { status: 401 })
+
+    // The service-role client answers the voice claim and the spend ledger.
+    function ledger(reserveTotal: string | null = "0.0100") {
+      rpc.mockImplementation(async (name: string) => {
+        if (name === "reserve_provider_spend") return { data: reserveTotal, error: null }
+        if (name === "settle_provider_spend") return { data: "0.0003", error: null }
+        return { data: [{ claim_id: "claim-1", refusal: null }], error: null }
+      })
+    }
+
+    let warnings: ReturnType<typeof vi.spyOn>
+    beforeEach(() => {
+      vi.stubEnv("OPENAI_API_KEY_FALLBACK", "sk-fallback-key")
+      vi.stubEnv("FALLBACK_CAP_USD", "")
+      warnings = vi.spyOn(console, "warn").mockImplementation(() => {})
+    })
+    afterEach(() => warnings.mockRestore())
+
+    it("uses the primary key while it works, and counts nothing against the cap", async () => {
+      ledger()
+      const res = await POST(upload())
+      expect(res.status).toBe(200)
+      expect(openai.mock.calls.map(([, init]) => keyOf(init))).toEqual(["Bearer sk-test-key"])
+      expect(rpc.mock.calls.map(([name]) => name)).toEqual(["claim_voice_transcription"])
+    })
+
+    it("moves to the fallback key when the primary is out of quota, and counts its cost", async () => {
+      ledger()
+      openai.mockImplementationOnce(async () => quota()).mockImplementationOnce(async () => okFromOpenAI(TRANSCRIPT, 4.2))
+      const res = await POST(upload())
+      expect(res.status).toBe(200)
+      expect((await json(res)).text).toBe(TRANSCRIPT)
+      expect(openai.mock.calls.map(([, init]) => keyOf(init))).toEqual(["Bearer sk-test-key", "Bearer sk-fallback-key"])
+      const names = rpc.mock.calls.map(([name]) => name)
+      expect(names).toEqual(["claim_voice_transcription", "reserve_provider_spend", "settle_provider_spend"])
+      const reserved = rpc.mock.calls[1][1] as { p_provider: string; p_usd: number; p_cap_usd: number }
+      expect(reserved).toMatchObject({ p_provider: "openai", p_cap_usd: 150 })
+      // 4.2 billed seconds of gpt-transcribe at $0.0045 a minute, minus what was reserved.
+      const settled = rpc.mock.calls[2][1] as { p_delta_usd: number }
+      expect(reserved.p_usd + settled.p_delta_usd).toBeCloseTo(0.000315, 6)
+      expect(isCoolingOff("OPENAI_API_KEY")).toBe(true)
+      expect(warnings.mock.calls.flat().join(" ")).toMatch(/openai: OPENAI_API_KEY refused \(quota\)/)
+      expectNothingLogged(TRANSCRIPT, "sk-test-key", "sk-fallback-key")
+    })
+
+    it("does not switch on an ordinary rate limit", async () => {
+      ledger()
+      openai.mockImplementationOnce(async () => Response.json({ error: { code: "rate_limit_exceeded", type: "requests" } }, { status: 429 }))
+      const res = await POST(upload())
+      expect(res.status).toBe(502)
+      expect(openai).toHaveBeenCalledTimes(1)
+    })
+
+    it("answers 429 site_busy when the fallback key is refused too, and releases the claim", async () => {
+      ledger()
+      openai.mockImplementationOnce(async () => invalidKey()).mockImplementationOnce(async () => invalidKey())
+      const res = await POST(upload())
+      expect(res.status).toBe(429)
+      expect(await json(res)).toMatchObject({ error: "site_busy" })
+      expect(remove).toHaveBeenCalled()
+      expect(eqDelete).toHaveBeenCalledWith("id", "claim-1")
+    })
+
+    it("answers 429 site_busy without calling the fallback once its monthly cap is reached", async () => {
+      ledger(null)
+      openai.mockImplementationOnce(async () => quota())
+      const res = await POST(upload())
+      expect(res.status).toBe(429)
+      expect(await json(res)).toMatchObject({ error: "site_busy" })
+      expect(openai).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -8,7 +8,15 @@
 // `languages[]`, where older models take one `language`.
 //
 // Neither the audio nor the transcript is logged or stored here.
+//
+// Callers use transcribe(), which picks the key (lib/providers): the primary
+// OPENAI_API_KEY, or OPENAI_API_KEY_FALLBACK when the primary is refused for
+// its key or its quota, within the monthly fallback cap.
 import "server-only"
+import { openaiSwitchReason } from "@/lib/providers/classify"
+import { transcriptionCostUsd, transcriptionReserveUsd } from "@/lib/providers/costs"
+import { callWithFallback } from "@/lib/providers/fallback"
+import { fallbackKey, readKey } from "@/lib/providers/keys"
 
 export const TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
 export const DEFAULT_TRANSCRIBE_MODEL = "gpt-transcribe"
@@ -113,4 +121,31 @@ export async function transcribeAudio(input: TranscribeInput, fetcher: typeof fe
   if (typeof text !== "string") throw new TranscriptionError(res.status, "no_text")
   const seconds = usage?.type === "duration" && typeof usage.seconds === "number" && Number.isFinite(usage.seconds) ? usage.seconds : null
   return { text: text.trim(), seconds }
+}
+
+// Is there any OpenAI key to transcribe with?
+export function hasTranscriptionKey(): boolean {
+  return Boolean(readKey("OPENAI_API_KEY") || fallbackKey("openai"))
+}
+
+// One transcription with whichever key may be used (lib/providers/fallback.ts).
+// `seconds` is the recording's length as the browser measured it, for the
+// fallback cap's reservation. Throws TranscriptionError as transcribeAudio
+// does, or ProviderUnavailableError when no key can be used right now.
+export async function transcribe(
+  input: Omit<TranscribeInput, "apiKey">,
+  seconds: number,
+  fetcher: typeof fetch = fetch,
+): Promise<TranscribeResult> {
+  const model = input.model ?? DEFAULT_TRANSCRIBE_MODEL
+  const reserveUsd = transcriptionReserveUsd(seconds, model)
+  return callWithFallback({
+    provider: "openai",
+    reserveUsd,
+    run: (apiKey) => transcribeAudio({ ...input, apiKey }, fetcher),
+    switchReason: (error) => (error instanceof TranscriptionError ? openaiSwitchReason(error.status, error.code) : null),
+    costUsd: (result) => transcriptionCostUsd(result.seconds ?? seconds, model),
+    // A refused request is not billed; one that timed out may have been.
+    costOnError: (error) => (error instanceof TranscriptionError && error.status === 0 ? reserveUsd : 0),
+  })
 }
