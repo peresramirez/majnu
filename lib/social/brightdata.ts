@@ -21,7 +21,9 @@
 //
 // `custom_output_fields` asks for the few fields we read, so contact details,
 // follower counts, photos and other people's profiles (people_also_viewed,
-// similar_profiles, related_accounts) are not sent to us. `include_errors` turns
+// similar_profiles, related_accounts) are not sent to us. Bright Data refuses
+// a name that is not in the scraper's output schema with a 400 (no job runs);
+// both lists were checked against it on 22 November. `include_errors` turns
 // a profile that could not be read into a row with `error_code`, which becomes
 // a ProfileReadError reason. What comes back is cut down to the person's own
 // words, kept in memory for the one model call that turns it into interests,
@@ -54,7 +56,7 @@ export const BRIGHTDATA_DATASETS = {
   instagram: {
     id: "gd_l1vikfch901nx3by4",
     mode: "async",
-    fields: ["is_private", "biography", "bio_hashtags", "category_name", "business_category_name", "posts", "post_hashtags", "error", "error_code"],
+    fields: ["is_private", "biography", "bio_hashtags", "posts", "post_hashtags", "error", "error_code"],
   },
 } as const satisfies Record<string, Dataset>
 
@@ -325,15 +327,13 @@ const InstagramRecord = z.object({
   is_private: z.boolean().nullish().catch(null),
   biography: text,
   bio_hashtags: list(z.string()),
-  category_name: text,
-  business_category_name: text,
   posts: list(z.object({ caption: text, post_hashtags: list(z.string()) })),
   post_hashtags: list(z.string()),
   ...ErrorFields,
 })
 
-// The same cut as instagramText() for Apify's records: bio, category, recent
-// captions and the most used hashtags.
+// The same cut as instagramText() for Apify's records: bio, recent captions
+// and the most used hashtags. This scraper has no category field.
 export function brightDataInstagramText(items: unknown[]): ProfileText {
   const item = firstRecord(InstagramRecord, items)
   const failure = rowFailure(item)
@@ -341,13 +341,11 @@ export function brightDataInstagramText(items: unknown[]): ProfileText {
   if (item.is_private) throw new ProfileReadError("private")
   const posts = item.posts.slice(0, MAX_POSTS)
   const bio = scrub(item.biography, MAX_BIO)
-  const category = scrub(item.category_name ?? item.business_category_name, 60)
   const postTags = posts.flatMap((post) => post.post_hashtags)
   // The profile-level list repeats the posts' tags; use it only when the posts carry none.
   const tags = [...item.bio_hashtags, ...(postTags.length ? postTags : item.post_hashtags)]
   const result: ProfileText = {
     ...(bio ? { bio } : {}),
-    ...(category ? { category } : {}),
     posts: posts.map((post) => scrub(post.caption, MAX_CAPTION)).filter(Boolean),
     hashtags: topHashtags(tags.map(cleanTag)),
   }

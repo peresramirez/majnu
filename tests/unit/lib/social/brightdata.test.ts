@@ -107,7 +107,7 @@ describe("the LinkedIn request", () => {
     const body = JSON.parse(init.body as string)
     expect(body.input).toEqual([{ url: "https://www.linkedin.com/in/lena-example-1a2b3c/" }])
     const fields = body.custom_output_fields.split("|")
-    expect(fields).toEqual(expect.arrayContaining(["position", "about", "experience", "posts", "activity", "error_code"]))
+    expect(fields).toEqual(["position", "about", "current_company", "experience", "education", "posts", "activity", "error", "error_code"])
     for (const field of ["name", "city", "avatar", "people_also_viewed", "similar_profiles"]) expect(fields).not.toContain(field)
   })
 
@@ -209,7 +209,8 @@ describe("the Instagram request", () => {
     const body = JSON.parse(init.body as string)
     expect(body.input).toEqual([{ url: "https://www.instagram.com/example.climbs/" }])
     const fields = body.custom_output_fields.split("|")
-    expect(fields).toEqual(expect.arrayContaining(["biography", "posts", "is_private"]))
+    // The names Bright Data's output schema accepted on 22 November; an unknown one is a 400.
+    expect(fields).toEqual(["is_private", "biography", "bio_hashtags", "posts", "post_hashtags", "error", "error_code"])
     for (const field of ["email_address", "business_email", "phone_number", "business_address", "followers", "related_accounts", "profile_image_link", "full_name"]) {
       expect(fields).not.toContain(field)
     }
@@ -314,11 +315,8 @@ describe("what is kept of an Instagram profile read with Bright Data", () => {
     for (const leak of ["example.com", "work@", "+49", "1200", "someone.else", "friend.climbs", "Anna Example", "example-cdn"]) expect(kept).not.toContain(leak)
   })
 
-  it("uses the profile's hashtag list when the posts carry none, and the category when there is one", () => {
-    const text = brightDataInstagramText([
-      { biography: "Wildlife", category_name: "Media/News Company", posts: [{ caption: "A snow leopard" }], post_hashtags: ["wildlife", "ocean"] },
-    ])
-    expect(text.category).toBe("Media/News Company")
+  it("uses the profile's hashtag list when the posts carry none", () => {
+    const text = brightDataInstagramText([{ biography: "Wildlife", posts: [{ caption: "A snow leopard" }], post_hashtags: ["wildlife", "ocean"] }])
     expect(text.hashtags).toEqual(["wildlife", "ocean"])
   })
 
