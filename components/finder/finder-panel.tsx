@@ -231,7 +231,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
             <div ref={checkHostRef} className="flex justify-start empty:hidden [&:not(:empty)]:mt-4" />
           </div>
         ) : (
-          <div className={`${column} pt-4 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-4" : "pb-6"}`}>
+          <div className={`${column} pt-4 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-3" : "pb-6"}`}>
             {chips.length > 0 && !wrapping && (
               <div className="mb-4">
                 <p className="text-xs text-night-lilac">Majnu assumed this. Tap one to change it.</p>

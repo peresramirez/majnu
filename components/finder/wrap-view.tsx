@@ -392,7 +392,9 @@ export function WrapView({ finder, wrap }: Props) {
   )
 
   return (
-    <form id={WRAP_FORM_ID} onSubmit={submit} aria-busy={busy} noValidate>
+    // data-wrap-step: the app shell hides its phone tab bar while this is on
+    // the page (components/app/app-shell.tsx), so step 2 fits above the bar.
+    <form id={WRAP_FORM_ID} onSubmit={submit} aria-busy={busy} noValidate data-wrap-step="">
       <div ref={top}>
         {step === "design" ? (
           <>
@@ -406,7 +408,7 @@ export function WrapView({ finder, wrap }: Props) {
           </>
         ) : (
           <>
-            <h2 className="font-display text-2xl leading-tight text-night-petal outline-none" tabIndex={-1} data-step-heading>
+            <h2 className="font-display text-[22px] leading-tight text-night-petal outline-none" tabIndex={-1} data-step-heading>
               Who is it for?
             </h2>
             <p className="mt-1 text-sm leading-relaxed text-night-lilac">
@@ -446,7 +448,7 @@ export function WrapView({ finder, wrap }: Props) {
           </div>
         </fieldset>
       ) : (
-        <fieldset className="mt-3.5 grid grid-cols-2 items-end gap-x-3 gap-y-3" disabled={busy}>
+        <fieldset className="mt-2.5 grid grid-cols-2 items-end gap-x-3 gap-y-2" disabled={busy}>
           <legend className="sr-only">Their name, your name, a note and the gift code</legend>
           {filled.length > 0 && (
             <p role="status" className="col-span-2 text-sm leading-relaxed text-night-lilac">
@@ -486,11 +488,13 @@ export function WrapView({ finder, wrap }: Props) {
           <label className="col-span-2 block text-sm font-medium text-night-petal">
             A note for them {optional}
             <textarea
-              className={`${field} min-h-[64px] resize-y`}
+              // One line that grows with the text where the browser can
+              // (field-sizing), so all of step 2 fits on a small phone.
+              className={`${field} min-h-[48px] max-h-[132px] resize-y [field-sizing:content]`}
               value={details.note}
               onChange={(e) => editDetails({ note: e.target.value })}
-              placeholder="Happy birthday. I saw this and thought of you."
-              rows={2}
+              placeholder="Happy birthday. Thinking of you."
+              rows={1}
               maxLength={WRAP_LIMITS.note}
             />
           </label>
@@ -507,7 +511,7 @@ export function WrapView({ finder, wrap }: Props) {
             />
           </label>
           <p id="wrap-code-help" className="col-span-2 -mt-1.5 text-[13px] leading-snug text-night-lilac">
-            Buy the gift in the shop first, then paste the voucher code, gift-card code or order details. It stays hidden until they open the gift.
+            Buy the gift in the shop first, then paste the voucher code, gift-card code or order details. Hidden until they open it.
           </p>
         </fieldset>
       )}
