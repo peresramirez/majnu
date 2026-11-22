@@ -31,9 +31,10 @@ export const VOICE_LIMITS = {
 // record webm/opus, older iOS Safari only mp4/AAC.
 export const RECORDING_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4"] as const
 
-// The first type this browser can record, or "" to let it choose.
-export function pickRecordingType(isTypeSupported: (type: string) => boolean): string {
-  for (const type of RECORDING_TYPES) {
+// The first type this browser can record, or "" to let it choose. Voice notes
+// in gifts (lib/audio/rules.ts) pass their own order.
+export function pickRecordingType(isTypeSupported: (type: string) => boolean, types: readonly string[] = RECORDING_TYPES): string {
+  for (const type of types) {
     try {
       if (isTypeSupported(type)) return type
     } catch {

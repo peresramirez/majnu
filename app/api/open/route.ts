@@ -5,7 +5,12 @@
 // Always answers 204 with no body and no cookies, whether or not the event was
 // recorded, so the endpoint reveals nothing about which slugs exist.
 // Excluded from the middleware matcher: it needs no session.
+//
+// Besides the event, it records the approximate place (country and city from
+// Cloudflare's request data), the browser's language and the device type
+// (lib/open/details.ts). The IP address only feeds the visitor hash.
 import * as z from "zod/v4"
+import { openDetails } from "@/lib/open/details"
 import { recordOpenEvent } from "@/lib/open/record"
 import { clientIp } from "@/lib/open/visitor"
 
@@ -41,6 +46,7 @@ export async function POST(request: Request) {
       ...parsed.data,
       ip: clientIp(request.headers),
       userAgent: request.headers.get("user-agent") ?? "",
+      details: openDetails(request),
     })
   } catch (error) {
     // Tracking must never break the letter page; log and move on.

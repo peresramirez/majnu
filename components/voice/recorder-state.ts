@@ -8,6 +8,12 @@
 //
 // `idle` carries what happened last (a finished transcription, a cancel or an
 // error), which the button shows and its live region announces.
+//
+// The same machine records voice notes for gifts (components/voice/
+// audio-note-recorder.tsx): `started` then carries a longer `limit`, and the
+// recording is handed back instead of transcribed, so `transcribing` ends with
+// `recorded` rather than `transcribed`. Without a limit everything behaves as
+// for the message box: one minute, then transcription.
 import {
   MAX_RECORDING_SECONDS,
   MIN_RECORDING_SECONDS,
@@ -21,17 +27,20 @@ export type RecorderNotice =
   | { kind: "done" }
   | { kind: "cancelled" }
   | { kind: "error"; code: VoiceErrorCode; message: string }
+  // A voice note was recorded and handed back (no transcription).
+  | { kind: "recorded"; reachedLimit: boolean }
 
 export type RecorderState =
   | { phase: "idle"; notice: RecorderNotice | null }
   | { phase: "starting" }
   // `startedAt` and `now` are milliseconds on one clock (performance.now()).
-  | { phase: "recording"; startedAt: number; now: number }
-  | { phase: "transcribing"; seconds: number; reachedLimit: boolean }
+  // `limit` is the longest recording in seconds, when it is not the default.
+  | { phase: "recording"; startedAt: number; now: number; limit?: number }
+  | { phase: "transcribing"; seconds: number; reachedLimit: boolean; limit?: number }
 
 export type RecorderEvent =
   | { type: "start" }
-  | { type: "started"; at: number }
+  | { type: "started"; at: number; limit?: number }
   | { type: "start_failed"; code: VoiceErrorCode }
   | { type: "tick"; at: number }
   // The recording ended: tapped stop, or reached the one-minute limit.
@@ -40,13 +49,33 @@ export type RecorderEvent =
   // MediaRecorder failed mid-recording (the microphone was unplugged or taken).
   | { type: "interrupted" }
   | { type: "transcribed"; text: string }
+  // The recording was handed back to the caller instead of transcribed.
+  | { type: "recorded" }
   | { type: "failed"; code: VoiceErrorCode; message?: string }
   | { type: "dismiss" }
 
 export const initialRecorderState: RecorderState = { phase: "idle", notice: null }
 
-export function elapsedSeconds(startedAt: number, at: number): number {
-  return Math.min(Math.max(0, (at - startedAt) / 1000), MAX_RECORDING_SECONDS)
+export function elapsedSeconds(startedAt: number, at: number, limit: number = MAX_RECORDING_SECONDS): number {
+  return Math.min(Math.max(0, (at - startedAt) / 1000), limit)
+}
+
+function limitOf(state: { limit?: number }): number {
+  return state.limit ?? MAX_RECORDING_SECONDS
+}
+
+// "60 seconds", "2 minutes": how long one can talk, in the live region.
+export function limitPhrase(limit: number): string {
+  if (limit >= 120 && limit % 60 === 0) return `${limit / 60} minutes`
+  return `${limit} seconds`
+}
+
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five"]
+
+// "one-minute", "two-minute": the limit as an adjective.
+export function limitAdjective(limit: number): string {
+  if (limit % 60 === 0 && limit / 60 < NUMBER_WORDS.length) return `${NUMBER_WORDS[limit / 60]}-minute`
+  return `${limit}-second`
 }
 
 // A tap and a tap back: nothing worth sending.
@@ -63,7 +92,8 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
     case "start":
       return state.phase === "idle" ? { phase: "starting" } : state
     case "started":
-      return state.phase === "starting" ? { phase: "recording", startedAt: event.at, now: event.at } : state
+      if (state.phase !== "starting") return state
+      return event.limit ? { phase: "recording", startedAt: event.at, now: event.at, limit: event.limit } : { phase: "recording", startedAt: event.at, now: event.at }
     case "start_failed":
       return state.phase === "starting" ? error(event.code) : state
     case "tick":
@@ -72,8 +102,10 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
       if (state.phase !== "recording") return state
       const raw = (event.at - state.startedAt) / 1000
       if (isTooShort(raw)) return error("too_short")
-      const seconds = elapsedSeconds(state.startedAt, event.at)
-      return { phase: "transcribing", seconds, reachedLimit: raw >= MAX_RECORDING_SECONDS }
+      const limit = limitOf(state)
+      const seconds = elapsedSeconds(state.startedAt, event.at, limit)
+      const next = { phase: "transcribing" as const, seconds, reachedLimit: raw >= limit }
+      return state.limit ? { ...next, limit: state.limit } : next
     }
     case "cancel":
       return state.phase === "idle" ? state : { phase: "idle", notice: { kind: "cancelled" } }
@@ -82,6 +114,8 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
     case "transcribed":
       if (state.phase !== "transcribing") return state
       return event.text.trim() ? { phase: "idle", notice: { kind: "done" } } : error("nothing_heard")
+    case "recorded":
+      return state.phase === "transcribing" ? { phase: "idle", notice: { kind: "recorded", reachedLimit: state.reachedLimit } } : state
     case "failed":
       return state.phase === "transcribing" ? error(event.code, event.message) : state
     case "dismiss":
@@ -91,7 +125,7 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
 
 // Should the recording stop by itself now?
 export function reachedLimit(state: RecorderState, at: number): boolean {
-  return state.phase === "recording" && (at - state.startedAt) / 1000 >= MAX_RECORDING_SECONDS
+  return state.phase === "recording" && (at - state.startedAt) / 1000 >= limitOf(state)
 }
 
 const WARN_AT_SECONDS_LEFT = 10
@@ -103,19 +137,25 @@ export function statusMessage(state: RecorderState): string {
     case "starting":
       return "Asking for your microphone…"
     case "recording": {
-      const left = MAX_RECORDING_SECONDS - elapsedSeconds(state.startedAt, state.now)
+      const limit = limitOf(state)
+      const left = limit - elapsedSeconds(state.startedAt, state.now, limit)
       return left <= WARN_AT_SECONDS_LEFT
         ? `${WARN_AT_SECONDS_LEFT} seconds left.`
-        : `Recording. Tap stop when you're done. You can talk for up to ${MAX_RECORDING_SECONDS} seconds.`
+        : `Recording. Tap stop when you're done. You can talk for up to ${limitPhrase(limit)}.`
     }
     case "transcribing":
       return state.reachedLimit
-        ? "That's the one-minute limit. Writing down what you said…"
+        ? `That's the ${limitAdjective(limitOf(state))} limit. Writing down what you said…`
         : "Writing down what you said…"
     case "idle":
       if (!state.notice) return ""
       if (state.notice.kind === "done") return "Done. Check the text in the message box, then send it."
       if (state.notice.kind === "cancelled") return "Recording cancelled."
+      if (state.notice.kind === "recorded") {
+        return state.notice.reachedLimit
+          ? "That's the limit, so the recording stopped. Listen back, then save it."
+          : "Recorded. Listen back, then save it."
+      }
       return state.notice.message
   }
 }
@@ -123,7 +163,8 @@ export function statusMessage(state: RecorderState): string {
 // "0:12 / 1:00", for the timer on screen.
 export function timerLabel(state: RecorderState): string {
   if (state.phase !== "recording") return ""
-  return `${formatSeconds(elapsedSeconds(state.startedAt, state.now))} / ${formatSeconds(MAX_RECORDING_SECONDS)}`
+  const limit = limitOf(state)
+  return `${formatSeconds(elapsedSeconds(state.startedAt, state.now, limit))} / ${formatSeconds(limit)}`
 }
 
 // getUserMedia's DOMException names, as the messages people see.
