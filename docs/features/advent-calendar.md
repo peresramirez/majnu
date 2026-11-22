@@ -67,7 +67,7 @@ A door with a gift and no note shows "A little something" as its title on the re
 | `lib/calendars/notes.ts` | The builder's brief for the notes and the one builder call. |
 | `lib/calendars/route.ts` | The account check and JSON answers shared by the routes. |
 | `lib/finder/pool.ts` | The finder's calendar mode: byte-stable prompts, the `report_ideas` tool, the research loop, links and photos, `toPoolOptions()`. |
-| `lib/finder/pool-limits.ts` | `claimPool()` (a plain finder search plus at most 2 pools a day), `claimMoreLikeThis()` (a personalised search). |
+| `lib/finder/pool-limits.ts` | `claimPool()` (a search in the calendar's session plus at most 2 pools a day), `claimMoreLikeThis()` (a later search in the same session, within its 10). |
 | `lib/letters/store.ts` | `updateMyCalendar()`, added: change a calendar's content with an optimistic check on `updated_at`. |
 | `finder_sessions`, `finder_searches` (migration `0004_finder.sql`) | Reused as they are: one session per calendar; one search row per pool or "more like this". No migration. |
 | `MAJNU_MODEL`, `TAVILY_API_KEY`, `MAJNU_DAILY_SEARCH_CAP`, `APIFY_DAILY_CAP` | As for the finder. Without a Tavily key, the pool runs on Anthropic's web search (no photos). |
@@ -84,7 +84,7 @@ A door with a gift and no note shows "A little something" as its title on the re
 
 - **Calendars need a real account** (`canUseFeature("calendar")`'s rule, `calendarResult()` in `lib/limits.ts`).
 - **Creating** a calendar counts as one of the 5 letters a day.
-- **A pool is one finder search**: it counts against the finder's 3 searches a day and the site-wide `MAJNU_DAILY_SEARCH_CAP`, and on top of that at most **2 pools a day** per user (`POOLS_PER_DAY`). **More like this** is a later search in the calendar's session, so by the finder's rule it is a personalised search (2 a day, within the 3). A search that fails or finds nothing with a link is given back. Claims are made the finder's way: insert first, count second.
+- **Counted by session, like the finder** (changed 22 November with issue #70). A calendar's finder session is not one of the finder's 2 sessions a day, so making a calendar never uses up a gift search. A pool is a search in that session, at most **2 pools a day** per user (`POOLS_PER_DAY`), the calendar's counterpart of the finder's 2 sessions. **More like this** is a later search in the same session; like every session, a calendar's allows **10 searches** (`FINDER_LIMITS.searchesPerSession`), its pools included, and the eleventh gets the calendar's own sentence ("Fill the doors with the ideas you have") under the `finder_daily` reason. There is no personalised cap any more. Every search counts against the site-wide `MAJNU_DAILY_SEARCH_CAP`. A search that fails or finds nothing with a link is given back. Claims are made the finder's way: insert first, count second.
 - **Research caps.** A pool may run 6 Tavily searches in 5 model requests (the finder keeps 4 and 4), because one pool must cover 24 doors from different shops; more like this runs 3 searches in 4 requests. Tavily's basic search is 1 credit per search, so a pool costs at most 6 credits. Model: `MAJNU_MODEL` at low effort with the server-side fallback, `max_tokens` 16,000; a 28-idea report is about 3,000 to 4,000 output tokens. Not measured live (see below).
 - **Notes**: one builder call (two if the first output does not fit), at most **4 runs a day per user** over all their calendars (`NOTES_PER_DAY`, counted from the markers). A run that fails is given back.
 - **Size**: a pool never grows past 48 ideas; a note is at most 80 characters of title and 600 of text; an own gift's fields are capped too.
@@ -111,9 +111,8 @@ A door with a gift and no note shows "A little something" as its title on the re
 
 ## Open questions
 
-- **One link left in another session's file:** the finder's wrapped-gift screen (`components/finder/wrap-view.tsx`) still sends "Make a calendar" to the letters chat with `?template=advent-classic`; it should link to `/dashboard/calendars/new`, as the Create tab does.
 - **Calendars made in the letters chat** have no session, so no pool or notes here; the editor sends them back to their chat. A setup step could create a session for them.
 - **The language of the editor.** The editor is in English like the rest of the app; the pool's ideas and Majnu's notes follow the browser's language.
-- **More like this** spends one of the 2 personalised searches a day, which is little when filling 24 doors. A separate small allowance (say 3 a day) could be added to `pool-limits.ts` if senders run out.
+- **More like this** shares the calendar session's 10 searches with its pools (since 22 November; before, it spent one of 2 personalised searches a day). Filling 24 doors rarely needs more; if senders run out, `pool-limits.ts` could give calendars a larger number.
 - **Images behind a door.** As for wrapped finder gifts, a door never shows the shop's photo. Storing the image on our side (see [gift-finder-api.md](gift-finder-api.md)) would let doors show it.
 - Pools are kept with the calendar's session until the account is deleted; a retention period should be chosen with the finder's.

@@ -4,7 +4,7 @@ Issue #34. Point 4 of the flow in [../plan.md](../plan.md), "Gift finder": a pub
 
 ## What it does
 
-While Majnu personalises a gift, it may offer once to look at the person's public Instagram or TikTok, or any public page about them ("Paste the link if you like"). When the sender pastes a profile link, a handle with the platform ("her insta is @anna.climbs") or another public page, Majnu reads it and turns it into three to six interests ("Bouldern", "Kaffee", "Analogfotografie"). The interests show as chips next to the other assumptions and steer the next search. A private, missing or blocked profile gets one kind sentence, and the search goes on without it.
+Whenever Majnu wants to know more about the person, before a first search or while personalising, it may ask once for their public Instagram, TikTok or LinkedIn, or any public page about them ("Paste the link if you like", with "No public profile" as an answer to tap; since issue #70). Under the gift ideas the finder also says the visitor can tell Majnu more, a profile link among it. Majnu reads only links and handles the visitor gives: it never looks anyone up by name or email address, and a pasted email address gets one sentence saying so and a request for a profile link or what the visitor knows. Until LinkedIn support lands in `lib/social/`, a LinkedIn link is read as a public web page (Tavily). When the sender pastes a profile link, a handle with the platform ("her insta is @anna.climbs") or another public page, Majnu reads it and turns it into three to six interests ("Bouldern", "Kaffee", "Analogfotografie"). The interests show as chips next to the other assumptions and steer the next search. A private, missing or blocked profile gets one kind sentence, and the search goes on without it.
 
 ## How it works
 
@@ -74,7 +74,7 @@ Later searches in the same session rely on the model, which sees the interests i
 
 - **One read per finder session.** The read is recorded with one `UPDATE ... WHERE id = ? AND owner_id = ? AND context->'profile' IS NULL`, so two messages at the same moment cannot both read. A read that fails still counts, because Apify may already have charged for it.
 - **`APIFY_DAILY_CAP` Instagram and TikTok reads a UTC day for the whole site** (default 20). They are counted from the sessions' `context->profile->>readAt` with no table of their own, and claimed like searches: record first, count second, and take the record back when it was over the cap. Pages read with Tavily do not count against it.
-- **A read only happens before a search that is allowed**, so in practice a visitor reads at most about three profiles a day (3 searches a day, one read per session).
+- **A read only happens before a search that is allowed**, so a visitor reads at most two profiles a day: one per finder session, and 2 finder sessions a day since issue #70. A session continued after a reload keeps its one read.
 - **Cost per read**, from the actors' pricing on 21 November: Instagram $0.0026 per profile; TikTok $0.003 per video, so 10 videos are $0.03. Each run is capped at $0.05 by `maxTotalChargeUsd`. At the default cap the worst day costs about $0.60, so the $5 credit lasts at least a week of full days. Tavily Extract at basic depth costs 1 credit per 5 pages. The interest step is one short model request.
 - **Time:** measured on 21 November, an Instagram profile in about 6 s, a TikTok profile with 10 videos in 7.8 s and a Tavily extract in 0.3 s. The run timeout is 60 s, and the request gives up at 70 s.
 

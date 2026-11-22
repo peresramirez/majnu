@@ -6,12 +6,12 @@ import { ArrowUp, X } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
-import { Conversation } from "./conversation"
+import { Conversation, MORE_PLACEHOLDER } from "./conversation"
 import { finderAnnouncement, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import type { Finder } from "./use-finder"
 import { useVisualViewportVars } from "./visual-viewport"
-import { WrapFooter, WrapView } from "./wrap-view"
+import { WRAP_PLACEHOLDER, WrapFooter, WrapView } from "./wrap-view"
 
 type Props = {
   finder: Finder
@@ -28,7 +28,7 @@ const MAX_COMPOSER_HEIGHT = 112
 // what it holds. Escape, the close button and a click outside close it (Radix
 // Dialog), and focus goes back to whatever opened it.
 export function FinderDialog({ finder, open, onOpenChange }: Props) {
-  const { state, wrap, send, choose, chooseTemplate, wrapGift, backToIdeas, checkHostRef, transport } = finder
+  const { state, wrap, send, choose, checkHostRef, transport } = finder
   const [draft, setDraft] = useState("")
   const composer = useRef<HTMLTextAreaElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -47,6 +47,9 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
   const chips = contextChips(state.context)
   const wrapping = wrap.stage !== "closed"
   const ready = wrap.stage === "ready"
+  // The message box stays while the visitor chooses a design and fills in the
+  // page: what they type there goes to Majnu with their choice (issue #70).
+  const composing = wrap.stage === "closed" || wrap.stage === "choose"
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -163,7 +166,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
             </DialogPrimitive.Description>
 
             {/* From md up the panel is as tall as this, up to its maximum; then this scrolls. */}
-            <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${ready ? "" : "md:flex-initial"}`}>
+            <div ref={scroller} data-finder-scroller="" className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${ready ? "" : "md:flex-initial"}`}>
               <div className={`px-4 pt-4 sm:px-5 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-4" : "pb-6"}`}>
                 {chips.length > 0 && !wrapping && (
                   <div className="mb-4">
@@ -189,25 +192,25 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                 <div ref={checkHostRef} className="flex justify-center empty:hidden [&:not(:empty)]:mb-4" />
 
                 {wrapping ? (
-                  <WrapView
-                    key={wrap.option.id}
-                    wrap={wrap}
-                    context={state.context}
-                    onTemplate={chooseTemplate}
-                    onWrap={wrapGift}
-                    onBack={backToIdeas}
-                    previewUrl={transport.previewUrl}
-                    shareUrl={transport.shareUrl}
-                  />
+                  <WrapView key={wrap.option.id} finder={finder} wrap={wrap} />
                 ) : (
-                  <Conversation state={state} onSend={(text) => void send(text)} onChoose={choose} />
+                  <Conversation
+                    state={state}
+                    onSend={(text) => void send(text)}
+                    onChoose={choose}
+                    onNewSearch={() => {
+                      finder.reset()
+                      setDraft("")
+                      requestAnimationFrame(() => composer.current?.focus())
+                    }}
+                  />
                 )}
               </div>
             </div>
 
-            {(wrap.stage === "choose" || wrap.stage === "wrapping") && <WrapFooter wrap={wrap} />}
+            {(wrap.stage === "choose" || wrap.stage === "wrapping") && <WrapFooter wrap={wrap} onNext={finder.nextStep} onPrevious={finder.previousStep} last={!composing} />}
 
-            {!wrapping && (
+            {composing && (
               <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum px-4 pb-[max(10px,var(--safe-bottom))] pt-2.5 sm:px-5">
                 <div className="flex items-end gap-2 rounded-[22px] bg-night-velvet py-1 pl-4 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
                   <label htmlFor="finder-message" className="sr-only">
@@ -222,7 +225,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     onKeyDown={onKeyDown}
                     enterKeyHint="send"
                     maxLength={1000}
-                    placeholder="Tell Majnu more about them"
+                    placeholder={wrapping ? WRAP_PLACEHOLDER : MORE_PLACEHOLDER}
                     className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
                   />
                   <VoiceButton

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   CUT_OFF,
   DEFAULT_ERROR,
+  EMPTY_DETAILS,
+  NAME_REQUIRED,
   WRAP_ERROR,
+  WRAP_LIMITS,
   WRAP_TEMPLATES,
   finderAnnouncement,
   finderReducer,
@@ -11,8 +14,12 @@ import {
   noticeRole,
   statusLit,
   wrapAccount,
+  wrapChoice,
+  wrapExchange,
   wrapReducer,
+  wrapRequest,
   type FinderAction,
+  type FinderItem,
   type FinderState,
   type WrapState,
 } from "@/components/finder/finder-state"
@@ -147,10 +154,18 @@ describe("latestOptionsIndex and statusLit", () => {
 
 describe("wrapReducer", () => {
   const closed: WrapState = { stage: "closed" }
-  const chosen = wrapReducer(closed, { type: "choose", option: option("a") })
+  const chosen = wrapReducer(closed, { type: "choose", option: option("a"), from: 4 })
+  const step2 = wrapReducer(chosen, { type: "next" })
+  const named = wrapReducer(step2, { type: "details", details: { recipientName: "Ana" } })
+  const wrap = (...actions: Parameters<typeof wrapReducer>[1][]) => actions.reduce(wrapReducer, chosen)
 
-  it("starts on the first gift template", () => {
-    expect(chosen).toEqual({ stage: "choose", option: option("a"), templateId: WRAP_TEMPLATES[0] })
+  it("starts on step 1, the design, with the first gift template and nothing typed", () => {
+    expect(chosen).toEqual({ stage: "choose", step: "design", option: option("a"), templateId: WRAP_TEMPLATES[0], details: EMPTY_DETAILS, from: 4 })
+  })
+
+  it("prefills their name when the visitor told Majnu one (issue #71)", () => {
+    const prefilled = wrapReducer(closed, { type: "choose", option: option("a"), recipientName: "  Ana " })
+    expect(prefilled).toMatchObject({ step: "design", details: { ...EMPTY_DETAILS, recipientName: "Ana" }, from: 0 })
   })
 
   it("offers the gift templates first, the 3D gift box and the party box among them, then the letters", () => {
@@ -164,27 +179,58 @@ describe("wrapReducer", () => {
     expect(wrapReducer(closed, { type: "template", templateId: "postcard" })).toBe(closed)
   })
 
-  it("goes from wrapping to ready with the letter", () => {
-    const wrapping = wrapReducer(chosen, { type: "submit" })
+  it("goes to the details with Next, and Back returns to the design without losing what was typed", () => {
+    expect(step2).toMatchObject({ stage: "choose", step: "details" })
+    const typed = wrapReducer(step2, { type: "details", details: { recipientName: "Ana", senderName: "Javi", note: "Für dich", giftCode: "ABC-123" } })
+    const back = wrapReducer(typed, { type: "previous" })
+    expect(back).toMatchObject({ step: "design", details: { recipientName: "Ana", senderName: "Javi", note: "Für dich", giftCode: "ABC-123" } })
+    expect(wrapReducer(back, { type: "template", templateId: "postcard" })).toMatchObject({ step: "design", templateId: "postcard", details: { recipientName: "Ana" } })
+    expect(wrapReducer(back, { type: "next" })).toMatchObject({ step: "details", details: { giftCode: "ABC-123" } })
+  })
+
+  it("wraps only from step 2: on step 1 the Wrap action moves on to the details", () => {
+    expect(wrapReducer(chosen, { type: "submit" })).toMatchObject({ stage: "choose", step: "details" })
+  })
+
+  it("needs their name before wrapping, and stops asking once it is typed", () => {
+    const refused = wrapReducer(step2, { type: "submit" })
+    expect(refused).toMatchObject({ stage: "choose", step: "details", nameMissing: true })
+    expect(wrapReducer(wrapReducer(step2, { type: "details", details: { recipientName: "   " } }), { type: "submit" })).toMatchObject({ nameMissing: true })
+    expect(wrapReducer(refused, { type: "details", details: { recipientName: "A" } })).toMatchObject({ nameMissing: false })
+    expect(NAME_REQUIRED).toMatch(/name/)
+  })
+
+  it("keeps every field within the form's limits", () => {
+    const long = wrapReducer(step2, { type: "details", details: { recipientName: "x".repeat(100), giftCode: "c".repeat(300) } })
+    expect(long.stage === "choose" && long.details.recipientName.length).toBe(WRAP_LIMITS.recipientName)
+    expect(long.stage === "choose" && long.details.giftCode.length).toBe(WRAP_LIMITS.giftCode)
+  })
+
+  it("goes from wrapping to ready with the letter, keeping the details", () => {
+    const wrapping = wrapReducer(named, { type: "submit" })
     expect(wrapping.stage).toBe("wrapping")
     expect(wrapReducer(wrapping, { type: "result", response: { letterId: "L1", slug: "abc" } })).toEqual({
       stage: "ready",
       option: option("a"),
       templateId: "gift-reveal",
+      details: { ...EMPTY_DETAILS, recipientName: "Ana" },
+      from: 4,
       letterId: "L1",
       slug: "abc",
     })
   })
 
-  it("goes back to choosing with the error when wrapping fails", () => {
-    const wrapping = wrapReducer(chosen, { type: "submit" })
+  it("goes back to step 2 with the error when wrapping fails, keeping the details", () => {
+    const wrapping = wrapReducer(named, { type: "submit" })
     expect(wrapReducer(wrapping, { type: "result", response: { error: "Too many", reason: "finder_daily" } })).toMatchObject({
       stage: "choose",
+      step: "details",
       error: "Too many",
       reason: "finder_daily",
+      details: { recipientName: "Ana" },
     })
     expect(wrapReducer(wrapping, { type: "result", response: { error: "" } })).toMatchObject({ error: WRAP_ERROR })
-    expect(wrapReducer(wrapping, { type: "failed", message: "Offline" })).toMatchObject({ stage: "choose", error: "Offline" })
+    expect(wrapReducer(wrapping, { type: "failed", message: "Offline" })).toMatchObject({ stage: "choose", step: "details", error: "Offline" })
   })
 
   it("ignores a result that arrives when nothing is being wrapped", () => {
@@ -193,6 +239,87 @@ describe("wrapReducer", () => {
 
   it("closes on back", () => {
     expect(wrapReducer(chosen, { type: "back" })).toEqual(closed)
+  })
+})
+
+describe("Majnu filling in the wrap form (issue #70)", () => {
+  const chosen = wrapReducer({ stage: "closed" }, { type: "choose", option: option("a") })
+
+  it("fills what Majnu heard, shows step 2 and says which fields it filled", () => {
+    const filled = wrapReducer(chosen, { type: "fill", fields: { recipientName: " Ana ", senderName: "Javi" } })
+    expect(filled).toMatchObject({
+      stage: "choose",
+      step: "details",
+      details: { recipientName: "Ana", senderName: "Javi", note: "", giftCode: "" },
+      filled: ["recipientName", "senderName"],
+    })
+  })
+
+  it("keeps what the visitor typed in fields Majnu did not fill", () => {
+    const typed = wrapReducer(wrapReducer(chosen, { type: "next" }), { type: "details", details: { note: "Alles Gute", recipientName: "Anna" } })
+    const filled = wrapReducer(typed, { type: "fill", fields: { recipientName: "Ana", giftCode: "GC-42", note: "  " } })
+    expect(filled).toMatchObject({ details: { recipientName: "Ana", note: "Alles Gute", giftCode: "GC-42" }, filled: ["recipientName", "giftCode"] })
+  })
+
+  it("changes nothing for an empty fill, or when the form is not open", () => {
+    expect(wrapReducer(chosen, { type: "fill", fields: {} })).toBe(chosen)
+    const wrapping: WrapState = { stage: "wrapping", option: option("a"), templateId: "postcard", details: EMPTY_DETAILS, from: 0 }
+    expect(wrapReducer(wrapping, { type: "fill", fields: { recipientName: "Ana" } })).toBe(wrapping)
+  })
+
+  it("never wraps by itself", () => {
+    const filled = wrapReducer(chosen, { type: "fill", fields: { recipientName: "Ana" } })
+    expect(filled.stage).toBe("choose")
+  })
+
+  it("closes the wrap step when a new search shows other options", () => {
+    expect(wrapReducer(chosen, { type: "options" })).toEqual({ stage: "closed" })
+    const ready: WrapState = { stage: "ready", option: option("a"), templateId: "postcard", details: EMPTY_DETAILS, from: 0, letterId: "L", slug: "s" }
+    expect(wrapReducer(ready, { type: "options" })).toBe(ready)
+  })
+
+  it("leaves the conversation as it is: the form gets the fields", () => {
+    const before = run([{ type: "send", text: "für meine Schwester Ana" }])
+    expect(run([ev({ type: "fill", fields: { recipientName: "Ana" } })], before)).toBe(before)
+  })
+})
+
+describe("what a wrap-step message carries (issue #70)", () => {
+  const chosen = wrapReducer({ stage: "closed" }, { type: "choose", option: option("a") })
+
+  it("is the chosen option and design while the wrap step is open, and nothing otherwise", () => {
+    expect(wrapChoice(chosen)).toEqual({ optionId: "a", templateId: "gift-reveal" })
+    expect(wrapChoice(wrapReducer(chosen, { type: "template", templateId: "postcard" }))).toEqual({ optionId: "a", templateId: "postcard" })
+    expect(wrapChoice({ stage: "closed" })).toBeUndefined()
+    expect(wrapChoice({ stage: "wrapping", option: option("a"), templateId: "postcard", details: EMPTY_DETAILS, from: 0 })).toBeUndefined()
+  })
+
+  it("sends the wrap request with the details trimmed and empty ones left out", () => {
+    const details = { recipientName: " Ana ", senderName: "", note: "  Für dich ", giftCode: " ABC-123 " }
+    expect(wrapRequest("s1", { option: option("a"), templateId: "gift-box-3d", details })).toEqual({
+      sessionId: "s1",
+      optionId: "a",
+      templateId: "gift-box-3d",
+      recipientName: "Ana",
+      senderName: undefined,
+      note: "Für dich",
+      giftCode: "ABC-123",
+    })
+  })
+
+  it("shows on the wrap step what was said since it opened, from the newest message on", () => {
+    const items: FinderItem[] = [
+      { id: "f0", role: "user", text: "Mama" },
+      { id: "f1", role: "options", options: [option("a")], recommendedId: "a", why: "" },
+      { id: "f2", role: "user", text: "für Ana" },
+      { id: "f3", role: "assistant", text: "Ich habe Ana eingetragen." },
+      { id: "f4", role: "user", text: "von Javi" },
+      { id: "f5", role: "assistant", text: "Javi steht jetzt drin." },
+      { id: "f6", role: "question", text: "Hast du einen Code?", suggestions: ["Noch nicht"] },
+    ]
+    expect(wrapExchange(items, 2).map((item) => item.id)).toEqual(["f4", "f5", "f6"])
+    expect(wrapExchange(items, 7)).toEqual([])
+    expect(wrapExchange(items.slice(0, 2), 0).map((item) => item.id)).toEqual(["f0"])
   })
 })
 

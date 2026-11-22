@@ -78,9 +78,19 @@ describe("POST /api/finder/wrap", () => {
       recipientName: "Anna",
       senderName: "Javier",
       note: "Danke.",
+      giftCode: undefined,
       now: expect.any(Date),
       timezone: "Europe/Berlin",
     })
+  })
+
+  it("passes on the gift code, trimmed, up to 200 characters (issue #71)", async () => {
+    expect((await POST(post({ ...valid, giftCode: "  GC-1234-5678  " }))).status).toBe(200)
+    expect(wrapOption).toHaveBeenLastCalledWith(expect.objectContaining({ giftCode: "GC-1234-5678" }))
+    expect((await POST(post({ ...valid, giftCode: "   " }))).status).toBe(200)
+    expect(wrapOption).toHaveBeenLastCalledWith(expect.objectContaining({ giftCode: undefined }))
+    expect((await POST(post({ ...valid, giftCode: "c".repeat(200) }))).status).toBe(200)
+    expect((await POST(post({ ...valid, giftCode: "c".repeat(201) }))).status).toBe(400)
   })
 
   it("accepts only the five gift templates, the 3D gift box and the party box among them", async () => {

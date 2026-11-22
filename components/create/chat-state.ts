@@ -63,6 +63,27 @@ export function composeMessage(templateName: string | null, typed: string): stri
   return text ? `${templateMessage(templateName)} ${text}` : templateMessage(templateName)
 }
 
+// The composer's send rules, in one place so every path behaves the same
+// (issue #70): Enter, the send button, a message dictated by voice and a
+// starter tapped in an empty chat all go through composeMessage(), so an
+// attached template always travels with the message.
+
+// Enter sends; Shift+Enter starts a new line; Enter that confirms an IME
+// composition (Japanese, Chinese) does neither.
+export function sendsOnEnter(key: { key: string; shiftKey: boolean; isComposing: boolean }): boolean {
+  return key.key === "Enter" && !key.shiftKey && !key.isComposing
+}
+
+// A template alone is a message: "Use the "Postcard" template."
+export function canSendMessage(busy: boolean, typed: string, templateName: string | null): boolean {
+  return !busy && (typed.trim() !== "" || templateName !== null)
+}
+
+// Dictated words are added to what is already typed, for the sender to check.
+export function withVoiceText(typed: string, spoken: string): string {
+  return typed.trim() ? `${typed.trimEnd()} ${spoken}` : spoken
+}
+
 // What frames the chat (issue #62).
 //   header: the bar with the gift's name and state, only once a gift exists. A
 //     first message refused by the day's letter limit creates none, so the bar
