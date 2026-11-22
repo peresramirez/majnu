@@ -11,7 +11,9 @@ import type { FinderRequest, GiftOption, WrapChoice, WrapTemplateId } from "@/li
 import { SessionError } from "./anonymous-session"
 import {
   WRAP_ERROR,
+  composeAnswers,
   finderReducer,
+  openQuestions,
   initialFinderState,
   wrapChoice,
   wrapReducer,
@@ -19,7 +21,8 @@ import {
   type WrapDetails,
   type WrapState,
 } from "./finder-state"
-import { FinderRequestError, OFFLINE, browserLocale, type FinderTransport } from "./transport"
+import { fileLabel, type Attachment } from "./attachments"
+import { FinderRequestError, OFFLINE, browserLocale, type FinderTransport, type UploadFile } from "./transport"
 
 const MAX_MESSAGE = 1000
 
@@ -42,7 +45,7 @@ export function useFinder(transport: FinderTransport) {
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const run = useCallback(
-    async (message: string, choice: WrapChoice | undefined) => {
+    async (message: string, choice: WrapChoice | undefined, files: UploadFile[]) => {
       const controller = new AbortController()
       abortRef.current = controller
       try {
@@ -62,7 +65,7 @@ export function useFinder(transport: FinderTransport) {
         const request: FinderRequest = { message, locale: browserLocale() }
         if (sessionRef.current) request.sessionId = sessionRef.current
         if (choice && sessionRef.current) request.wrap = choice
-        for await (const event of transport.stream(request, controller.signal)) {
+        for await (const event of transport.stream(request, controller.signal, files)) {
           if (controller.signal.aborted) return
           if (event.type === "session") sessionRef.current = event.sessionId
           if (event.type === "fill") dispatchWrap({ type: "fill", fields: event.fields })
@@ -72,7 +75,7 @@ export function useFinder(transport: FinderTransport) {
         if (!controller.signal.aborted) dispatch({ type: "closed" })
       } catch (error) {
         if (controller.signal.aborted) return
-        dispatch({ type: "failed", message: error instanceof FinderRequestError ? error.message : OFFLINE })
+        dispatch({ type: "failed", message: error instanceof FinderRequestError ? error.message : OFFLINE, noRetry: files.length > 0 })
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null
@@ -85,19 +88,31 @@ export function useFinder(transport: FinderTransport) {
 
   // Returns false when nothing was sent: an empty message, or a reply is still
   // streaming. The message box keeps its text in that case.
+  // `answers` (the message box and "Send answers", issue #82): the message
+  // also carries what was picked for Majnu's open questions and the profile
+  // field, as one message. Other sends (a suggestion, Try again) do not.
+  // `files` (issue #77): photos and documents from the box, sent with the
+  // message; a message may be files alone.
   const send = useCallback(
-    (raw: string): boolean => {
-      const message = raw.trim().slice(0, MAX_MESSAGE)
-      if (!message || busyRef.current) return false
+    (raw: string, opts: { answers?: boolean; files?: Attachment[] } = {}): boolean => {
+      if (busyRef.current) return false
+      const current = stateRef.current
+      const answering = opts.answers === true && openQuestions(current.items).length > 0
+      const message = (answering ? composeAnswers(current, raw) : raw.trim()).slice(0, MAX_MESSAGE)
+      const files = opts.files ?? []
+      if (!message && files.length === 0) return false
       busyRef.current = true
       // The choice as it is now, on the wrap step; nothing otherwise.
       const choice = wrapChoice(wrapRef.current)
-      dispatch({ type: "send", text: message })
-      void run(message, choice)
+      dispatch({ type: "send", text: message, answered: answering, files: files.map((f) => ({ kind: f.kind, name: fileLabel(f.name, f.kind) })) })
+      void run(message, choice, files.map((f) => ({ file: f.file, name: f.name })))
       return true
     },
     [run],
   )
+
+  const answer = useCallback((itemId: string, value: string) => dispatch({ type: "answer", itemId, value }), [])
+  const setProfile = useCallback((change: { link?: string; none?: boolean }) => dispatch({ type: "profile", ...change }), [])
 
   // Back to an empty finder ("New search" in the app's Find a gift tab): stop
   // any reply, and forget the conversation, its session and the gift being wrapped.
@@ -158,6 +173,8 @@ export function useFinder(transport: FinderTransport) {
     state,
     wrap,
     send,
+    answer,
+    setProfile,
     restart,
     reset,
     choose,

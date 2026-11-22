@@ -82,6 +82,7 @@ These values are never taken from the browser:
 | Every column of `free_design_days` | The free-design functions, with the hash computed on the server ([free-designs.md](free-designs.md)) | A browser must not be able to reset its count, read the hashes, or have a free design counted against someone else's address |
 | `letter_events` | `POST /api/open` ([sharing-and-tracking.md](sharing-and-tracking.md)) | Statistics come only from the beacon route's rules |
 | `letter_designs` | The Daytona job ([daytona-redesign.md](daytona-redesign.md)) | The HTML is served from our domain |
+| `finder_sessions.context`, with the notes and file counts of shared files | The finder route through `writeContext()` ([finder-files.md](finder-files.md)), which writes only if the context's revision has not moved since it was read | The counts are what the file limits read; a stale save must not wipe them. The files themselves are never stored |
 
 Slugs are 10 characters from a 49-character alphabet without look-alikes (no `0/O/o`, `1/l/I`, `2/Z`, `5/S/s` or `u/v`), drawn from `crypto.getRandomValues` with rejection sampling so every character is equally likely: about 56 bits, so links cannot be guessed, and they still work when read aloud or typed from a QR code. An insert that hits a taken slug retries with a new one, up to 5 times.
 
@@ -102,6 +103,7 @@ Every route that calls a model checks limits first, counted through the signed-i
 | Daytona per run | $3, 360 s, a 20-minute sandbox |
 | Monthly spend | A limit set in the Anthropic Console |
 | Calendars | Need a real account (guests are asked to sign up); nothing is gated on a payment |
+| Photos and documents in the finder | 3 per message (20 MB together; 5 MB a photo, 10 MB and 20 pages a PDF, 100 KB text), 6 per finder session, 12 per visitor per UTC day, `MAJNU_DAILY_FILE_CAP` (150) reader calls a day for the site, each claimed before the reader runs and given back if it fails; the real type from the file's first bytes ([finder-files.md](finder-files.md)) |
 
 The details of each are in [letters-chat.md](letters-chat.md#limits-and-costs).
 

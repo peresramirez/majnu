@@ -76,6 +76,17 @@ export default function PrivacyPage() {
         address, and do not store the network address itself. The country and region are stored with your finder
         session, so the ideas it shows can be explained (Art. 6 (1) (b) GDPR).
       </p>
+      <p>
+        You can also share <strong>photos and documents</strong> with the gift finder (for example a screenshot of a
+        wishlist, a photo of a bookshelf or a club newsletter as a PDF): at most three in one message. Your browser makes
+        photos smaller first, which also removes what a photo&apos;s metadata says, such as where it was taken. Each file is
+        sent once to Anthropic, whose AI model reads it and writes a few short notes that help choose a gift, such as
+        &quot;shelf full of fantasy novels&quot; or &quot;wishlist: e-reader, 149,99 €&quot;. We do not store the file
+        anywhere: only those notes are kept, with your finder session, and you see them and can correct them. The model is
+        told never to identify anyone from their face, never to guess names, and to leave out anything about health,
+        beliefs, politics, ethnicity or sexuality, and we filter its notes for those again. This is part of the search you
+        asked for (Art. 6 (1) (b) GDPR). Please only share pictures of other people if they would be happy with it.
+      </p>
 
       <h3>Public social profiles</h3>
       <p>
@@ -186,7 +197,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Supabase</strong>: database and sign-in. Servers in Frankfurt, Germany.</li>
         <li><strong>Cloudflare</strong>: hosting and delivery of the site, the country and region used by the gift finder, the Turnstile bot check, and forwarding of email sent to {operator.email}.</li>
-        <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies and searches the web for gift ideas. Under its commercial terms, Anthropic does not use this data to train its models.</li>
+        <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies, searches the web for gift ideas, and reads the photos and documents you share in the gift finder to write short notes about them. Under its commercial terms, Anthropic does not use this data to train its models.</li>
         <li><strong>Google</strong>: sign-in with Google, and the mailbox our email is forwarded to.</li>
         <li><strong>Stripe</strong>: payments for personalised wrappers, and their receipts.</li>
         <li><strong>Daytona</strong>: the short-lived sandbox in the EU where a personalised wrapper is designed.</li>
@@ -208,7 +219,7 @@ export default function PrivacyPage() {
       <ul>
         <li>Your account, gifts and conversations: until you delete them or ask us to delete your account.</li>
         <li>Guest accounts: the same; once you create an account, they are your account.</li>
-        <li>Finder sessions, with their country and region and any summary of a public profile: as long as the account they belong to.</li>
+        <li>Finder sessions, with their country and region, any summary of a public profile and the notes from files you shared (never the files): as long as the account they belong to.</li>
         <li>Records of when a gift was opened: for as long as the gift exists.</li>
         <li>Invoices and payment records: as long as German tax and commercial law requires, up to ten years.</li>
         <li>Technical logs: up to seven days.</li>

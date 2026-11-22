@@ -6,13 +6,14 @@
 // letter, inked over a faint map whose dotted path ends at an X with the
 // recipient's name. CSS and SVG only: nothing to download, and with reduced
 // motion the seal opens the letter at once.
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import type { LetterContent } from "@/lib/letters/schema"
 import { displayStyle, focusRing, MadeWith, Ornament } from "../chrome"
 import { GiftList } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { monogram, wholeName } from "../names"
+import { VoiceNoteSlot } from "../voice-player"
 import { Compass, parchment } from "./treasure-map/parts"
 
 type Stage = "sealed" | "unfolding" | "open"
@@ -182,6 +183,12 @@ export function TreasureMap({ content }: { content: LetterContent }) {
                 {content.headline}
               </h1>
               <Ornament align="start" className="unfold mt-5 text-[var(--paper-accent)]" style={{ animationDelay: "220ms" }} />
+              {/* The sender's voice, inked onto the map like a note in the margin. */}
+              <VoiceNoteSlot
+                tone="paper"
+                className="unfold mt-6 rounded-[3px] border border-dashed px-3 py-2.5"
+                style={{ animationDelay: "280ms", borderColor: "color-mix(in srgb, var(--paper-ink) 32%, transparent)", "--vp-bar": "color-mix(in srgb, var(--paper-ink) 26%, transparent)" } as CSSProperties}
+              />
               <Paragraphs body={content.body} className="unfold mt-6" style={{ animationDelay: "320ms" }} />
               <SignOff signOff={content.signOff} senderName={content.senderName} className="unfold mt-8" />
             </div>

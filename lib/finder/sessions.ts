@@ -12,6 +12,17 @@
 // (one read per session, APIFY_DAILY_CAP a day) need no table of their own.
 // It is server-only: parseContext() leaves it out, so the browser never sees
 // it. Only the interests are kept, never what was read.
+//
+// Files the visitor shares (issue #77) are counted the same way, as
+// `uploads: { v, total, day, today }` in the context: files read in the
+// session ever, and on `day` (UTC). Their notes are visitor-facing
+// (FinderContext.notes); the files themselves are never stored.
+//
+// Every write of the context column goes through writeContext(): it reads the
+// row, builds the new context from what is there, and writes it only if the
+// context's revision (`rev`) has not moved since, retrying otherwise. So a
+// turn saved from a stale copy can never wipe a file claim or a profile read
+// another request made in the meantime.
 import "server-only"
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta"
 import * as z from "zod/v4"
@@ -66,7 +77,12 @@ const StoredContext = z.object({
   interests: z.array(z.string()).optional().catch(undefined),
   occasion: z.string().optional().catch(undefined),
   name: z.string().optional().catch(undefined),
+  notes: z.array(z.string()).optional().catch(undefined),
 })
+
+// The visitor-facing keys of the context column. Everything else in it is a
+// server-only marker (profile, uploads, a calendar's marker) or the revision.
+const VISITOR_KEYS = new Set(Object.keys(StoredContext.shape))
 
 const StoredOption = z.object({
   id: z.string(),
@@ -171,58 +187,170 @@ export async function listTodaysFinderSessions(ownerId: string, now: Date, max =
   return (data ?? []).map(toSession)
 }
 
+// ---------- Writing the context column ----------
+
+type RawContext = Record<string, unknown>
+
+const MAX_WRITE_ATTEMPTS = 4
+
+export class ContextConflictError extends Error {
+  constructor() {
+    super("The finder session kept changing while it was saved")
+    this.name = "ContextConflictError"
+  }
+}
+
+function asRecord(value: unknown): RawContext {
+  return value && typeof value === "object" && !Array.isArray(value) ? { ...(value as RawContext) } : {}
+}
+
+// The server-only markers of a stored context, without the revision.
+export function serverMarkers(raw: RawContext): RawContext {
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => !VISITOR_KEYS.has(key) && key !== "rev"))
+}
+
+function revisionOf(raw: RawContext): number | null {
+  return typeof raw.rev === "number" && Number.isInteger(raw.rev) && raw.rev >= 0 ? raw.rev : null
+}
+
+// Reads the session's context, builds the next one from it, and writes it
+// (with `extra` columns) only if no other write came in between. `build`
+// returns null to write nothing. Returns what was written, or null.
+export async function writeContext(
+  session: Pick<FinderSession, "id" | "ownerId">,
+  build: (current: RawContext) => RawContext | null,
+  extra: Record<string, unknown> = {},
+): Promise<RawContext | null> {
+  const admin = createAdminClient()
+  for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
+    const read = await admin
+      .from("finder_sessions")
+      .select("context")
+      .eq("id", session.id)
+      .eq("owner_id", session.ownerId)
+      .maybeSingle<{ context: unknown }>()
+    if (read.error) throw new Error(`Could not load the finder session: ${read.error.message}`)
+    if (!read.data) throw new Error("Finder session not found")
+    const current = asRecord(read.data.context)
+    const next = build(current)
+    if (!next) return null
+    const rev = revisionOf(current)
+    const { rev: _ignored, ...body } = next
+    void _ignored
+    const written = { ...body, rev: (rev ?? 0) + 1 }
+    let update = admin.from("finder_sessions").update({ ...extra, context: written }).eq("id", session.id).eq("owner_id", session.ownerId)
+    update = rev === null ? update.is("context->rev", null) : update.eq("context->>rev", String(rev))
+    const { data, error } = await update.select("id").maybeSingle()
+    if (error) throw new Error(`Could not save the finder session: ${error.message}`)
+    if (data) return written
+  }
+  throw new ContextConflictError()
+}
+
 // Saves a turn. `chat` must be what was loaded with this turn's messages
-// appended; the owner check keeps a write from ever landing on another user's row.
+// appended; the owner check keeps a write from ever landing on another user's
+// row. The visitor-facing context is the turn's; the server-only markers are
+// the row's own, except the profile read this turn made.
 export async function saveFinderSession(
   session: Pick<FinderSession, "id" | "ownerId">,
   update: { chat: BetaMessageParam[]; context: FinderContext; lastOptions: StoredOptions | null; profile?: ProfileRead | null },
 ): Promise<void> {
-  const { data, error } = await createAdminClient()
-    .from("finder_sessions")
-    .update({ chat: update.chat, context: storedContext(update.context, update.profile), last_options: update.lastOptions })
-    .eq("id", session.id)
-    .eq("owner_id", session.ownerId)
-    .select("id")
-    .maybeSingle()
-  if (error) throw new Error(`Could not save the finder session: ${error.message}`)
-  if (!data) throw new Error("Finder session not found")
+  await writeContext(
+    session,
+    (current) => ({ ...serverMarkers(current), ...update.context, ...(update.profile ? { profile: update.profile } : {}) }),
+    { chat: update.chat, last_options: update.lastOptions },
+  )
 }
 
 // ---------- Public profile reads (issue #34) ----------
 
 // Records a profile read on the session, unless one is already recorded. The
-// check and the write are one UPDATE, so two messages at the same moment
-// cannot both read a profile. False when the session already has one.
+// write is conditional on the revision it read, and on there being no profile
+// yet, so two messages at the same moment cannot both read a profile. False
+// when the session already has one.
 export async function markProfileRead(
   session: Pick<FinderSession, "id" | "ownerId">,
   context: FinderContext,
   profile: ProfileRead,
 ): Promise<boolean> {
-  const { data, error } = await createAdminClient()
-    .from("finder_sessions")
-    .update({ context: storedContext(context, profile) })
-    .eq("id", session.id)
-    .eq("owner_id", session.ownerId)
-    .is("context->profile", null)
-    .select("id")
-    .maybeSingle()
-  if (error) throw new Error(`Could not record the profile read: ${error.message}`)
-  return Boolean(data)
+  const written = await writeContext(session, (current) =>
+    current.profile ? null : { ...serverMarkers(current), ...context, profile },
+  )
+  return written !== null
 }
 
 // Takes a recorded read back (it was over the daily cap). Never throws; a
 // marker left behind only means this session cannot read a profile.
 export async function clearProfileRead(session: Pick<FinderSession, "id" | "ownerId">, context: FinderContext): Promise<void> {
   try {
-    const { error } = await createAdminClient()
-      .from("finder_sessions")
-      .update({ context: storedContext(context, null) })
-      .eq("id", session.id)
-      .eq("owner_id", session.ownerId)
-    if (error) console.error("[finder] could not clear a profile read", { message: error.message })
+    await writeContext(session, (current) => {
+      const { profile: _profile, ...markers } = serverMarkers(current)
+      void _profile
+      return { ...markers, ...context }
+    })
   } catch (error) {
     console.error("[finder] could not clear a profile read", { message: error instanceof Error ? error.message : String(error) })
   }
+}
+
+// ---------- Files the visitor shares (issue #77) ----------
+
+// `v` goes up with every change, `total` counts the session's files ever,
+// `today` those of `day` (YYYY-MM-DD, UTC).
+export type UploadsRecord = { v: number; total: number; day: string; today: number }
+
+const StoredUploads = z.object({
+  v: z.number().int().min(0),
+  total: z.number().int().min(0),
+  day: z.string(),
+  today: z.number().int().min(0),
+})
+
+export function parseUploads(context: unknown): UploadsRecord | null {
+  if (!context || typeof context !== "object") return null
+  const parsed = StoredUploads.safeParse((context as { uploads?: unknown }).uploads)
+  return parsed.success ? parsed.data : null
+}
+
+export const utcDay = (now: Date) => now.toISOString().slice(0, 10)
+
+// Files read today (UTC) by this user over all their sessions, and on the
+// whole site. Rows are the sessions that read a file today: a few per user,
+// a few hundred at most for the site.
+export async function countFileReadsToday(ownerId: string, now: Date): Promise<{ visitor: number; site: number }> {
+  const admin = createAdminClient()
+  const day = utcDay(now)
+  const [mine, site] = await Promise.all([
+    admin.from("finder_sessions").select("uploads:context->uploads").eq("owner_id", ownerId).eq("context->uploads->>day", day),
+    admin.from("finder_sessions").select("uploads:context->uploads").eq("context->uploads->>day", day),
+  ])
+  if (mine.error) throw new Error(`Could not count today's files: ${mine.error.message}`)
+  if (site.error) throw new Error(`Could not count today's files: ${site.error.message}`)
+  const sum = (rows: unknown) =>
+    (Array.isArray(rows) ? rows : []).reduce((total: number, row) => {
+      const uploads = parseUploads(row)
+      return total + (uploads && uploads.day === day ? uploads.today : 0)
+    }, 0)
+  return { visitor: sum(mine.data), site: sum(site.data) }
+}
+
+// Changes the session's file counts with `change`, from what the row holds
+// now. `change` returns null to leave them alone (a refusal), or the counts
+// to write; a calendar's session never takes files. Returns what was written.
+export async function changeUploads(
+  session: Pick<FinderSession, "id" | "ownerId">,
+  change: (uploads: UploadsRecord | null, current: RawContext) => Omit<UploadsRecord, "v"> | null,
+): Promise<UploadsRecord | null> {
+  let result: UploadsRecord | null = null
+  await writeContext(session, (current) => {
+    if (current.calendar) return null
+    const uploads = parseUploads(current)
+    const next = change(uploads, current)
+    if (!next) return null
+    result = { ...next, v: (uploads?.v ?? 0) + 1 }
+    return { ...current, uploads: result }
+  })
+  return result
 }
 
 // Profile reads from these sources recorded on any session since `since`.

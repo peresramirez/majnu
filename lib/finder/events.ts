@@ -14,6 +14,15 @@ export type FinderLocale = {
   timezone?: string // Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
+// Photos and documents (issue #77): a message with files is sent as
+// multipart/form-data instead of JSON, with this request as JSON in a part
+// named `request` and up to 3 parts named `file` (lib/finder/file-rules.ts
+// has the types and limits). `message` may then be empty. The server reads
+// each file once, keeps only short notes (FinderContext.notes) and stores no
+// file. Added for issue #77 (additive).
+export const FINDER_REQUEST_PART = "request"
+export const FINDER_FILE_PART = "file"
+
 export type FinderRequest = {
   // Absent on a visitor's first message; the route creates a session and sends
   // a `session` event first.
@@ -48,6 +57,11 @@ export type FinderContext = {
   // The person's name, only if the visitor gave it. The wrap step prefills
   // "Their name" with it. Added for issue #71 (additive).
   name?: string
+  // Short notes from photos and documents the visitor shared ("Wishlist:
+  // Kindle Paperwhite, 149,99 €"), shown as chips the visitor can correct and
+  // used by the search and the wrap brief. Never the file itself. Added for
+  // issue #77 (additive).
+  notes?: string[]
 }
 
 export type GiftOption = {
@@ -73,6 +87,9 @@ export type FinderLimitReason =
   // while one of today's sessions is left. Added for issue #70.
   | "session_full"
   | "site_busy" // the site-wide daily cap
+  // Files that were not read: this session's 6, the visitor's 12 a day, or the
+  // site's daily cap on reading files. Added for issue #77 (additive).
+  | "files_limit"
   | "signin_required" // e.g. an advent calendar
 
 export type FinderEvent =
@@ -83,8 +100,13 @@ export type FinderEvent =
   | { type: "context"; context: FinderContext }
   // Three options (sometimes fewer), with the one Majnu recommends and why.
   | { type: "options"; options: GiftOption[]; recommendedId: string; why: string }
-  // A personalising question; `suggestions` become tappable answers.
-  | { type: "question"; text: string; suggestions?: string[] }
+  // A personalising question; `suggestions` become answers the visitor picks
+  // (issue #82: picked, not sent, until they send all their answers as one
+  // message). `label` names what it asks about in a word or two ("Free
+  // time"), for that message. `profileRead` says a public profile was already
+  // read in this session, so the finder offers no profile field under the
+  // questions. Both added for issue #82 (additive).
+  | { type: "question"; text: string; suggestions?: string[]; label?: string; profileRead?: boolean }
   | { type: "limit"; reason: FinderLimitReason; message: string }
   | { type: "error"; message: string }
   // On the wrap step: what Majnu heard for the page (fill_wrap), filled into

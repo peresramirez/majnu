@@ -16,7 +16,7 @@ const isString = (v: unknown): v is string => typeof v === "string"
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 const optionalString = (v: unknown) => v === undefined || isString(v)
 
-const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required"])
+const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required", "files_limit"])
 
 function isGiftOption(v: unknown): v is GiftOption {
   if (!isRecord(v)) return false
@@ -69,7 +69,14 @@ export function parseFinderEvent(line: string): FinderEvent | null {
     case "question": {
       if (!isString(e.text)) return null
       const suggestions = Array.isArray(e.suggestions) ? e.suggestions.filter(isString).filter((s) => s.trim() !== "") : undefined
-      return suggestions && suggestions.length ? { type: "question", text: e.text, suggestions } : { type: "question", text: e.text }
+      // The label and whether a profile was read: issue #82.
+      return {
+        type: "question",
+        text: e.text,
+        ...(suggestions && suggestions.length ? { suggestions } : {}),
+        ...(isString(e.label) && e.label.trim() ? { label: e.label } : {}),
+        ...(e.profileRead === true ? { profileRead: true } : {}),
+      }
     }
     case "limit":
       return isString(e.reason) && LIMIT_REASONS.has(e.reason) && isString(e.message)

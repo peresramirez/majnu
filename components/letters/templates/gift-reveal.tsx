@@ -11,6 +11,7 @@ import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { wholeName } from "../names"
 import { paletteOf } from "../theme"
+import { VoiceNoteSlot } from "../voice-player"
 
 type Stage = "wrapped" | "unwrapping" | "open"
 
@@ -147,6 +148,8 @@ export function GiftReveal({ content }: { content: LetterContent }) {
           ) : null}
 
           <article className="rise mt-8 rounded-[22px] px-6 pb-9 pt-8 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.5)]" style={{ ...paperStyle, animationDelay: "700ms" }}>
+            {/* The sender's voice, on the note that came with the gift. */}
+            <VoiceNoteSlot tone="paper" className="mb-7 border-b border-[var(--line)] pb-6" />
             <Paragraphs body={content.body} />
             <SignOff signOff={content.signOff} senderName={content.senderName} className="mt-8" />
           </article>
