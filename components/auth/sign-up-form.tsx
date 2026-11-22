@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signInWithGoogle } from "@/app/auth/actions"
+import { afterAuthPath } from "@/app/auth/destination"
 import { nextPathFromSearch, withNext } from "@/lib/billing/next-path"
 import { createClient } from "@/lib/supabase/client"
 import { signUpSchema } from "@/lib/validations"
@@ -34,8 +35,9 @@ export default function SignUpForm() {
   const busy = isEmailLoading || isGoogleLoading
   const guest = useAuth().user?.is_anonymous === true
   const turnstile = useTurnstile("signup")
-  // Where to go after signing up: ?next=... or ?plan=full-moon (the landing
-  // page's "Choose Full moon"). Read after mount, so the page stays static.
+  // Where to go after signing up: a same-site ?next=... (an old ?plan=full-moon
+  // link from the retired subscription means Purchases), otherwise the gift
+  // finder. Read after mount, so the page stays static.
   const [next, setNext] = useState<string | null>(null)
   useEffect(() => setNext(nextPathFromSearch(new URLSearchParams(window.location.search))), [])
 
@@ -68,7 +70,7 @@ export default function SignUpForm() {
         setConfirm({ email: values.email, guest: result.upgradedGuest })
         return
       }
-      router.push(next ?? "/dashboard")
+      router.push(afterAuthPath(next))
       router.refresh()
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't create your account. Try again."))
@@ -108,7 +110,7 @@ export default function SignUpForm() {
               creating your account. Everything you made as a guest comes with you.
             </p>
             <p className="mt-3 leading-relaxed text-night-lilac">Until then, you can keep going as a guest.</p>
-            <Link href={next ?? "/dashboard"} className={`mt-6 inline-block ${linkClass}`}>
+            <Link href={afterAuthPath(next)} className={`mt-6 inline-block ${linkClass}`}>
               Back to Majnu
             </Link>
           </>

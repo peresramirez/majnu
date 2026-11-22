@@ -115,14 +115,21 @@ describe("GET /auth/callback", () => {
   })
 
   it.each(["https://evil.example", "//evil.example", "/\\evil.example", "javascript:alert(1)"])(
-    "lands on the dashboard instead of %s",
+    "lands on the gift finder instead of %s",
     async (next) => {
-      expect(await land(`?code=abc&next=${encodeURIComponent(next)}`)).toBe("https://majnu.app/dashboard")
+      expect(await land(`?code=abc&next=${encodeURIComponent(next)}`)).toBe("https://majnu.app/dashboard/find")
     },
   )
 
-  it("lands on the dashboard without a next", async () => {
-    expect(await land("?code=abc")).toBe("https://majnu.app/dashboard")
+  // Google sign-in and sign-up, a guest linking Google, and an email link
+  // (sign-up confirmation or a guest's upgrade) all end here.
+  it("lands on the gift finder without a next (issue #47)", async () => {
+    expect(await land("?code=abc")).toBe("https://majnu.app/dashboard/find")
+    expect(fakes.exchangeCodeForSession).toHaveBeenCalledWith("abc")
+  })
+
+  it("keeps an explicit next to the letters chat", async () => {
+    expect(await land("?code=abc&next=%2Fdashboard")).toBe("https://majnu.app/dashboard")
   })
 
   it("sends a refused Google link to sign-in with its code, keeping next", async () => {

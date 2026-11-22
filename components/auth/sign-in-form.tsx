@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signInWithGoogle } from "@/app/auth/actions"
+import { afterAuthPath } from "@/app/auth/destination"
 import { nextPathFromSearch, withNext } from "@/lib/billing/next-path"
 import { createClient } from "@/lib/supabase/client"
 import { signInSchema } from "@/lib/validations"
@@ -34,9 +35,10 @@ export default function SignInForm() {
   const busy = isEmailLoading || isGoogleLoading
   const guest = useAuth().user?.is_anonymous === true
   const turnstile = useTurnstile("signin")
-  // Where to go after signing in: ?next=... or ?plan=full-moon (the landing
-  // page's "Choose Full moon"), and ?auth_error=... from the auth callback.
-  // Read after mount, so the page stays static.
+  // Where to go after signing in: a same-site ?next=... (an old ?plan=full-moon
+  // link from the retired subscription means Purchases), otherwise the gift
+  // finder; and ?auth_error=... from the auth callback. Read after mount, so
+  // the page stays static.
   const [next, setNext] = useState<string | null>(null)
   useEffect(() => {
     const search = new URLSearchParams(window.location.search)
@@ -70,7 +72,7 @@ export default function SignInForm() {
         setError(friendlyAuthError(result.error, "We couldn't sign you in. Try again."))
         return
       }
-      router.push(next ?? "/dashboard")
+      router.push(afterAuthPath(next))
       router.refresh()
     } catch (err) {
       setError(friendlyAuthError(err, "We couldn't sign you in. Try again."))
