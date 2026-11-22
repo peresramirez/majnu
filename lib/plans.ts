@@ -55,3 +55,27 @@ export const WRAPPER_REQUEST_MAX_CHARS = 500
 // server stores this exact text with the purchase, never text the browser sent.
 export const WRAPPER_CONSENT_TEXT =
   "Start making my design straight away. I understand that because it is made just for me, I lose my right of withdrawal once you start."
+
+// Personalisations bought in advance on the Purchases tab (issue #96): one to
+// five at once, each the wrapper's price, one Stripe Checkout. "Make it
+// unique" then uses one without going to Stripe.
+export const topUp = {
+  maxQuantity: 5,
+  // Shown in Checkout and on receipts (the line item is the wrapper's Price).
+  productName: "Majnu personalisations",
+  name: "Personalisations",
+  summary: "Buy personalised wrappers in advance, then use one on any gift without paying again.",
+} as const
+
+// Where a refund of unused personalisations is asked for.
+export const REFUND_EMAIL = "hello@majnu.app"
+
+// The withdrawal rule for personalisations bought in advance, in one place for
+// the Purchases tab, the dialog and the terms. Unused ones can be refunded for
+// 14 days; one that is used, with the consent below, is no longer refundable.
+export const TOP_UP_REFUND_TEXT = `Unused personalisations can be refunded within 14 days of buying: write to ${REFUND_EMAIL}. Using one starts its design at once, which ends the right of withdrawal for that one.`
+
+// The sentence the sender agrees to before using a personalisation bought in
+// advance. Stored with the purchase, as the paid one is.
+export const CREDIT_CONSENT_TEXT =
+  "Start making my design straight away. I understand that because it is made just for me, I lose my right of withdrawal for this personalisation once you start."

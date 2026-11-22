@@ -16,6 +16,7 @@
 import "server-only"
 import type Stripe from "stripe"
 import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
+import { applyPaidCreditsSession, CREDITS_SESSION_EXPAND, isCreditsSession } from "./credits"
 import { getMyLetterForWrapper } from "./my-purchases"
 import { safeNextPath } from "./next-path"
 import {
@@ -260,7 +261,11 @@ function isMissingResource(error: unknown): boolean {
 
 // ---------- Webhook ----------
 
-export type EventOutcome = { outcome: "applied"; status: PurchaseStatus | null } | { outcome: "ignored"; reason: string }
+export type EventOutcome =
+  | { outcome: "applied"; status: PurchaseStatus | null }
+  // A top-up of personalisations bought in advance (./credits.ts).
+  | { outcome: "granted" | "already_granted"; quantity: number }
+  | { outcome: "ignored"; reason: string }
 
 // The events the webhook endpoint subscribes to in the Stripe Dashboard.
 export const HANDLED_EVENTS = [
@@ -275,6 +280,13 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<EventOutco
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
       const snapshot = event.data.object
+      if (isCreditsSession(snapshot)) {
+        if (snapshot.payment_status === "unpaid") return ignored("waiting for a delayed payment")
+        // Read the session as it is now, with its line item (the quantity) and the charge (the receipt).
+        const session = await createStripeClient().checkout.sessions.retrieve(snapshot.id, { expand: CREDITS_SESSION_EXPAND })
+        const grant = await applyPaidCreditsSession(session)
+        return grant.outcome === "ignored" ? ignored(grant.reason) : { outcome: grant.outcome, quantity: grant.quantity }
+      }
       if (snapshot.mode !== "payment" || !snapshot.metadata?.purchase_id) return ignored("not a wrapper checkout")
       // Fulfil only what is paid; a delayed method completes first and pays later.
       if (snapshot.payment_status === "unpaid") return ignored("waiting for a delayed payment")
@@ -285,7 +297,9 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<EventOutco
     }
     case "checkout.session.async_payment_failed":
     case "checkout.session.expired": {
-      // Never paid: the pending row was not a purchase.
+      // Never paid: the pending row was not a purchase. A top-up records
+      // nothing before it is paid, so there is nothing to remove.
+      if (isCreditsSession(event.data.object)) return ignored("unpaid top-up")
       const purchaseId = event.data.object.metadata?.purchase_id
       if (!purchaseId || !UUID.test(purchaseId)) return ignored("not a wrapper checkout")
       await deletePendingPurchase(purchaseId)
