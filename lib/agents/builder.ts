@@ -20,6 +20,9 @@ export type BuildInput = {
   now: Date
   // The sender's IANA timezone.
   timezone: string
+  // The page is given as a gift, so it must carry one even on a template where
+  // a gift is optional (party-box). The finder's wrap step sets it.
+  giftRequired?: boolean
 } & (
   | { mode: "build"; brief: string }
   | { mode: "edit"; current: LetterContent | CalendarContent; change: string }
@@ -56,12 +59,13 @@ Writing
 Gifts
 - Include only gifts the brief names. Copy codes, links and prices exactly, character for character. Never invent a code, a link, a price or an image.
 - Links must start with https://. Leave out any link that does not.
-- A gift reveal needs at least one gift. Other letters usually have none: an empty list.
+- A gift reveal or a 3D gift box (gift-reveal, gift-box-3d) needs at least one gift. A party pop box (party-box) needs one when the brief gives a gift. Other letters usually have none: an empty list.
 
-Invitations (wedding-invite, party-invite)
+Invitations (wedding-invite, party-invite, wedding-envelope-3d)
 - Fill event: a title, startsAt as local ISO 8601 with the UTC offset that applies on that date in that timezone (for example 2026-12-24T19:00:00+01:00), locationName, and a street address a map can find.
 - Use the date, time and place from the brief. If the time is missing, pick a sensible one for the occasion.
 - recipientName may be a group ("Everyone", "Friends") when the invitation is for several people.
+- A party pop box (party-box) is an invitation only when the brief gives a party's date and place: then fill event the same way. Otherwise leave event out.
 
 Calendars
 - advent-classic: exactly 24 doors, days 1 to 24. startDate is 1 December of this year, or of next year if this year's Christmas has passed, unless the brief says otherwise.
@@ -139,17 +143,34 @@ function sanitizeGift<T extends GiftLike>(gift: T): T {
   return { ...rest, ...(safeUrl ? { url: safeUrl } : {}), ...(safeImage ? { imageUrl: safeImage } : {}) } as T
 }
 
+// Templates whose page is built around the event: without it there is nothing
+// to invite to. The builder prompt's "Invitations" section names the same ids.
+export const EVENT_TEMPLATES = ["wedding-invite", "party-invite", "wedding-envelope-3d"] as const satisfies readonly TemplateId[]
+
+// Templates whose reveal ends on a gift card: without a gift they open on nothing.
+// party-box shows a gift only when it has one, so it needs one only when it is
+// given as a gift (BuildInput.giftRequired).
+export const GIFT_TEMPLATES = ["gift-reveal", "gift-box-3d"] as const satisfies readonly TemplateId[]
+
+function isOneOf(list: readonly TemplateId[], id: TemplateId): boolean {
+  return list.includes(id)
+}
+
 // Problems the model should fix itself; empty when the content fits the template.
 // Small things (door numbers, links, a bad timezone) are fixed in sanitize() instead.
-export function checkContent(templateId: TemplateId, built: BuiltContent): string[] {
+export function checkContent(templateId: TemplateId, built: BuiltContent, options: { giftRequired?: boolean } = {}): string[] {
   const problems: string[] = []
   if (built.kind === "letter") {
     const c = built.content
     if (c.body.length < 1 || c.body.length > 6) problems.push(`body must have 1 to 6 paragraphs, not ${c.body.length}`)
-    if ((templateId === "wedding-invite" || templateId === "party-invite") && !c.event) {
+    if (isOneOf(EVENT_TEMPLATES, templateId) && !c.event) {
       problems.push("an invitation needs the event (title, startsAt, locationName, address)")
     }
-    if (templateId === "gift-reveal" && c.gifts.length === 0) problems.push("a gift reveal needs at least one gift")
+    if (c.gifts.length === 0) {
+      if (templateId === "gift-reveal") problems.push("a gift reveal needs at least one gift")
+      else if (templateId === "gift-box-3d") problems.push("a 3D gift box needs at least one gift")
+      else if (options.giftRequired) problems.push("this page is given as a gift, so it needs the gift from the brief")
+    }
   } else {
     const c = built.content
     const doors = c.doors.length
@@ -212,7 +233,7 @@ export async function buildContent(input: BuildInput): Promise<BuiltContent> {
       continue
     }
     const built = { kind, content: parsed } as BuiltContent
-    const found = checkContent(input.templateId, built)
+    const found = checkContent(input.templateId, built, { giftRequired: input.giftRequired })
     if (found.length === 0) return sanitize(built, input.timezone)
     problems = found
   }
@@ -224,9 +245,12 @@ export function titleFor(templateId: TemplateId, recipientName: string): string 
   const name = recipientName.trim().slice(0, 40) || "someone"
   switch (templateId) {
     case "gift-reveal":
+    case "gift-box-3d":
+    case "party-box":
       return `A gift for ${name}`
     case "wedding-invite":
     case "party-invite":
+    case "wedding-envelope-3d":
       return `An invitation for ${name}`
     case "postcard":
       return `A postcard for ${name}`

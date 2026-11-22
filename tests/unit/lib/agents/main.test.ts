@@ -177,3 +177,13 @@ describe("runMainAgent", () => {
     expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "assistant"])
   })
 })
+
+describe("MAIN_SYSTEM_PROMPT", () => {
+  it("names every template that takes a gift list in the gift-list step", async () => {
+    const { GIFT_LIST_TEMPLATES } = await import("@/lib/claims/rules")
+    const step = MAIN_SYSTEM_PROMPT.split("\n").find((line) => line.startsWith("5. Gift list."))
+    expect(step).toBeDefined()
+    for (const id of GIFT_LIST_TEMPLATES) expect(step).toContain(id)
+    expect(step).toContain("wedding-invite, party-invite, wedding-envelope-3d, party-box")
+  })
+})
