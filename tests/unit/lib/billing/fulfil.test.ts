@@ -174,3 +174,51 @@ describe("a purchase paid with a coupon code", () => {
     expect(stripe.refunds.create).not.toHaveBeenCalled()
   })
 })
+
+describe("one of the day's free designs (docs/features/free-designs.md)", () => {
+  const HASH = "a".repeat(64)
+  const DAY = "2026-11-22"
+
+  function claimed(overrides: Record<string, unknown> = {}) {
+    db.freeDays.set(`${DAY}|${HASH}`, { day: DAY, ipHash: HASH, used: 1 })
+    return addPurchase({ letterId: LETTER, status: "paid", freeDay: DAY, freeIpHash: HASH, amountCents: 0, consentAt: null, consentText: null, ...overrides })
+  }
+
+  it("runs like a paid one, keeps the use and forgets the address hash when the design is made", async () => {
+    const purchase = claimed()
+    const outcome = await runPurchaseDesign(purchase.id, { redesign: async () => ({ designId: "d1", seconds: 70 }), log })
+    expect(outcome).toEqual({ outcome: "done", designId: "d1", seconds: 70 })
+    expect(db.purchases.get(purchase.id)).toMatchObject({ status: "done", freeIpHash: null, freeDay: DAY })
+    expect(db.freeDays.get(`${DAY}|${HASH}`)?.used).toBe(1)
+  })
+
+  it("gives the free design back and marks the purchase failed when the run fails, without calling Stripe", async () => {
+    const purchase = claimed()
+    const outcome = await runPurchaseDesign(purchase.id, {
+      redesign: async () => {
+        throw new Error("sandbox did not start")
+      },
+      log,
+    })
+    expect(outcome).toMatchObject({ outcome: "free_returned", reason: expect.stringMatching(/sandbox did not start/) })
+    expect(db.purchases.get(purchase.id)).toMatchObject({ status: "failed", refundId: null, freeIpHash: null })
+    expect(db.freeDays.get(`${DAY}|${HASH}`)?.used).toBe(0)
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+
+  it("gives it back once when the dead-letter queue finds the run abandoned", async () => {
+    const purchase = claimed({ status: "designing" })
+    expect(await refundAbandonedPurchase(purchase.id, { log })).toMatchObject({ outcome: "free_returned" })
+    expect(await refundAbandonedPurchase(purchase.id, { log })).toMatchObject({ outcome: "skipped" })
+    expect(db.freeDays.get(`${DAY}|${HASH}`)?.used).toBe(0)
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+
+  it("never reaches Stripe even when the gift was deleted before its design", async () => {
+    const purchase = claimed({ letterId: null })
+    const redesign = vi.fn()
+    expect(await runPurchaseDesign(purchase.id, { redesign, log })).toMatchObject({ outcome: "free_returned" })
+    expect(redesign).not.toHaveBeenCalled()
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+})

@@ -7,8 +7,9 @@
 //      letter_designs and returns its id.
 //   3. Mark the purchase done with the design, or, if anything failed, refund
 //      the payment through Stripe and mark it refunded. A purchase paid with
-//      a coupon code is marked failed and its code gets the use back instead;
-//      Stripe is never called for it (./refunds.ts, giveBack).
+//      a coupon code is marked failed and its code gets the use back instead,
+//      and one of the day's free designs gets that free design back; Stripe
+//      is never called for either (./refunds.ts, giveBack).
 import "server-only"
 import { redesignLetter, type RedesignResult } from "@/lib/daytona/redesign"
 import { claimForDesign, getPurchase, markDone } from "./purchases"
@@ -19,6 +20,8 @@ export type JobOutcome =
   | { outcome: "refunded" | "refund_failed"; reason: string }
   // A coupon purchase: failed, and its code has the use back.
   | { outcome: "code_returned"; reason: string }
+  // A free purchase: failed, and the day's free design is given back.
+  | { outcome: "free_returned"; reason: string }
   | { outcome: "skipped"; reason: string }
 
 export type JobDeps = {
@@ -68,7 +71,7 @@ export async function refundAbandonedPurchase(purchaseId: string, deps: Partial<
 }
 
 async function refundAfterFailure(
-  purchase: { id: string; paymentIntentId: string | null; couponId: string | null },
+  purchase: { id: string; paymentIntentId: string | null; couponId: string | null; freeDay: string | null },
   reason: string,
   log: (line: string) => void,
 ): Promise<JobOutcome> {
@@ -77,9 +80,13 @@ async function refundAfterFailure(
     log(`${purchase.id}: failed, the coupon code has its use back`)
     return { outcome: "code_returned", reason }
   }
+  if (refund.outcome === "free_returned") {
+    log(`${purchase.id}: failed, the free design is given back`)
+    return { outcome: "free_returned", reason }
+  }
   if (refund.outcome === "nothing_to_return") {
     // Someone else (the dead-letter queue, or the job itself) got there first.
-    return { outcome: "skipped", reason: "the coupon purchase was already settled" }
+    return { outcome: "skipped", reason: `the ${purchase.freeDay ? "free" : "coupon"} purchase was already settled` }
   }
   if (refund.outcome === "refunded") {
     log(`${purchase.id}: refunded (${refund.refundId})`)

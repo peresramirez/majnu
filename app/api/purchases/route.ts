@@ -3,12 +3,15 @@
 // whether the letter can have a wrapper, and its newest purchase (to show the
 // status instead of the button while a design is on its way, or done), plus
 // a coupon code this browser remembered from a poster's short link, so the
-// dialog can open with it filled in (lib/billing/coupon-cookie.ts).
+// dialog can open with it filled in (lib/billing/coupon-cookie.ts), and how
+// many of today's free designs this connection has left
+// (lib/billing/free-designs.ts; null when they are not offered).
 //
 // 200 WrapperState (lib/billing/view.ts); 400 for a bad id; 401 without a
 // session; 404 for a letter that is not the sender's. Read through row-level
 // security, so nobody sees another sender's letters or purchases.
 import { rememberedCouponCode } from "@/lib/billing/coupon-cookie"
+import { freeDesignsLeft } from "@/lib/billing/free-designs"
 import { jsonError } from "@/lib/billing/http"
 import { getMyLatestPurchaseForLetter, getMyLetterForWrapper } from "@/lib/billing/my-purchases"
 import { toPurchaseView, type WrapperState } from "@/lib/billing/view"
@@ -29,13 +32,23 @@ export async function GET(request: Request): Promise<Response> {
   if (!user) return jsonError(401, "Sign in first.")
 
   try {
-    const [letter, purchase] = await Promise.all([getMyLetterForWrapper(letterId), getMyLatestPurchaseForLetter(letterId)])
+    const [letter, purchase, freeDesigns] = await Promise.all([
+      getMyLetterForWrapper(letterId),
+      getMyLatestPurchaseForLetter(letterId),
+      // A failure here must not hide the button: the dialog then offers what
+      // it offered before free designs (a code, or payment).
+      freeDesignsLeft(request.headers).catch((error: unknown) => {
+        console.error("free designs lookup failed", error instanceof Error ? error.message : error)
+        return null
+      }),
+    ])
     if (!letter) return jsonError(404, "Unknown gift.")
     const state: WrapperState = {
       account: user.is_anonymous === true ? "guest" : "member",
       unavailable: letter.kind !== "letter" ? "not_a_letter" : letter.built ? null : "not_built",
       purchase: purchase ? toPurchaseView(purchase) : null,
       rememberedCode: rememberedCouponCode(request),
+      freeDesigns,
     }
     return Response.json(state, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
