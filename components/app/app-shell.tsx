@@ -3,20 +3,23 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Gift, LayoutTemplate, PenLine, Receipt, Search, type LucideIcon } from "lucide-react"
+import { Gift, MailOpen, PenLine, Search, type LucideIcon } from "lucide-react"
 import { Wordmark } from "@/components/brand/wordmark"
+import { FinderProvider } from "@/components/finder/finder-panel"
 import { AccountMenu } from "./account-menu"
 import { GuestNotice } from "./guest-notice"
 import type { SessionUser } from "./session"
 import { focusRing } from "./styles"
-import { activeTab, appTabs, type TabId } from "./tabs"
+import { APP_HOME, activeTab, appTabs, type TabId } from "./tabs"
 
-const icons: Record<TabId, LucideIcon> = { find: Search, letters: PenLine, templates: LayoutTemplate, gifts: Gift, purchases: Receipt }
+const icons: Record<TabId, LucideIcon> = { find: Search, gifts: Gift, create: PenLine, tracker: MailOpen }
 
-// Header with the wordmark, top tabs from md up, and a bottom tab bar on phones.
-// The shell is exactly one screen tall and <main> scrolls, so the create chat
-// can pin its composer above the tab bar. While the composer has focus on a
-// phone, the tab bar steps aside to give the keyboard the room.
+// Header with the wordmark, top tabs from md up, and a bottom tab bar on phones
+// (docs/features/app-shell.md). The shell is exactly one screen tall and <main>
+// scrolls, so the finder and the letters chat can pin their message box above
+// the tab bar. While a message box has focus on a phone, the tab bar steps
+// aside to give the keyboard the room. The gift finder's state lives here
+// (FinderProvider), so a conversation in Find a gift survives the other tabs.
 export function AppShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   const current = activeTab(usePathname() ?? "")
 
@@ -31,7 +34,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
       <header className="flex-none border-b border-night-petal/10 bg-night-plum pt-[env(safe-area-inset-top)]">
         <div className="flex h-14 items-center gap-8 px-4 md:h-16 md:px-6">
-          <Link href="/dashboard/find" aria-label="Majnu, find a gift" className={`flex-none rounded ${focusRing}`}>
+          <Link href={APP_HOME} aria-label="Majnu, find a gift" className={`flex-none rounded ${focusRing}`}>
             <Wordmark width={108} />
           </Link>
           <nav aria-label="Main" className="hidden md:block">
@@ -63,14 +66,14 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       {user.isGuest && <GuestNotice />}
 
       <main id="main" className="min-h-0 flex-1 overflow-y-auto">
-        {children}
+        <FinderProvider>{children}</FinderProvider>
       </main>
 
       <nav
         aria-label="Main"
         className="flex-none border-t border-night-petal/10 bg-night-plum pb-[env(safe-area-inset-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid" style={{ gridTemplateColumns: `repeat(${appTabs.length}, minmax(0, 1fr))` }}>
           {appTabs.map((tab) => {
             const active = tab.id === current
             const Icon = icons[tab.id]
