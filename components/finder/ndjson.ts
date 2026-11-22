@@ -16,7 +16,7 @@ const isString = (v: unknown): v is string => typeof v === "string"
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 const optionalString = (v: unknown) => v === undefined || isString(v)
 
-const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "site_busy", "signin_required"])
+const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required"])
 
 function isGiftOption(v: unknown): v is GiftOption {
   if (!isRecord(v)) return false
@@ -77,6 +77,16 @@ export function parseFinderEvent(line: string): FinderEvent | null {
         : null
     case "error":
       return { type: "error", message: isString(e.message) ? e.message : "" }
+    case "fill": {
+      // Only the wrap form's four fields, and only text (issue #70).
+      if (!isRecord(e.fields)) return null
+      const fields: Record<string, string> = {}
+      for (const key of ["recipientName", "senderName", "note", "giftCode"] as const) {
+        const value = e.fields[key]
+        if (isString(value) && value.trim()) fields[key] = value
+      }
+      return Object.keys(fields).length ? { type: "fill", fields } : null
+    }
     case "done":
       return { type: "done" }
     default:

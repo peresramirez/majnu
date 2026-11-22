@@ -10,7 +10,7 @@ The landing page at `majnu.app` tells a visitor from an ad what Majnu does in on
 flowchart TD
   ad(["Visitor from an ad"]) --> landing["Landing page /<br/>app/(marketing)/page.tsx"]
   landing --> hero["Hero: Give something personal"]
-  landing --> how["How it works: three compact steps with pictures,<br/>moon travels with the scroll"]
+  landing --> how["How it works: pinned, one step at a time,<br/>the moon travels with the scroll"]
   landing --> send["What you can send:<br/>TemplateCard thumbnails"]
   landing --> pricing["Pricing from lib/plans.ts"]
   landing --> faq["Questions"]
@@ -24,7 +24,7 @@ The page, top to bottom ([`app/(marketing)/page.tsx`](../../app/(marketing)/page
 
 1. **Header** with the wordmark, links to "How it works" and "Pricing", and "Sign in".
 2. **Hero:** "Personalized digital gifting", the headline "Give something personal.", a primary **Create a gift** button to `/signin` and "See how it works". Under it: "Free to start. Nothing to install for the person you send it to."
-3. **How it works** ([`how-it-works.tsx`](../../components/landing/how-it-works.tsx)): one line ("Majnu would have given Layla the moon. Yours takes three steps.") and three compact steps: Say who it is for; Choose from three gifts; Wrap it, send the link. Each has a moon phase one step fuller than the last, a short title, one line, and a small picture of what happens (see [How it works](#how-it-works-1) below). On desktop the painting is pinned behind the hero and the steps, and the moon travels as they scroll past; on phones it is a framed card between them.
+3. **How it works** ([`how-it-works.tsx`](../../components/landing/how-it-works.tsx)): one line ("Majnu would have given Layla the moon. Yours takes three steps.") and three steps, told one at a time while the section stays pinned: Say who it is for; Choose from three gifts; Wrap it, send the link. Each is a large title and one line; as the visitor scrolls, the step on screen lifts and blurs away like mist and the next one settles in, while the moon travels from Majnu to Layla (see [How it works](#how-it-works-1) below). On desktop the painting is pinned behind the hero and the story; on phones it is part of the story's pinned screen.
 4. **What you can send:** gift, letter, invitation and advent calendar, with their plan, and three examples drawn with `<TemplateCard>` that open the demo pages. The demo slugs always resolve to the same fixtures as the thumbnails ([templates-and-gift-pages.md](templates-and-gift-pages.md#demo-slugs)).
 5. **Pricing:** two cards read from [`lib/plans.ts`](../../lib/plans.ts): Free (€0, everything that makes Majnu useful) and the personalised wrapper (€2.99 once, for one gift, bought with "Make it unique" on a wrapped gift; [billing.md](billing.md)). Prices include VAT; nothing renews.
 6. **Questions:** whether you need an account, where the ideas come from, location, whether the recipient needs an account, who can see a gift, what Majnu costs and what happens when you buy a personalised wrapper.
@@ -34,24 +34,34 @@ Sections below the fold play in as they scroll into view ([`reveal.tsx`](../../c
 
 ### How it works
 
-The section was three tall cards of three sentences each, spaced most of a screen apart on desktop to give the moon room to travel. The developer asked for it to be simpler and easier to take in at a glance (22 November), so each step now shows what happens instead of describing it.
+Until 22 November the section was three cards with small pictures that scrolled past. The developer asked for it to be told as a story instead (issue #73): the section pins, shows one step at a time as text only, changes step with a striking effect as the visitor scrolls, keeps the scene moving the whole time, and lets the page scroll on after the last step.
 
-- **The words** live in [`how-it-works-steps.ts`](../../components/landing/how-it-works-steps.ts), a plain TypeScript file so the unit test can read it. The test keeps three steps, titles of two to five words, lines of at most twelve, and moon phases that grow to full on the last step.
-- **The pictures** are drawn with our own markup, Tailwind and lucide icons, in the finder's own styles, so they look like what the visitor will see next:
-  1. A message, "A gift for my mother", and the chips Majnu assumed from it ("About 45–70", "Germany"), as in the finder dialog ([`context-chips.ts`](../../components/finder/context-chips.ts)).
-  2. Three gifts with prices; the middle one is lifted, with the orchid "Recommended" badge of [`gift-option-card.tsx`](../../components/finder/gift-option-card.tsx). It is the only orchid on the screen.
-  3. The wrapped gift, an arrow, and Link, WhatsApp and QR code. WhatsApp is drawn with lucide's speech bubble, as lucide has no brand icons.
-- **Accessibility.** The pictures are `aria-hidden`; a screen reader reads the heading, the line, and an ordered list of three level-3 headings, each with its line. The section has nothing to focus.
+```mermaid
+flowchart LR
+  scroll(["scroll event<br/>(passive)"]) --> raf["requestAnimationFrame:<br/>read scrollY, ease towards it"]
+  raf -->|"one CSS variable"| u["--u on the section<br/>(steps of scroll since it pinned)"]
+  u --> css["app/globals.css: each letter's<br/>transform, opacity, blur"]
+  u --> marks["the three moon marks"]
+  scroll --> scene["GiftScene reads scrollY<br/>against the data-moon marks"]
+  scene --> moon["the moon's place and phase"]
+```
+
+- **The track.** The section is one screen tall plus 0.8 of a screen of scroll per step (340 svh in all). Its screen is `position: sticky`, so it stays put for 2.4 screens of scrolling and lets go when the track ends; the next section follows directly, with no gap. Heights use `svh`, the small viewport, so Safari's toolbar showing and hiding never resizes the pinned screen.
+- **The timeline** lives in [`how-it-works-steps.ts`](../../components/landing/how-it-works-steps.ts), with the steps' words. It is measured in steps of scroll: 0 where the section pins, 3 where it lets go. The first step settles while the section scrolls into view; the change from step 1 to 2 happens around 0.92 and from 2 to 3 around 2.08, each taking 0.36 of a step's scroll for the old step to leave and as much for the new one to arrive (they overlap by 0.06 in the middle). That leaves each step at rest for about 0.6 of a step's scroll. The last step never leaves; it scrolls away with the section. The unit test checks these rules.
+- **One variable.** [`how-it-works.tsx`](../../components/landing/how-it-works.tsx) reads `scrollY` in a passive `scroll` listener, and at most once a frame eases towards it (about 70 ms behind, the same at 60 and 120 Hz) and writes `--u`. It writes it on each step and each progress mark rather than once on the section, held still outside that step's entrance and exit (`stepPosition` in the steps file), and skips the write when the value has not changed. A frame therefore restyles only the letters that are moving, and nothing while a step rests: on a phone with the CPU slowed four times, style work went from 6.8 ms to 1.0 ms a frame. `scrollY` is read in the scroll event, not in the frame, because Chrome recalculates styles when it is read after a style write. The section's place in the page is measured only when something resizes (a `ResizeObserver` on the section and the body). The loop stops when `--u` has arrived.
+- **The effect, in CSS** ([`app/globals.css`](../../app/globals.css)). Each title is split into letters and each line into words, all `inline-block` spans with a place in the wave (`--c`) and a small random drift (`--r`, the same on the server and in the browser). From `--u` and the step's `--enter` and `--leave`, each letter works out how far it has arrived and how far it has left. Leaving, it eases in, like mist in moonlight: it drifts up and a little to one side, turns, grows by 15%, blurs and fades, letter after letter from left to right. Arriving, it eases out: it rises half a line into place and comes into focus. Only `transform`, `opacity` and `filter` change. The values are registered with `@property` as numbers, so the browser works each one out once per letter.
+- **Progress.** Three small moons beside the heading, one per step with its phase (0.22, 0.55, full). The current one is lit in rose gold and slightly larger; it lights up as its step arrives and dims as it leaves.
+- **Story mode is CSS only:** it applies under `@media (prefers-reduced-motion: no-preference) and (scripting: enabled)`. With reduced motion, without JavaScript, or in a browser that does not know the `scripting` feature (Safari before 17, Chrome before 120), the same markup is the plain list its Tailwind classes describe: the heading, the line and the three steps, each with its moon phase. Nothing pins and nothing moves, and nothing jumps when the page hydrates, because the choice is made before the first paint. The story-mode rules are scoped under `.story` so they win over Tailwind's responsive classes, which Tailwind appends after the file.
+- **Accessibility and search.** Every step is in the page, in order, as real text: an `h2`, the line, and an ordered list of three `h3` headings with their lines. In story mode that text is visually hidden (the usual screen-reader-only clip), never `display: none`, and what people see is an `aria-hidden` copy split into letters, so a screen reader never spells a title out letter by letter. Search engines see both. The heading is set in capitals in story mode, which Chrome passes on to screen readers, so it carries `aria-label="How it works"`. The section has nothing to focus, so Tab goes from the hero's last suggestion straight to the first example below it. The header's "How it works" link (`#how`) lands at the top of the track, where the first step is on screen.
 - **Layout.**
 
-  | Width | Steps |
+  | Width | Story mode |
   |---|---|
-  | Under 640 px | A tight stack: moon and title, the line, then the picture under them |
-  | 640 to 767 px | One row per step, picture on the right (the painting is a card above the section) |
-  | 768 to 1279 px | A 448 px column on the left of the pinned painting, picture under the text, so Majnu stays in view |
-  | 1280 px and up | A 576 px column, one row per step |
+  | Under 768 px | The pinned screen is a column: the heading, the line and the marks at the top, the scene filling the middle (it fades into the page above and below), the step at the bottom, clear of Safari's floating toolbar (`padding-bottom: max(28px, var(--safe-bottom) + 16px)`) |
+  | 768 to 1279 px | A 448 px column on the left of the pinned painting, centred on the screen, so Majnu stays in view |
+  | 1280 px and up | A 576 px column |
 
-- **Motion.** Each card plays in with `<Reveal>`. Inside it the picture's pieces arrive one after another: the message, then the chips; the three gifts, then the badge; the gift, the arrow, then the three ways to send it. Each takes 700 ms with the brand's easing, set with `group-data-[reveal=hidden]` classes and two CSS variables for the delay (`--i` for the step, `--d` for the piece). With reduced motion `<Reveal>` never hides anything, so the pictures are simply there.
+  Titles are Gilda Display at 34 to 46 px on phones and 46 to 72 px from 768 px; the line is 17 or 19 px in Lilac haze.
 
 ### The scroll scene
 
@@ -60,8 +70,10 @@ The section was three tall cards of three sentences each, spaced most of a scree
 - The painting was generated with FLUX and is served as WebP at 1280 and 2048 pixels wide from [`public/landing/`](../../public/landing/).
 - The moon follows a quadratic curve from the light above Majnu's cupped hands, over an arc, to Layla's open palm. Its radius grows from 9 to 46 and shrinks to 15 as it lands, and it fills from a crescent to full on the way.
 - Scroll progress is read on `scroll` (a passive listener) and eased towards with `requestAnimationFrame`, which stops when the moon has arrived.
-- On desktop the progress is how far the page has scrolled through the track (`data-gift-track`: the hero and How it works), divided by the track's height less one screen. The moon therefore lands on Layla's palm exactly when the end of How it works reaches the bottom of the screen, however long that section is. Since the steps became compact, the journey takes one section's height of scrolling (696 px at 1440 × 900, 923 px at 1024 × 768, where the steps stack) instead of about 1,570 px, and each step comes fully into view as the moon passes: the first at the top of the arc, all three just before it lands.
-- **Variants:** `backdrop` pinned behind a long section (desktop landing), `card` animated as it scrolls past (phone landing), and `panel`, which fills its parent with the moon already given (sign-in and sign-up, [`app/(auth)/layout.tsx`](../../app/(auth)/layout.tsx), beside the line "Majnu would have given Layla the moon.").
+- **The journey follows the story.** How it works places four invisible marks in its track (`data-moon`, from `moonMarks` in [`how-it-works-steps.ts`](../../components/landing/how-it-works-steps.ts)), each with the moon's progress when it reaches the top of the screen: 0 when the section starts to come into view from below (on desktop, the top of the page), 0.2 when it pins with the first step, 0.5 (the top of the arc, half lit) as the second step settles, and 1 (on Layla's palm, full) as the last step settles. In between it moves evenly. The scene measures the marks' places in the page when the track resizes and, while scrolling, reads only `scrollY`, in the scroll event. The marks and the scene both sit inside `data-gift-track`, the hero and How it works together.
+- **Variants:** `backdrop` pinned behind the hero and How it works (desktop), `story`, which fills its box inside How it works' pinned screen, zoomed 1.28 times and centred on the couple, with its top and bottom fading into the page through a mask (phones), and `panel`, which fills its parent with the moon already given (sign-in and sign-up, [`app/(auth)/layout.tsx`](../../app/(auth)/layout.tsx), beside the line "Majnu would have given Layla the moon."). A hidden variant (the backdrop on phones, the story from 768 px) does no work while scrolling.
+- **The moon breathes** while nobody scrolls: the drawing's opacity goes from 0.8 to 1 and back over 7 seconds, an animation on the `<svg>` element that the compositor runs without the main thread.
+- **The page behind.** The hero's glow (a radial gradient on the track) is sized in pixels (1440 px tall, centred 325 px from the top), as it was at the track's old height, so the much taller track does not stretch it; it fades to Plum, the colour of the next section.
 - With `prefers-reduced-motion`, nothing moves: the scene shows its final state, the full moon in Layla's hand.
 
 ## The Night Post brand
@@ -146,15 +158,33 @@ flowchart LR
 
 ## How it was checked
 
-- How it works (22 November): [`how-it-works.test.ts`](../../tests/unit/components/landing/how-it-works.test.ts) holds the steps to the brief (three steps, short titles and lines, the moon filling to full). In a browser at 320, 375, 700, 1024, 1280 and 1440 px wide: no horizontal scroll, and no piece of any picture outside its box (measured per element). The section went from 1,572 to 696 px tall at 1440 × 900 (it fits on one screen) and from 1,336 to 910 px at 375 px. With a script reading the moon's position while scrolling, it reached Layla's palm (1489, 489 in the painting's coordinates) at the end of the track at 1024, 1280 and 1440 px. Reduced motion: nothing hidden, no transitions, the moon still in Layla's hand. The accessibility tree reads the heading, the line and three level-3 headings with their lines; the console showed no errors or warnings.
+- How it works as a pinned story (issue #73, 22 November): see [How it was checked: the pinned story](#how-it-was-checked-the-pinned-story) below.
 - Apart from that, no unit tests cover the landing page itself. The `TemplateCard` data has a test, and the demo slugs are tested to point at templates of the right kind ([`fixtures.test.ts`](../../tests/unit/lib/letters/fixtures.test.ts)).
 - Browser checks of the page, the scene and the legal pages (375 px and 1440 px, keyboard, reduced motion) are part of every task's verification, but their results are not recorded in the repository. The screenshots in `media/` come from the starter template and do not show Majnu.
 - Self-hosted fonts (21 November): every font file was compared glyph by glyph with the file Google Fonts serves for the same request. Outlines and advance widths match within 1.3 font units (about 0.02 px at 16 px), the OpenType features are the same, and no character in Google's advertised ranges is missing. In a browser, the landing page, `/signin`, `/l/demo-letter` (opened) and `/dev/templates` laid out identically to majnu.app at 375 px and 1440 px (the same text widths and heights per font; one Cormorant line on the landing page 1 px narrower), and the network panel showed fonts only from our own domain. `npm run build` passed with `fonts.googleapis.com` and `fonts.gstatic.com` unreachable.
+
+### How it was checked: the pinned story
+
+Issue #73, 22 November, in the `browser` MCP server's Chrome, on `next dev` and then on the production build (`next start`):
+
+- **Unit tests** ([`how-it-works.test.ts`](../../tests/unit/components/landing/how-it-works.test.ts)): the words (three steps, short titles and lines, the moon filling to full, no exclamation marks) and the timeline (about one screen of scroll per step; the first step settled when the section pins; the old step mostly gone before the new one arrives and fully gone before it settles; the last step never leaves; every step rests for at least half a step's scroll; the moon's marks move forward, reach the top of the arc as the second step settles and land, full, as the last one settles; `stepPosition` stands still exactly where a step's letters do).
+- **1440 × 900, 1024 × 768, 700 × 1000, 375 × 667, 375 × 548 and 320 × 568** (true phone widths with device emulation): the section pins, one step at a time, the step in the middle of a change lifting and blurring away letter by letter while the next settles in, and no horizontal scroll at any width. At 1440 × 900 the section is 3,060 px tall (2,160 px of pinned scrolling, 720 px per step); at 375 × 667 it is 2,268 px (534 px per step).
+- **The moon**, read from the drawing while scrolling at 1440 px: in Majnu's hands (1452, 486) at the top of the page, rising (1457, 337) as the section pins, at the top of its arc (1466, 254) as the second step settles, and on Layla's palm (1489, 489) as the third settles, where it stays.
+- **The release:** at the end of the track the pinned screen's bottom, the track's bottom and the next section's top were the same pixel (450 px at 1440, 334 px at 375), with no gap, jump or change of colour.
+- **Safari's toolbar, simulated** as for the app shell: `--toolbar-overlap` forced to 32 px and a 45 px pill whose top is 24 px above the bottom of the screen. At 375 × 548 the step's last line ends at 500 px, 24 px above the pill.
+- **Reduced motion** (emulated): the section is a plain list, 965 px tall at 375 px and 438 px at 1440 px, nothing pinned or moving, and the moon already in Layla's hand.
+- **Accessibility:** the accessibility tree reads the region "How it works", its line, and three level-3 headings with their lines, in order. Tab from the hero's last suggestion goes straight to the first example below the story. The header's "How it works" link scrolls to the top of the track with the first step on screen (`--u` 0).
+- **Performance** (traces while scrolling the whole section 10 to 14 px at a time, production build): no long task from the page; the only one over 50 ms was the tracing tool's own script at the start. At 1440 px unthrottled, style work was 1.2 ms a frame and no style recalculation was forced inside an animation frame. At 375 px with the CPU slowed four times: 56 frames a second, style work 1.0 ms a frame, the page's longest frame about 10 ms. Layout shift (CLS) 0.
+- **The console** showed no errors or warnings.
+- **Screenshots:** [screenshots/how-it-works-story/](screenshots/how-it-works-story/) (each step and a change between steps at 375 and 1440 px, the release at 1440 px, reduced motion at 375 px).
+- **Not checked:** a real iPhone. Chrome cannot show Safari's toolbar collapsing and expanding, so whether the pinned screen stays perfectly still then (it is sized in `svh` for that reason) and how Safari handles blur on many letters at once are for the developer to check after the deploy. Also not checked: Firefox and Safari on a desktop, and a browser with JavaScript turned off (the list is chosen by `(scripting: enabled)` in CSS, which Chrome cannot switch off from the tools used here).
 
 ## Open questions
 
 - The hero gets the gift finder's chat box, as the main flow now starts there ([#32](https://github.com/peresramirez/majnu/issues/32)).
 - Before the finder goes live, the privacy page must name Cloudflare Turnstile, Apify and anonymous accounts ([#33](https://github.com/peresramirez/majnu/issues/33)), and before the Daytona redesign is offered, Daytona.
+- How it works splits each title into letters, and letters in separate boxes lose the font's kerning between them, so a few pairs may sit a touch wider than in plain text. Splitting into words would keep it, at the cost of a less misty exit.
+- A change between steps takes about half a screen of scroll, so a quick flick on a phone can pass a step in one movement. Snapping to steps was left out, because it fights the browser's own scrolling, most of all on iPhones.
 - [docs/brand.md](../brand.md#motion) asks for a still **half** moon with reduced motion; the scene shows the full moon already given. One of the two should change.
 - The brand pass on the sign-in pages, favicon and landing examples is still open ([#24](https://github.com/peresramirez/majnu/issues/24)).
 - **Fewer scripts than before.** `next/font/google` also self-hosted every other subset Google has (latin-ext for Gilda Display and Hanken Grotesk; cyrillic, greek and vietnamese for several letter faces) and loaded them on demand. Now Gilda Display and Hanken Grotesk cover latin only, so a name like "Łucja" in the site chrome shows its "Ł" in the fallback font, and Cyrillic, Greek and Vietnamese text in letters uses the system font. Adding latin-ext to the two site fonts would cost about 8 KB in the preloaded files.

@@ -12,7 +12,17 @@ type Props = {
   state: FinderState
   onSend: (text: string) => void
   onChoose: (option: GiftOption) => void
+  // Starts an empty search: offered when this one is full (issue #70).
+  onNewSearch?: () => void
 }
+
+// Under the newest ideas: what else Majnu can use to tailor the next search
+// (issue #70). It reads only links and handles the visitor gives.
+// Short enough for one line beside the microphone at 375px; the line under
+// the ideas (TELL_MORE) says what "more" can be.
+export const MORE_PLACEHOLDER = "Tell Majnu more about them"
+
+export const TELL_MORE = "Tell Majnu more: their Instagram, TikTok or LinkedIn, what they love, what they talk about."
 
 function MajnuMark() {
   return (
@@ -32,8 +42,21 @@ function Said({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Notice({ item, last, busy, onSend }: { item: Extract<FinderItem, { role: "notice" }>; last: boolean; busy: boolean; onSend: (text: string) => void }) {
+function Notice({
+  item,
+  last,
+  busy,
+  onSend,
+  onNewSearch,
+}: {
+  item: Extract<FinderItem, { role: "notice" }>
+  last: boolean
+  busy: boolean
+  onSend: (text: string) => void
+  onNewSearch?: () => void
+}) {
   const signin = item.reason === "signin_required"
+  const full = item.reason === "session_full" && last && onNewSearch !== undefined
   return (
     <div
       // Heard once: an error as this alert, a limit from the finder's live region.
@@ -41,7 +64,7 @@ function Notice({ item, last, busy, onSend }: { item: Extract<FinderItem, { role
       className="ml-[38px] rounded-2xl bg-night-velvet/70 px-4 py-3 text-[15px] leading-relaxed text-night-petal ring-1 ring-inset ring-night-petal/10"
     >
       <p>{item.message}</p>
-      {(signin || (item.retry && last)) && (
+      {(signin || full || (item.retry && last)) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {signin && (
             <>
@@ -53,7 +76,13 @@ function Notice({ item, last, busy, onSend }: { item: Extract<FinderItem, { role
               </Link>
             </>
           )}
-          {item.retry && last && !signin && (
+          {full && (
+            <button type="button" className={smallButton} disabled={busy} onClick={onNewSearch}>
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Start a new search
+            </button>
+          )}
+          {item.retry && last && !signin && !full && (
             <button type="button" className={smallButton} disabled={busy} onClick={() => onSend(item.retry!)}>
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               Try again
@@ -70,7 +99,7 @@ const repliedAfter = (items: FinderItem[], i: number) => items.slice(i + 1).some
 
 // The conversation: what the visitor asked, what Majnu said, the gift ideas,
 // its questions with tappable answers, and limits or errors.
-export function Conversation({ state, onSend, onChoose }: Props) {
+export function Conversation({ state, onSend, onChoose, onNewSearch }: Props) {
   const { items, streaming } = state
   const newestOptions = latestOptionsIndex(items)
   // Between sending and the first words: what Majnu is doing, beside its mark.
@@ -122,7 +151,7 @@ export function Conversation({ state, onSend, onChoose }: Props) {
                     <button type="button" className={smallButton} onClick={() => onSend(PERSONALISE_MESSAGE)}>
                       {PERSONALISE_MESSAGE}
                     </button>
-                    <span className="text-[13px] text-night-lilac">None quite right? Tell Majnu more about them.</span>
+                    <span className="text-[13px] text-night-lilac">{TELL_MORE}</span>
                   </div>
                 )}
               </li>
@@ -152,7 +181,7 @@ export function Conversation({ state, onSend, onChoose }: Props) {
           case "notice":
             return (
               <li key={item.id}>
-                <Notice item={item} last={last} busy={streaming} onSend={onSend} />
+                <Notice item={item} last={last} busy={streaming} onSend={onSend} onNewSearch={onNewSearch} />
               </li>
             )
         }

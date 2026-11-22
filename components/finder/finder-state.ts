@@ -7,6 +7,9 @@ import type {
   FinderEvent,
   FinderLimitReason,
   GiftOption,
+  WrapChoice,
+  WrapFill,
+  WrapRequest,
   WrapResponse,
   WrapTemplateId,
 } from "@/lib/finder/events"
@@ -97,6 +100,9 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
         message: event.message || DEFAULT_ERROR,
         retry: state.lastMessage ?? undefined,
       })
+    case "fill":
+      // For the wrap form (wrapReducer); the conversation shows Majnu's words.
+      return state
     case "done":
       return { ...state, streaming: false, status: null }
   }
@@ -176,7 +182,14 @@ export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "item
 // the occasion Majnu heard is a birthday or a party (issue #59).
 export const WRAP_TEMPLATES: readonly WrapTemplateId[] = WRAP_ORDER
 
-export type WrapDetails = { recipientName: string; senderName: string; note: string }
+// What the sender fills in on the wrap step's second page. Only their name is
+// required; POST /api/finder/wrap still accepts a request without one.
+export type WrapDetails = { recipientName: string; senderName: string; note: string; giftCode: string }
+
+// The wrap form's limits, the same as POST /api/finder/wrap and fill_wrap.
+export const WRAP_LIMITS = { recipientName: 60, senderName: 60, note: 600, giftCode: 200 } as const
+
+export const EMPTY_DETAILS: WrapDetails = { recipientName: "", senderName: "", note: "", giftCode: "" }
 
 // Whose gift it is once wrapped: a guest (anonymous account, the gift lives in
 // this browser until they sign up) or a member (it is in My gifts). No user at
@@ -187,15 +200,39 @@ export function wrapAccount(user: { is_anonymous?: boolean } | null | undefined)
   return user && user.is_anonymous !== true ? "member" : "guest"
 }
 
+// Wrapping takes two steps (issue #71): 1. the design, then Next; 2. the
+// details, with the Wrap button. Back on step 2 returns to step 1 and keeps
+// what was typed. `from` is where the conversation stood when the wrap step
+// opened: what is said after it is shown on the wrap step.
+export type WrapStep = "design" | "details"
+
+type OpenParts = { option: GiftOption; templateId: WrapTemplateId; details: WrapDetails; from: number }
+
 export type WrapState =
   | { stage: "closed" }
-  | { stage: "choose"; option: GiftOption; templateId: WrapTemplateId; error?: string; reason?: FinderLimitReason }
-  | { stage: "wrapping"; option: GiftOption; templateId: WrapTemplateId }
-  | { stage: "ready"; option: GiftOption; templateId: WrapTemplateId; letterId: string; slug: string }
+  | (OpenParts & {
+      stage: "choose"
+      step: WrapStep
+      error?: string
+      reason?: FinderLimitReason
+      // Wrap was pressed without their name.
+      nameMissing?: boolean
+      // Majnu filled in fields from a message (fill_wrap), for the sender to check.
+      filled?: (keyof WrapDetails)[]
+    })
+  | (OpenParts & { stage: "wrapping" })
+  | (OpenParts & { stage: "ready"; letterId: string; slug: string })
 
 export type WrapAction =
-  | { type: "choose"; option: GiftOption }
+  // `recipientName` prefills "Their name" when the visitor told Majnu a name.
+  | { type: "choose"; option: GiftOption; recipientName?: string; from?: number }
   | { type: "template"; templateId: WrapTemplateId }
+  | { type: "next" }
+  | { type: "previous" }
+  | { type: "details"; details: Partial<WrapDetails> }
+  | { type: "fill"; fields: WrapFill }
+  // A new search showed other options: the chosen one may be gone.
+  | { type: "options" }
   | { type: "submit" }
   | { type: "result"; response: WrapResponse }
   | { type: "failed"; message: string }
@@ -203,28 +240,106 @@ export type WrapAction =
 
 export const WRAP_ERROR = "Something went wrong wrapping the gift. Try again."
 
+export const NAME_REQUIRED = "Write their name first. It goes on the page."
+
+function clip(details: WrapDetails): WrapDetails {
+  return {
+    recipientName: details.recipientName.slice(0, WRAP_LIMITS.recipientName),
+    senderName: details.senderName.slice(0, WRAP_LIMITS.senderName),
+    note: details.note.slice(0, WRAP_LIMITS.note),
+    giftCode: details.giftCode.slice(0, WRAP_LIMITS.giftCode),
+  }
+}
+
+function parts(state: Exclude<WrapState, { stage: "closed" }>): OpenParts {
+  return { option: state.option, templateId: state.templateId, details: state.details, from: state.from }
+}
+
 export function wrapReducer(state: WrapState, action: WrapAction): WrapState {
   switch (action.type) {
     case "choose":
-      return { stage: "choose", option: action.option, templateId: WRAP_TEMPLATES[0] }
+      return {
+        stage: "choose",
+        step: "design",
+        option: action.option,
+        templateId: WRAP_TEMPLATES[0],
+        details: clip({ ...EMPTY_DETAILS, recipientName: action.recipientName?.trim() ?? "" }),
+        from: action.from ?? 0,
+      }
     case "template":
-      return state.stage === "choose" ? { stage: "choose", option: state.option, templateId: action.templateId } : state
-    case "submit":
-      return state.stage === "choose" ? { stage: "wrapping", option: state.option, templateId: state.templateId } : state
+      return state.stage === "choose" ? { ...state, templateId: action.templateId } : state
+    case "next":
+      return state.stage === "choose" ? { ...state, step: "details" } : state
+    case "previous":
+      return state.stage === "choose" ? { ...state, step: "design" } : state
+    case "details": {
+      if (state.stage !== "choose") return state
+      const details = clip({ ...state.details, ...action.details })
+      return { ...state, details, nameMissing: state.nameMissing && !details.recipientName.trim() }
+    }
+    case "fill": {
+      if (state.stage !== "choose") return state
+      const keys = (Object.keys(action.fields) as (keyof WrapFill)[]).filter((key) => action.fields[key]?.trim())
+      if (keys.length === 0) return state
+      const filled = Object.fromEntries(keys.map((key) => [key, action.fields[key]!.trim()]))
+      const details = clip({ ...state.details, ...filled })
+      return { ...state, step: "details", details, filled: keys, nameMissing: state.nameMissing && !details.recipientName.trim() }
+    }
+    case "options":
+      return state.stage === "choose" ? { stage: "closed" } : state
+    case "submit": {
+      if (state.stage !== "choose") return state
+      if (state.step !== "details") return { ...state, step: "details" }
+      if (!state.details.recipientName.trim()) return { ...state, nameMissing: true, error: undefined, reason: undefined }
+      return { stage: "wrapping", ...parts(state) }
+    }
     case "result": {
       if (state.stage !== "wrapping") return state
       const r = action.response
       if ("letterId" in r && r.letterId && r.slug) {
-        return { stage: "ready", option: state.option, templateId: state.templateId, letterId: r.letterId, slug: r.slug }
+        return { stage: "ready", ...parts(state), letterId: r.letterId, slug: r.slug }
       }
       const error = "error" in r && r.error ? r.error : WRAP_ERROR
-      return { stage: "choose", option: state.option, templateId: state.templateId, error, reason: "reason" in r ? r.reason : undefined }
+      return { stage: "choose", step: "details", ...parts(state), error, reason: "reason" in r ? r.reason : undefined }
     }
     case "failed":
-      return state.stage === "wrapping"
-        ? { stage: "choose", option: state.option, templateId: state.templateId, error: action.message }
-        : state
+      return state.stage === "wrapping" ? { stage: "choose", step: "details", ...parts(state), error: action.message } : state
     case "back":
       return { stage: "closed" }
   }
+}
+
+// What a message sent from the finder's box carries while the wrap step is
+// open: the gift and the design chosen (issue #70). Nothing otherwise.
+export function wrapChoice(state: WrapState): WrapChoice | undefined {
+  return state.stage === "choose" ? { optionId: state.option.id, templateId: state.templateId } : undefined
+}
+
+// The wrap request for the details typed, trimmed, without empty fields.
+export function wrapRequest(sessionId: string, state: Pick<OpenParts, "option" | "templateId" | "details">): WrapRequest {
+  const trimmed = (value: string) => value.trim() || undefined
+  const { recipientName, senderName, note, giftCode } = state.details
+  return {
+    sessionId,
+    optionId: state.option.id,
+    templateId: state.templateId,
+    recipientName: trimmed(recipientName),
+    senderName: trimmed(senderName),
+    note: trimmed(note),
+    giftCode: trimmed(giftCode),
+  }
+}
+
+// What was said since the wrap step opened, for the wrap step to show: from
+// the visitor's newest message on, so the reply to it stays in view.
+export function wrapExchange(items: FinderItem[], from: number): FinderItem[] {
+  const since = items.slice(from)
+  let lastUser = -1
+  for (let i = since.length - 1; i >= 0; i--) {
+    if (since[i].role === "user") {
+      lastUser = i
+      break
+    }
+  }
+  return lastUser === -1 ? [] : since.slice(lastUser).filter((item) => item.role !== "options")
 }

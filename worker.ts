@@ -12,11 +12,16 @@
 
 // @ts-ignore .open-next/worker.js is generated at build time by `opennextjs-cloudflare build`.
 import { default as handler } from "./.open-next/worker.js"
+// @ts-ignore .open-next/cloudflare/next-env.mjs is generated at build time too: the public values from .env.production.
+import * as nextEnv from "./.open-next/cloudflare/next-env.mjs"
 import { consumeDesignBatch, type MessageBatch } from "./lib/billing/consumer"
+import { populateQueueEnv, type NextEnvModule } from "./lib/billing/queue-env"
 
 export default {
   fetch: handler.fetch,
-  async queue(batch: MessageBatch): Promise<void> {
+  async queue(batch: MessageBatch, env: Record<string, unknown>): Promise<void> {
+    // OpenNext fills process.env for web requests only; the job needs it too.
+    populateQueueEnv(process.env, env, nextEnv as unknown as NextEnvModule)
     await consumeDesignBatch(batch)
   },
 }

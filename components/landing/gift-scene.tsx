@@ -10,10 +10,15 @@ const IH = 1152
 const FROM = { x: 1452, y: 486 } // the light above his cupped hands
 const PEAK = { x: 1462, y: 20 } // control point of the arc above them
 const TO = { x: 1489, y: 489 } // resting on her open palm
+// The middle of the couple and of the moon's arc, as a share of the painting.
+const COUPLE = { x: 1470 / IW, y: 0.515 }
+// The phone story zooms in on the couple: it shows 1/1.28 of the painting's
+// height, from just above the top of the moon's arc to just below their feet.
+const STORY_ZOOM = 1.28
 
 const ease = (t: number) => t * t * (3 - 2 * t)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
-const clamp = (t: number) => Math.min(1, Math.max(0, t))
+const clamp = (t: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, t))
 
 function pointAt(t: number) {
   const u = 1 - t
@@ -33,16 +38,9 @@ function litPath(r: number, lit: number) {
 
 // Where layout() will put the painting, in CSS, so the page renders it there
 // from the start and nothing moves (a layout shift) when the script takes over.
-// The card is always 4:5: as tall as the card, 2048/1152 × 5/4 of its width,
-// shifted by 90% of the overflow. The backdrop covers its box with container
-// units: right-aligned, and 55% of any vertical overflow above it.
-const CARD_WIDTH = (IW / IH) * (5 / 4)
-const CARD_FRAME = {
-  width: `${(CARD_WIDTH * 100).toFixed(3)}%`,
-  height: "100%",
-  left: `${((1 - CARD_WIDTH) * 0.9 * 100).toFixed(3)}%`,
-  top: 0,
-} as const
+// Both cover their box with container units. The backdrop is right-aligned, with
+// 55% of any vertical overflow above it; the story is zoomed in and centred on
+// the couple, without ever showing past the painting's edges.
 const coverWidth = `max(100cqw, ${((IW / IH) * 100).toFixed(3)}cqh)`
 const coverHeight = `max(100cqh, ${((IH / IW) * 100).toFixed(3)}cqw)`
 const BACKDROP_FRAME = {
@@ -51,10 +49,35 @@ const BACKDROP_FRAME = {
   left: `calc(100cqw - ${coverWidth})`,
   top: `calc((100cqh - ${coverHeight}) * 0.55)`,
 } as const
+const storyWidth = `calc(${coverWidth} * ${STORY_ZOOM})`
+const storyHeight = `calc(${coverHeight} * ${STORY_ZOOM})`
+const STORY_FRAME = {
+  width: storyWidth,
+  height: storyHeight,
+  left: `clamp(100cqw - ${storyWidth}, 50cqw - ${storyWidth} * ${COUPLE.x.toFixed(4)}, 0px)`,
+  top: `clamp(100cqh - ${storyHeight}, 50cqh - ${storyHeight} * ${COUPLE.y}, 0px)`,
+} as const
 
-// "backdrop": pinned behind a long section; "card": a framed card that animates as it
-// scrolls past; "panel": fills its parent, moon already given (sign-in pages).
-export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" }) {
+type Mark = { y: number; t: number }
+
+// Where the moon should be at the current scroll position. The marks are points
+// in the page (data-moon, placed by how-it-works.tsx) with the moon's progress
+// when each reaches the top of the screen; in between it moves evenly.
+function journey(marks: Mark[], y: number) {
+  if (y <= marks[0].y) return marks[0].t
+  for (let i = 1; i < marks.length; i++) {
+    const a = marks[i - 1]
+    const b = marks[i]
+    if (y < b.y) return b.y > a.y ? lerp(a.t, b.t, (y - a.y) / (b.y - a.y)) : b.t
+  }
+  return marks[marks.length - 1].t
+}
+
+// "backdrop": pinned behind the hero and How it works (desktop landing);
+// "story": fills its box inside How it works' pinned screen (phone landing);
+// "panel": fills its parent, moon already given (sign-in pages).
+// The first two follow the moon marks of How it works.
+export function GiftScene({ variant }: { variant: "backdrop" | "story" | "panel" }) {
   const box = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLDivElement>(null)
   const moon = useRef<SVGGElement>(null)
@@ -66,18 +89,30 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
     const el = box.current, fr = frame.current
     if (!el || !fr) return
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    // A hidden scene (the backdrop on phones, the story from md up) does no work.
+    let shown = false
     const layout = () => {
       const W = el.clientWidth, H = el.clientHeight
-      if (!W || !H) return
+      shown = W > 0 && H > 0
+      if (!shown) return
       // Short, wide boxes (the panel as a phone banner) zoom in on the couple.
-      const zoom = variant === "panel" && H < 420 ? 1.9 : 1
-      // Where the painting sits when it is cropped to fill the box: keep the couple in view.
-      const focus = variant === "backdrop" ? { x: 1, y: 0.55 } : { x: 0.9, y: zoom > 1 ? 0.24 : 0.5 }
+      const zoom = variant === "story" ? STORY_ZOOM : variant === "panel" && H < 420 ? 1.9 : 1
       const s = Math.max(W / IW, H / IH) * zoom
-      fr.style.width = `${IW * s}px`
-      fr.style.height = `${IH * s}px`
-      fr.style.left = `${(W - IW * s) * focus.x}px`
-      fr.style.top = `${(H - IH * s) * focus.y}px`
+      const w = IW * s, h = IH * s
+      let left: number, top: number
+      if (variant === "story") {
+        left = clamp(W / 2 - COUPLE.x * w, W - w, 0)
+        top = clamp(H / 2 - COUPLE.y * h, H - h, 0)
+      } else {
+        // Where the painting sits when it is cropped to fill the box: keep the couple in view.
+        const focus = variant === "backdrop" ? { x: 1, y: 0.55 } : { x: 0.9, y: zoom > 1 ? 0.24 : 0.5 }
+        left = (W - w) * focus.x
+        top = (H - h) * focus.y
+      }
+      fr.style.width = `${w}px`
+      fr.style.height = `${h}px`
+      fr.style.left = `${left}px`
+      fr.style.top = `${top}px`
     }
 
     const draw = (p: number) => {
@@ -91,73 +126,93 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
       lit.current?.setAttribute("d", litPath(r, 0.18 + 0.82 * ease(t)))
     }
 
-    const target = () => {
-      const vh = window.innerHeight
-      if (variant === "backdrop") {
-        const section = el.closest<HTMLElement>("[data-gift-track]")
-        if (!section) return 0
-        const rect = section.getBoundingClientRect()
-        const travel = rect.height - vh
-        return travel > 0 ? -rect.top / travel : 0
-      }
-      const rect = el.getBoundingClientRect()
-      const travel = vh - rect.height
-      return travel > 0 ? (vh - rect.bottom) / travel : 0
+    // The marks' places in the page are measured on resize; while scrolling,
+    // only scrollY is read, in the scroll event rather than in the frame
+    // (reading it after How it works has written its variable would make
+    // Chrome recalculate styles early).
+    const scope = el.closest<HTMLElement>("[data-gift-track]")
+    let marks: Mark[] = []
+    let y = window.scrollY
+    const measureMarks = () => {
+      if (!scope) return
+      y = window.scrollY
+      marks = Array.from(scope.querySelectorAll<HTMLElement>("[data-moon]"), (m) => ({
+        y: m.getBoundingClientRect().top + y,
+        t: Number(m.dataset.moon),
+      })).sort((a, b) => a.y - b.y)
     }
+    measureMarks()
 
+    let wake = () => {}
+    const sized = new ResizeObserver(() => {
+      layout()
+      wake()
+    })
+    sized.observe(el)
     layout()
-    if (reduceMotion || variant === "panel") {
+    if (reduceMotion || variant === "panel" || marks.length === 0) {
       draw(1)
-      const onResize = () => layout()
-      window.addEventListener("resize", onResize)
-      return () => window.removeEventListener("resize", onResize)
+      return () => sized.disconnect()
     }
 
-    let current = clamp(target())
+    let current = journey(marks, y)
     let raf = 0
     draw(current)
     const tick = () => {
-      const goal = clamp(target())
+      const goal = journey(marks, y)
       current += (goal - current) * 0.12
+      if (Math.abs(goal - current) <= 0.0005) current = goal
       draw(current)
-      raf = Math.abs(goal - current) > 0.0005 ? requestAnimationFrame(tick) : 0
+      raf = current === goal ? 0 : requestAnimationFrame(tick)
     }
-    const wake = () => { if (!raf) raf = requestAnimationFrame(tick) }
-    const onResize = () => { layout(); wake() }
-    window.addEventListener("scroll", wake, { passive: true })
-    window.addEventListener("resize", onResize)
+    wake = () => {
+      if (shown && !raf) raf = requestAnimationFrame(tick)
+    }
+    // The marks move when the page above them changes height.
+    const moved = new ResizeObserver(() => {
+      measureMarks()
+      wake()
+    })
+    if (scope) moved.observe(scope)
+    const onScroll = () => {
+      y = window.scrollY
+      wake()
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener("scroll", wake)
-      window.removeEventListener("resize", onResize)
+      sized.disconnect()
+      moved.disconnect()
+      window.removeEventListener("scroll", onScroll)
     }
   }, [variant])
 
   const backdrop = variant === "backdrop"
+  const story = variant === "story"
   const panel = variant === "panel"
   return (
     <div
       ref={box}
       aria-hidden="true"
-      style={backdrop ? { containerType: "size" } : undefined}
+      style={backdrop || story ? { containerType: "size" } : undefined}
       className={
         backdrop
           ? "pointer-events-none sticky top-0 h-[100svh] overflow-hidden"
-          : panel
-            ? "pointer-events-none absolute inset-0 overflow-hidden"
-            : "relative aspect-[4/5] w-full overflow-hidden rounded-3xl ring-1 ring-inset ring-night-petal/10"
+          : // The story fades into the page above and below; the panel's fades
+            // sit in its parent (app/(auth)/layout.tsx).
+            `pointer-events-none absolute inset-0 overflow-hidden${story ? " story-scene-fade" : ""}`
       }
     >
       <div
         ref={frame}
         className="absolute left-0 top-0 h-full w-full"
-        style={variant === "card" ? CARD_FRAME : variant === "backdrop" ? BACKDROP_FRAME : undefined}
+        style={backdrop ? BACKDROP_FRAME : story ? STORY_FRAME : undefined}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/landing/majnu-layla-2048.webp"
           srcSet="/landing/majnu-layla-1280.webp 1280w, /landing/majnu-layla-2048.webp 2048w"
-          sizes={backdrop ? "(min-aspect-ratio: 16/9) 100vw, 178vh" : panel ? "(min-width: 768px) 178vh, 380vw" : "222vw"}
+          sizes={backdrop ? "(min-aspect-ratio: 16/9) 100vw, 178vh" : panel ? "(min-width: 768px) 178vh, 380vw" : "240vw"}
           alt=""
           width={IW}
           height={IH}
@@ -166,7 +221,12 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
           decoding="async"
           className="absolute inset-0 h-full w-full"
         />
-        <svg viewBox={`0 0 ${IW} ${IH}`} className="absolute inset-0 h-full w-full">
+        {/* The moon breathes gently even while nobody scrolls (an opacity
+            animation on the whole drawing, so the compositor runs it). */}
+        <svg
+          viewBox={`0 0 ${IW} ${IH}`}
+          className={`absolute inset-0 h-full w-full${panel ? "" : " motion-safe:animate-[moon-glow_7s_ease-in-out_infinite]"}`}
+        >
           <defs>
             <radialGradient id={`glow-${variant}`}>
               <stop offset="0" stopColor="#FFE7D6" stopOpacity="0.9" />
@@ -202,9 +262,7 @@ export function GiftScene({ variant }: { variant: "backdrop" | "card" | "panel" 
         // The fades into the page sit in the parent, outside this clipped box, so they
         // can overlap its edge and hide the anti-aliased seam.
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-night-plum/60 to-transparent" />
-      ) : (
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-night-plum/80 to-transparent" />
-      )}
+      ) : null}
     </div>
   )
 }

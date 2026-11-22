@@ -7,7 +7,10 @@ import type { FinderLimitReason } from "./events"
 
 type Texts = {
   // Each takes the limit it reports, so the numbers live only in limits.ts.
-  limits: Record<Exclude<FinderLimitReason, "signin_required"> | "sessions_daily" | "session_messages", (limit: number) => string>
+  limits: Record<
+    Exclude<FinderLimitReason, "signin_required" | "personalise_daily" | "session_full"> | "session_searches" | "session_messages" | "calendar_searches" | "sessions_daily",
+    (limit: number) => string
+  >
   errors: { generic: string; busy: string; refusal: string; noOptions: string; saving: string }
   // Answers before a stream starts, and from the wrap route.
   requests: {
@@ -25,11 +28,12 @@ type Texts = {
 
 const EN: Texts = {
   limits: {
-    finder_daily: (n) => `You have searched for gifts ${n} times today, the most for one day. Choose one of the ideas you found, or come back tomorrow for more.`,
-    personalise_daily: (n) => `You have personalised ${n} searches today, the most for one day. Choose one of the ideas you found, or start a new search.`,
+    finder_daily: (n) => `You have used today's ${n} gift searches. Choose one of the ideas you found, or come back tomorrow for more.`,
+    session_searches: (n) => `This search has looked for gifts ${n} times, the most for one search. Choose one of the ideas, or start a new search to keep looking.`,
+    session_messages: () => "This search has had a lot of messages. Choose one of the ideas, or start a new search to keep going.",
+    calendar_searches: (n) => `You have looked for ideas for this calendar ${n} times. Fill the doors with the ideas you have, or add your own.`,
     site_busy: () => "A lot of people are looking for gifts today, so new searches are paused until tomorrow. Choose one of the ideas you found, or come back tomorrow.",
     sessions_daily: () => "You have started a lot of searches today. Come back tomorrow to start another.",
-    session_messages: () => "This search has had a lot of messages. Start a new search to keep going.",
   },
   errors: {
     generic: "Something went wrong looking for gifts. Try again.",
@@ -52,11 +56,12 @@ const EN: Texts = {
 
 const DE: Texts = {
   limits: {
-    finder_daily: (n) => `Du hast heute schon ${n}-mal nach Geschenken gesucht, mehr geht an einem Tag nicht. Wähl eine der Ideen aus, oder schau morgen wieder vorbei.`,
-    personalise_daily: (n) => `Du hast heute schon ${n} Suchen persönlich angepasst, mehr geht an einem Tag nicht. Wähl eine der Ideen aus, oder starte eine neue Suche.`,
+    finder_daily: (n) => `Du hast deine ${n} Geschenksuchen für heute genutzt. Wähl eine der Ideen aus, oder schau morgen wieder vorbei.`,
+    session_searches: (n) => `In dieser Suche hast du schon ${n}-mal nach Geschenken gesucht, mehr geht in einer Suche nicht. Wähl eine der Ideen aus, oder starte eine neue Suche.`,
+    session_messages: () => "In dieser Suche sind schon sehr viele Nachrichten. Wähl eine der Ideen aus, oder starte eine neue Suche, um weiterzumachen.",
+    calendar_searches: (n) => `Du hast für diesen Kalender schon ${n}-mal Ideen gesucht. Füll die Türchen mit den Ideen, die du hast, oder mit eigenen Geschenken.`,
     site_busy: () => "Heute suchen sehr viele Menschen nach Geschenken, deshalb sind neue Suchen bis morgen pausiert. Wähl eine der Ideen aus, oder schau morgen wieder vorbei.",
     sessions_daily: () => "Du hast heute schon viele Suchen begonnen. Morgen kannst du eine neue starten.",
-    session_messages: () => "In dieser Suche sind schon sehr viele Nachrichten. Starte eine neue Suche, um weiterzumachen.",
   },
   errors: {
     generic: "Bei der Geschenksuche ist etwas schiefgegangen. Versuch es noch einmal.",
