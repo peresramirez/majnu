@@ -17,7 +17,7 @@ flowchart LR
   page --> renderer["LetterRenderer<br/>components/letters/registry.tsx"]
   renderer --> templates["Template components"]
   page --> beacon["OpenBeacon"]
-  crawler(["Link-preview crawler"]) -->|"GET /l/slug/opengraph-image"| og["Envelope image<br/>first name only"]
+  crawler(["Link-preview crawler"]) -->|"GET /l/slug/opengraph-image"| og["Envelope image<br/>kind and name only"]
 ```
 
 One page view, in order:
@@ -59,7 +59,9 @@ The theme is a mood, not a colour value: `palette` is one of `night`, `petal`, `
 | `advent-classic` | calendar | Advent calendar | 24 numbered doors, each with a moon one step fuller than the last | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `advent` | Free, with an account |
 | `countdown` | calendar | Countdown | Tear-off calendar pages counting the days left, 1 to 31 doors | [`calendar.tsx`](../../components/calendars/calendar.tsx), variant `countdown` | Free, with an account |
 
-Both invitations, and the 3D wedding envelope, show the date and time as the sender wrote them (the event's own local time, never converted to the viewer's), a Google Maps search link, an `.ics` file made in the browser (times in UTC, three hours long by default) and a live countdown ([`event-time.ts`](../../components/letters/event-time.ts)). The map is a link, not an embed, so the page loads nothing from Google. A gift is a card ([`gift-card.tsx`](../../components/letters/gift-card.tsx)) with its title, price, description, a code that stays hidden until the recipient asks for it, a copy button and a link to redeem it.
+Both invitations, and the 3D wedding envelope, show the date and time as the sender wrote them (the event's own local time, never converted to the viewer's), a Google Maps search link, an `.ics` file made in the browser (times in UTC, three hours long by default) and a live countdown ([`event-time.ts`](../../components/letters/event-time.ts)). The map is a link, not an embed, so the page loads nothing from Google. A gift is a card ([`gift-card.tsx`](../../components/letters/gift-card.tsx)) with its title, price, description, a code that stays hidden until the recipient asks for it, a copy button and a link. The link says "Redeem your gift" when there is a code and "See the gift" when there is none, as for a shop product wrapped in the finder (`giftLinkLabel()` in [`gift-link.ts`](../../components/letters/gift-link.ts), issue #59); screen readers also hear that it opens a new tab.
+
+**Names on the page** (issue #62). Templates name the recipient by the whole name the sender gave, through `wholeName()` in [`names.ts`](../../components/letters/names.ts): the builder writes a first name, a nickname or, for an invitation, a group, so "our friends" and "Mia & Leo" stay whole instead of being cut to "our" and "Mia". Spaces are tidied, end punctuation dropped, and a name over 40 characters is cut at a word with an ellipsis. Wording that depends on the name agrees with it: `isGroup()` reads two names joined ("Mia & Leo", "Lea and Max", "Mama und Papa"), plural nouns ("Friends", "Liebe Freunde") and groups such as "our friends" or "the Schmidts" as several people, and `verbFor()` picks the verb ("Only Mia & Leo see it." under the gift list's name field; "Mia & Leo say:" in the voice note's caption). "Everyone" stays singular, as in English. The advent calendar (`components/calendars/`) still uses the first name.
 
 The rules the builder must meet for each template are in [letters-chat.md](letters-chat.md#the-builder-sub-agent): the event on the three invitations (`wedding-invite`, `party-invite`, `wedding-envelope-3d`); a gift on `gift-reveal` and `gift-box-3d`, and on `party-box` when it is given as a gift (the finder's wrap step says so); 24 doors on `advent-classic` and 1 to 31 on `countdown`. A `party-box` carries an event only when the brief gives the party's date and place, and is then a party invitation that can take a gift list. `treasure-map` has no rule of its own. The titles say what the page is: "A gift for …" for the gift reveal and both boxes, "An invitation for …" for the three invitations (issue #50).
 
@@ -168,13 +170,13 @@ Open tracking applies the same view at the moment an event arrives, so a `door_o
 
 ## The link-preview image
 
-When a gift link is pasted into WhatsApp or iMessage, the app fetches `/l/<slug>/opengraph-image` (and `twitter-image` for X). [`render-envelope.tsx`](../../app/(public)/l/[slug]/render-envelope.tsx) draws a cream envelope on the night sky, sealed with the crescent and addressed to the recipient's first name, at 1200 × 630.
+When a gift link is pasted into WhatsApp or iMessage, the app fetches `/l/<slug>/opengraph-image` (and `twitter-image` for X). [`render-envelope.tsx`](../../app/(public)/l/[slug]/render-envelope.tsx) draws a cream envelope on the night sky, sealed with the crescent and addressed to the recipient by the name the sender gave, at 1200 × 630.
 
-- It takes the kind of gift and the first name and **nothing else** ([`og-envelope.ts`](../../components/letters/og-envelope.ts)), so no message, gift, code, place or date can reach a preview.
+- It takes the kind of gift and the recipient's name, whole as the sender gave it ("our friends"), and **nothing else** ([`og-envelope.ts`](../../components/letters/og-envelope.ts)), so no message, gift, code, place or date can reach a preview.
 - The name is set in an embedded subset of Gilda Display ([`gilda-display.ts`](../../app/(public)/l/[slug]/gilda-display.ts), with its licence in `gilda-display-OFL.txt`). A name with characters outside the subset is shown as "you", because `next/og` would otherwise ask Google Fonts for the missing glyphs and send the name with the request. Long names shrink to fit.
 - Unknown slugs and lookup failures get the same envelope addressed to "you", so the image never fails a preview. Responses are cached for an hour.
 
-The page's own metadata ([`page-meta.ts`](../../components/letters/page-meta.ts)) is generic too: the title is the kind of gift and the first name ("A letter for Anna"), the page is `noindex, nofollow`, it sends no referrer, and the browser bar takes the colour of the palette. Deleting the two image routes would make every letter preview with `/brand/majnu-og.png` again.
+The page's own metadata ([`page-meta.ts`](../../components/letters/page-meta.ts)) is generic too: the title is the kind of gift and the recipient's name ("A letter for Anna", "An invitation for our friends"), the page is `noindex, nofollow`, it sends no referrer, and the browser bar takes the colour of the palette. Deleting the two image routes would make every letter preview with `/brand/majnu-og.png` again.
 
 ## Demo slugs
 
@@ -230,7 +232,7 @@ The index links each state the issues asked to check (0, 1, 12 and 24 open doors
 
 - There is **no anonymous read policy** on `letters`. The page, the preview image and open tracking read through the service-role client, by exact slug, on the server. A slug is 10 characters from a 49-character alphabet without look-alike letters (about 56 bits), so links cannot be guessed ([data-and-security.md](data-and-security.md)).
 - **Gift codes** are in the page only once the recipient unwraps the gift or asks for the code. **Locked doors** are removed on the server.
-- **Titles and previews** name the kind of gift and the first name only.
+- **Titles and previews** name the kind of gift and the recipient's name only (the name as the sender gave it, since issue #62; before, its first word).
 - **No third-party requests:** no analytics, no external scripts, fonts served from our domain, a maps link instead of an embed. three.js is bundled and served from our domain like any other chunk. Pages are `noindex` and send no referrer, so a letter's address never reaches another site.
 - Anyone with the link can open the gift. The privacy page says so and offers to take a page down on request.
 
@@ -273,10 +275,16 @@ The index links each state the issues asked to check (0, 1, 12 and 24 open doors
 - **In a browser:** a `gift-box-3d` letter carrying a gift as the finder writes it, at `/l/<slug>` against the real database at 375 and 1440 px: the box opened to the gift card (title, description, price, shop link), then the note; console clean. The finder's five choices and Ready to send on `/dev/finder`.
 - **Not checked live:** the builder writing a 3D gift box, a party box or a wedding envelope, and a letters-chat build of a wedding envelope with a gift list. The Anthropic key was over its monthly spend limit (429 `enforced_spend_limit_reached`, until 1 December).
 
+### Issues #59 and #62 (wording for senders and recipients)
+
+- **Template descriptions** for the 3D gift box and the 3D wedding envelope are written for senders now ("made around a gift", no "Needs …"), because the builder enforces the gift and the event itself; the builder still reads them, and the envelope's still names the date, time and place.
+- **Unit tests:** [`names.test.ts`](../../tests/unit/components/letters/names.test.ts) (`wholeName`, `isGroup`, `verbFor`, `possessive`, titles), [`gift-link.test.ts`](../../tests/unit/components/letters/gift-link.test.ts), [`wishlist-model.test.ts`](../../tests/unit/components/letters/wishlist-model.test.ts) (the name hint and thank-you for one host, a couple and none), [`og-envelope.test.ts`](../../tests/unit/components/letters/og-envelope.test.ts).
+- **In a browser** (an isolated Chrome at 375 × 812 with reduced motion and 1440 × 900), on a temporary page rendering the fixtures with the recipient "our friends", the sender "Mia & Leo" and the gift's code removed (deleted before committing): the gift reveal reads "For our friends", the voice note "Tap to hear Mia & Leo" with "Mia & Leo say:" as its description, the gift card "See the gift" (and "Redeem your gift" with the code put back); the party invitation's claim form reads "Only Mia & Leo see it."; the 3D gift box's card wraps "For our friends from the club" over two lines; the voice-note recorder reads "Our friends hear it" and "Anna hears it". Console clean.
+- **Not checked:** the link-preview image with a group name (unit-tested only), and the stored title the builder gives a letter for a group (`titleFor` in `lib/agents/builder.ts`, which belongs to the letters chat and is still to change).
+
 ## Open questions
 
 - **A party box given as a gift in the letters chat** is held to its gift by the prompts only. `giftRequired` is set by the finder's wrap step; the main agent's `build_letter` tool has no way to say "this party box is a gift", so a party box the builder writes without the gift the brief named is accepted there. Adding an optional flag to `build_letter` (in `lib/agents/tools.ts`) would close it.
-- **The templates' descriptions in `templates.ts`** end in "Needs at least one gift" and "Needs the date, time and place", which the builder reads and the finder's and the Templates tab's cards show to people. Now that the builder enforces both, the descriptions could drop these words.
 - **The preview modal depends on `/dev/templates/<id>`.** If the workbench is taken down after launch, the modal needs a public preview route of its own.
 
 - Issues still open for this area: [#18](https://github.com/peresramirez/majnu/issues/18) (gift reveal) and [#27](https://github.com/peresramirez/majnu/issues/27) (the link-preview image), though both are in the code.

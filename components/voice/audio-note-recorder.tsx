@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { LoaderCircle, Mic, Pause, Play, RotateCcw, Square, Trash2, X } from "lucide-react"
 import { eyebrow, primaryButton, smallButton } from "@/components/app/styles"
+import { sentenceStart, verbFor, wholeName } from "@/components/letters/names"
 import { MAX_NOTE_SECONDS, NOTE_RECORDING_TYPES, type AudioNoteSummary } from "@/lib/audio/rules"
 import { formatSeconds } from "@/lib/voice/rules"
 import { initialNoteState, noteApi, noteReducer, noteStatus, savedNote, type NoteApi } from "./audio-note-model"
@@ -27,7 +28,7 @@ type Props = {
   letterId: string
   // The saved note, null for none, or left out to load it.
   initial?: AudioNoteSummary | null
-  // "Anna", for "Anna hears it with one tap". Optional.
+  // "Anna", for "Anna hears it with one tap" ("Our friends hear it"). Optional.
   recipientName?: string | null
   onChange?: (note: AudioNoteSummary | null) => void
   className?: string
@@ -79,7 +80,9 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
   const saved = savedNote(state)
   const listenSrc = draft ? draftUrl : saved?.src ?? null
   const player = useAudioPlayer(listenSrc, draft ? draft.seconds : saved?.seconds)
-  const name = recipientName?.trim() ? recipientName.trim().split(/\s+/)[0]! : null
+  // The whole name, so "our friends" is not cut to "our" (issue #62).
+  const name = recipientName?.trim() ? wholeName(recipientName) : null
+  const hearsIt = name ? `${sentenceStart(name)} ${verbFor(name, "hears", "hear")} it` : "They hear it"
 
   useEffect(() => setMounted(true), [])
 
@@ -167,7 +170,7 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
   // recording ("Recorded. Listen back, then save it."); the note's own states
   // (saving, saved, removed) speak otherwise.
   const justRecorded = state.view === "draft" && !noteError && recorderNotice?.kind === "recorded"
-  const status = recording || recorderError || justRecorded ? statusMessage(recorder.state) : noteStatus(state, name)
+  const status = recording || recorderError || justRecorded ? statusMessage(recorder.state) : noteStatus(state, name ? sentenceStart(name) : null)
   const canRecord = mounted && recorder.supported
   const busy = state.view === "saving" || state.view === "removing" || state.view === "loading"
 
@@ -288,7 +291,7 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
             <p className="mt-2 line-clamp-2 text-sm italic leading-relaxed text-night-lilac">&ldquo;{saved.caption}&rdquo;</p>
           ) : (
             <p className="mt-2 text-sm leading-relaxed text-night-lilac">
-              {name ? `${name} hears it with one tap on the gift.` : "They hear it with one tap on the gift."}
+              {hearsIt} with one tap on the gift.
             </p>
           )}
           {state.view === "confirm_remove" || state.view === "removing" ? (
@@ -327,7 +330,7 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
       ) : (
         <>
           <p className="mt-2 text-sm leading-relaxed text-night-lilac">
-            Record up to {MAX_NOTE_SECONDS / 60} minutes in your own voice. {name ? `${name} hears it` : "They hear it"} with one tap on the gift.
+            Record up to {MAX_NOTE_SECONDS / 60} minutes in your own voice. {hearsIt} with one tap on the gift.
           </p>
           <div className="mt-3">
             {canRecord ? (

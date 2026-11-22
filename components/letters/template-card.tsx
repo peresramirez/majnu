@@ -21,7 +21,7 @@ import { BoxDrawing } from "./templates/gift-box-3d/drawing"
 import { Compass, ink, parchment } from "./templates/treasure-map/parts"
 import { EnvelopeDrawing } from "./templates/wedding-envelope-3d/drawing"
 import { eventDateParts, formatEventTime, parseEventStart } from "./event-time"
-import { firstName, monogram } from "./names"
+import { monogram, wholeName } from "./names"
 import { paletteOf, themeStyle } from "./theme"
 
 const cq = (n: number) => `${n}cqw`
@@ -87,7 +87,7 @@ function EnvelopeThumb({ c }: { c: LetterContent }) {
             For
           </span>
           <span className="block" style={{ ...displayStyle, fontSize: cq(7), lineHeight: 1 }}>
-            {firstName(c.recipientName)}
+            {wholeName(c.recipientName)}
           </span>
         </span>
       </span>
@@ -110,7 +110,7 @@ function GiftThumb({ c }: { c: LetterContent }) {
     <span className="flex h-full flex-col items-center justify-center">
       <span style={eyebrow}>{c.occasion || "A gift"}</span>
       <span className="mt-[2cqw]" style={{ ...displayStyle, fontSize: cq(8), lineHeight: 1.1 }}>
-        For {firstName(c.recipientName)}
+        For {wholeName(c.recipientName)}
       </span>
       <span className="relative mt-[8cqw] block h-[46cqw] w-[54cqw]">
         {/* Box */}
@@ -144,7 +144,7 @@ function WeddingThumb({ c }: { c: LetterContent }) {
   const formal: CSSProperties = { fontFamily: "var(--formal)", fontWeight: 500 }
   return (
     <span className="flex h-full flex-col items-center justify-center">
-      <span style={eyebrow}>For {firstName(c.recipientName)}</span>
+      <span style={eyebrow}>For {wholeName(c.recipientName)}</span>
       <span
         className="relative mt-[4cqw] flex w-[80cqw] flex-col items-center px-[6cqw] pb-[8cqw] pt-[8cqw] text-center"
         style={{ ...paperStyle, borderRadius: cq(0.8), boxShadow: "0 4cqw 8cqw -4cqw rgba(0,0,0,0.7)" }}
@@ -211,7 +211,7 @@ function PartyThumb({ c }: { c: LetterContent }) {
         />
       ))}
       <span className="flex items-center justify-between gap-[2cqw]">
-        <span style={{ ...eyebrow, letterSpacing: "0.18em" }}>Hey {firstName(c.recipientName)}</span>
+        <span style={{ ...eyebrow, letterSpacing: "0.18em" }}>Hey {wholeName(c.recipientName)}</span>
         <span
           className="rotate-[6deg] rounded-full px-[3cqw] py-[1.4cqw]"
           style={{ background: "var(--page-ink)", color: "var(--page-flat)", fontSize: cq(2.6), fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}
@@ -252,7 +252,7 @@ function PartyThumb({ c }: { c: LetterContent }) {
 function PostcardThumb({ c }: { c: LetterContent }) {
   return (
     <span className="flex h-full flex-col items-center justify-center">
-      <span style={eyebrow}>A postcard for {firstName(c.recipientName)}</span>
+      <span style={eyebrow}>A postcard for {wholeName(c.recipientName)}</span>
       <span
         className="relative mt-[5cqw] block w-[72cqw] -rotate-2 p-[2cqw]"
         style={{ aspectRatio: "3 / 4", background: "var(--paper)", borderRadius: cq(1), boxShadow: "0 5cqw 10cqw -5cqw rgba(0,0,0,0.55)" }}
@@ -283,7 +283,7 @@ function Box3DThumb({ c, mood }: { c: LetterContent; mood: "gift" | "party" }) {
     <span className="flex h-full flex-col items-center justify-center">
       <span style={eyebrow}>{c.occasion || (mood === "party" ? "Surprise" : "A gift")}</span>
       <span className="mt-[2cqw]" style={{ ...displayStyle, fontSize: cq(8), lineHeight: 1.1 }}>
-        For {firstName(c.recipientName)}
+        For {wholeName(c.recipientName)}
       </span>
       <BoxDrawing mood={mood} idPrefix={`thumb-${mood}`} className="mt-[6cqw] block h-auto w-[72cqw]" />
       <span
@@ -303,7 +303,7 @@ function Envelope3DThumb({ c }: { c: LetterContent }) {
     <span className="flex h-full flex-col items-center justify-center">
       <span style={eyebrow}>{c.occasion || "You're invited"}</span>
       <span className="mt-[2cqw]" style={{ fontFamily: "var(--formal)", fontWeight: 500, fontSize: cq(9), lineHeight: 1.1 }}>
-        For {firstName(c.recipientName)}
+        For {wholeName(c.recipientName)}
       </span>
       <EnvelopeDrawing initials={monogram(c.senderName)} idPrefix="thumb-envelope" className="mt-[5cqw] block h-auto w-[86cqw]" />
       <span
@@ -330,7 +330,7 @@ function MapThumb({ c }: { c: LetterContent }) {
           a map for
         </span>
         <span className="relative" style={{ ...displayStyle, fontSize: cq(10), lineHeight: 1.05 }}>
-          {firstName(c.recipientName)}
+          {wholeName(c.recipientName)}
         </span>
         <Compass className="relative mt-[4cqw] block w-[17cqw]" />
         <span
@@ -359,7 +359,7 @@ function AdventThumb({ c }: { c: CalendarContent }) {
   const openUpTo = 5
   return (
     <span className="flex h-full flex-col items-center justify-center px-[6cqw]">
-      <span style={eyebrow}>For {firstName(c.recipientName)}</span>
+      <span style={eyebrow}>For {wholeName(c.recipientName)}</span>
       <span className="mt-[2cqw] text-center" style={{ ...displayStyle, ...lining, fontSize: cq(9), lineHeight: 1.05 }}>
         {c.headline}
       </span>
@@ -398,7 +398,7 @@ function CountdownThumb({ c }: { c: CalendarContent }) {
   const openUpTo = 2
   return (
     <span className="flex h-full flex-col items-center justify-center px-[7cqw]">
-      <span style={eyebrow}>For {firstName(c.recipientName)}</span>
+      <span style={eyebrow}>For {wholeName(c.recipientName)}</span>
       <span className="mt-[2cqw] text-balance text-center" style={{ ...displayStyle, fontSize: cq(8.4), lineHeight: 1.05 }}>
         {c.headline}
       </span>

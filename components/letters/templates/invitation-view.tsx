@@ -28,7 +28,7 @@ import { GiftList } from "../gift-card"
 import { useLetter, useMounted } from "../letter-context"
 import { Wishlist } from "../wishlist"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName, monogram } from "../names"
+import { monogram, wholeName } from "../names"
 import { paletteOf } from "../theme"
 
 type Mood = "elegant" | "playful"
@@ -192,7 +192,7 @@ function Elegant({ content, start, countdown, claimed }: ViewProps) {
       {/* Centred when it is shorter than the screen (an invitation without an event). */}
       <div className="relative mx-auto flex min-h-[100svh] max-w-[520px] flex-col justify-center px-4 pb-12 pt-10 sm:pt-16">
         <p className="rise text-center text-[12px] font-semibold uppercase tracking-[0.3em] text-[var(--page-muted)]">
-          For {firstName(content.recipientName)}
+          For {wholeName(content.recipientName)}
         </p>
 
         <article
@@ -294,7 +294,7 @@ function Playful({ content, start, countdown, claimed }: ViewProps) {
       {/* Centred when it is shorter than the screen (an invitation without an event). */}
       <div className="relative mx-auto flex min-h-[100svh] max-w-[520px] flex-col justify-center px-4 pb-12 pt-10 sm:pt-16">
         <div className="pop flex items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--page-muted)]">Hey {firstName(content.recipientName)}</p>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--page-muted)]">Hey {wholeName(content.recipientName)}</p>
           <span
             className="rotate-[6deg] rounded-full px-4 py-2 text-[13px] font-bold uppercase tracking-[0.14em] shadow-[0_8px_18px_-10px_rgba(0,0,0,0.5)]"
             style={{ background: "var(--page-ink)", color: "var(--page-flat)" }}

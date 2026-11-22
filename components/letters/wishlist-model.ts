@@ -3,6 +3,7 @@
 // POST /api/claim changes the list. Kept apart from wishlist.tsx so it can be
 // unit-tested (the test runner cannot load .tsx).
 import type { WishlistItem } from "@/lib/letters/schema"
+import { sentenceStart, verbFor, wholeName } from "./names"
 import { safeHttps } from "./urls"
 
 // open: anyone can claim it. taken: someone claimed it. mine: this guest
@@ -70,13 +71,26 @@ export function claimedFrom(body: unknown): string[] {
   return idsFrom((body as { claimed?: unknown } | null)?.claimed) ?? []
 }
 
+// The host as the list names them: the whole name as they sign ("Mia & Leo"),
+// or "the host" on an invitation that is not signed.
+function host(hostName: string | null | undefined): string {
+  return wholeName(hostName, "the host")
+}
+
+// Under the claim form's name field: who sees the guest's name. Plural-aware,
+// so a couple reads "Only Mia & Leo see it." (issue #62).
+export function nameHint(hostName: string | null | undefined): string {
+  const name = host(hostName)
+  return `Only ${name} ${verbFor(name, "sees", "see")} it.`
+}
+
 // How the list changes after POST /api/claim answered `status` with `body`.
 export function claimOutcome(status: number, body: unknown, hostName: string): ClaimOutcome {
   const answer = (body ?? {}) as { ok?: unknown; error?: unknown; claimed?: unknown }
   const claimed = idsFrom(answer.claimed)
   const base = { claimed, mine: false, gone: false, closeForm: false }
   if (status === 200 && answer.ok === true) {
-    return { ...base, mine: true, closeForm: true, message: `Thank you. ${hostName} will know you are bringing it.` }
+    return { ...base, mine: true, closeForm: true, message: `Thank you. ${sentenceStart(host(hostName))} will know you are bringing it.` }
   }
   switch (answer.error) {
     case "taken":

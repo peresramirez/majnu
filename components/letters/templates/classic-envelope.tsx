@@ -8,7 +8,7 @@ import { displayStyle, focusRing, MadeWith, Ornament, paperStyle, Stars } from "
 import { GiftList } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName } from "../names"
+import { wholeName } from "../names"
 import { paletteOf } from "../theme"
 
 type Stage = "sealed" | "opening" | "open" | "done"
@@ -69,7 +69,7 @@ export function ClassicEnvelope({ content }: { content: LetterContent }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const dark = paletteOf(content.theme).dark
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
   const initial = Array.from((content.senderName ?? "").trim())[0]?.toUpperCase() ?? "M"
 
   const reading = stage === "open" || stage === "done"

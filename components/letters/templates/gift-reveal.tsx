@@ -9,7 +9,7 @@ import { displayStyle, focusRing, MadeWith, paperStyle, Stars } from "../chrome"
 import { GiftCard } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName } from "../names"
+import { wholeName } from "../names"
 import { paletteOf } from "../theme"
 
 type Stage = "wrapped" | "unwrapping" | "open"
@@ -42,7 +42,7 @@ export function GiftReveal({ content }: { content: LetterContent }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const dark = paletteOf(content.theme).dark
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
   const gifts = content.gifts ?? []
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])

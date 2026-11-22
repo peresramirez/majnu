@@ -17,8 +17,11 @@ const letter = (templateId: LetterTemplateId, content: LetterContent = letterFix
 const withName = (recipientName: string) => letter("classic-envelope", { ...letterFixtures["classic-envelope"], recipientName })
 
 describe("envelopeName", () => {
-  it("addresses the envelope to the first name only", () => {
-    expect(envelopeName(withName("Anna Schmidt"))).toBe("Anna")
+  it("addresses the envelope to the name the sender gave, groups included (issue #62)", () => {
+    expect(envelopeName(withName("Anna"))).toBe("Anna")
+    expect(envelopeName(withName("Anna Schmidt"))).toBe("Anna Schmidt")
+    expect(envelopeName(withName("our friends"))).toBe("our friends")
+    expect(envelopeName(withName("Mia & Leo"))).toBe("Mia & Leo")
     expect(envelopeName(withName("Zoë"))).toBe("Zoë")
     expect(envelopeName(withName("Łukasz"))).toBe("Łukasz")
     expect(envelopeName(withName("D’Arcy"))).toBe("D’Arcy")

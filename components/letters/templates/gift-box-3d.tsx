@@ -22,7 +22,7 @@ import { formatEventDate, formatEventTime, mapsUrl, parseEventStart } from "../e
 import { GiftCard } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName } from "../names"
+import { wholeName } from "../names"
 import { paletteOf } from "../theme"
 import { Wishlist } from "../wishlist"
 import { BoxDrawing } from "./gift-box-3d/drawing"
@@ -54,7 +54,7 @@ function readCard(el: HTMLElement, content: LetterContent, mood: BoxMood): CardT
   const s = getComputedStyle(el)
   return {
     eyebrow: content.occasion || (mood === "party" ? "Surprise" : "A gift"),
-    title: `For ${firstName(content.recipientName)}`,
+    title: `For ${wholeName(content.recipientName)}`,
     headline: content.headline ?? "",
     from: content.senderName ? `from ${content.senderName}` : "",
     // Custom properties compute with their var() references resolved, so these
@@ -121,7 +121,7 @@ export function GiftBox3D({ content, mood, claimed }: { content: LetterContent; 
   const stageNow = useRef<Stage>("closed")
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const dark = paletteOf(content.theme).dark
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
   const gifts = content.gifts ?? []
   const party = mood === "party"
 

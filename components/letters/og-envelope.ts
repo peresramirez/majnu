@@ -1,12 +1,13 @@
 // The link-preview image for a letter (app/(public)/l/[slug]/opengraph-image.tsx):
 // a cream envelope on the night sky, sealed with the crescent, addressed to the
-// recipient's first name. It takes the kind of gift and the first name and
-// nothing else, so no message, gift, code, place or date can reach a preview.
+// recipient by the name the sender gave ("Anna", "our friends"). It takes the
+// kind of gift and that name and nothing else, so no message, gift, code,
+// place or date can reach a preview.
 //
 // This file holds the rules (who it is addressed to, how big the name is);
 // og-envelope-image.tsx draws it. Pure, so the rules can be tested.
 import type { PublicLetter } from "@/lib/letters/schema"
-import { firstName, letterNoun } from "./names"
+import { letterNoun, wholeName } from "./names"
 
 export const OG_SIZE = { width: 1200, height: 630 }
 
@@ -16,7 +17,7 @@ export const OG_SIZE = { width: 1200, height: 630 }
 const DRAWABLE = /^[\u0020-\u007E\u00A0-\u00AC\u00AE-\u017E\u2013\u2014\u2018-\u201E\u2026]+$/
 
 export function envelopeName(letter: Pick<PublicLetter, "content"> | null): string {
-  const name = firstName(letter?.content.recipientName)
+  const name = wholeName(letter?.content.recipientName)
   return DRAWABLE.test(name) ? name : "you"
 }
 

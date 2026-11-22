@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { firstName, letterDescription, letterNoun, letterTitle, monogram, signOffLines } from "@/components/letters/names"
+import {
+  firstName,
+  isGroup,
+  letterDescription,
+  letterNoun,
+  letterTitle,
+  monogram,
+  possessive,
+  sentenceStart,
+  signOffLines,
+  verbFor,
+  wholeName,
+} from "@/components/letters/names"
 import { letterFixtures } from "@/lib/letters/fixtures"
 
 describe("firstName", () => {
@@ -11,6 +23,58 @@ describe("firstName", () => {
   it("falls back when there is no name", () => {
     expect(firstName("")).toBe("you")
     expect(firstName(null)).toBe("you")
+  })
+})
+
+describe("wholeName (issue #62)", () => {
+  it("keeps the name as the sender gave it, groups included", () => {
+    expect(wholeName("Anna")).toBe("Anna")
+    expect(wholeName("our friends")).toBe("our friends")
+    expect(wholeName("Mia & Leo")).toBe("Mia & Leo")
+    expect(wholeName("  Lea   and Max. ")).toBe("Lea and Max")
+  })
+  it("falls back when there is no name", () => {
+    expect(wholeName("")).toBe("you")
+    expect(wholeName(null)).toBe("you")
+    expect(wholeName("  ", "the host")).toBe("the host")
+  })
+  it("cuts a very long name at a word, with an ellipsis", () => {
+    const name = wholeName("our dear friends from the climbing club on Thursdays")
+    expect(name).toBe("our dear friends from the climbing club…")
+    expect(Array.from(name).length).toBeLessThanOrEqual(41)
+  })
+})
+
+describe("isGroup and verbFor (issue #62)", () => {
+  it.each(["Mia & Leo", "Mia&Leo", "Lea and Max", "Mama und Papa", "Ana y Luis", "our friends", "Friends", "my dear friends", "Liebe Freunde", "the Schmidts", "dear neighbours", "our kids", "you all"])(
+    "reads %s as more than one person",
+    (name) => {
+      expect(isGroup(name)).toBe(true)
+      expect(verbFor(name, "sees", "see")).toBe("see")
+    },
+  )
+
+  it.each(["Anna", "Anna Schmidt", "Everyone", "Grandma", "my boss", "our Lucas", "my love", "Thomas", ""])("reads %j as one person", (name) => {
+    expect(isGroup(name)).toBe(false)
+    expect(verbFor(name, "sees", "see")).toBe("sees")
+  })
+
+  it("agrees with you", () => {
+    expect(verbFor("you", "hears", "hear")).toBe("hear")
+  })
+})
+
+describe("possessive and sentenceStart", () => {
+  it("adds 's, or only ' to a group ending in s", () => {
+    expect(possessive("Anna")).toBe("Anna's")
+    expect(possessive("Lea and Max")).toBe("Lea and Max's")
+    expect(possessive("the Schmidts")).toBe("the Schmidts'")
+    expect(possessive("James")).toBe("James's")
+  })
+  it("starts a sentence with a capital", () => {
+    expect(sentenceStart("our friends")).toBe("Our friends")
+    expect(sentenceStart("Anna")).toBe("Anna")
+    expect(sentenceStart("")).toBe("")
   })
 })
 
@@ -28,10 +92,12 @@ describe("letterNoun", () => {
 })
 
 describe("letterTitle", () => {
-  it("names the kind of gift and the recipient's first name only", () => {
+  it("names the kind of gift and the recipient as the sender named them", () => {
     expect(letterTitle("classic-envelope", "Anna")).toBe("A letter for Anna")
     expect(letterTitle("gift-reveal", "Tom")).toBe("A gift for Tom")
-    expect(letterTitle("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie")
+    expect(letterTitle("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie Meyer")
+    expect(letterTitle("party-invite", "our friends")).toBe("An invitation for our friends")
+    expect(letterDescription("Mia & Leo")).toBe("Made for Mia & Leo with Majnu.")
     expect(letterTitle("party-invite", "Everyone")).toBe("An invitation for Everyone")
     expect(letterTitle("postcard", "Grandma")).toBe("A postcard for Grandma")
     expect(letterTitle("advent-classic", "Lena")).toBe("An advent calendar for Lena")

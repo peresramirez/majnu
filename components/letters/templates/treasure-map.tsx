@@ -12,7 +12,7 @@ import { displayStyle, focusRing, MadeWith, Ornament } from "../chrome"
 import { GiftList } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName, monogram } from "../names"
+import { monogram, wholeName } from "../names"
 import { Compass, parchment } from "./treasure-map/parts"
 
 type Stage = "sealed" | "unfolding" | "open"
@@ -90,7 +90,7 @@ export function TreasureMap({ content }: { content: LetterContent }) {
   const reduced = useReducedMotion()
   const headingRef = useRef<HTMLHeadingElement>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
   const initial = monogram(content.senderName).split(" ")[0]
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])

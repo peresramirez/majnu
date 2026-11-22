@@ -11,7 +11,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent,
 import type { WishlistItem } from "@/lib/letters/schema"
 import { focusRing, paperStyle } from "./chrome"
 import { useLetter } from "./letter-context"
-import { claimedFrom, claimOutcome, giftListView, type GiftListRow } from "./wishlist-model"
+import { claimedFrom, claimOutcome, giftListView, nameHint, type GiftListRow } from "./wishlist-model"
 
 type Mood = "elegant" | "playful"
 
@@ -259,7 +259,7 @@ function ClaimForm({
         placeholder="e.g. Sam"
       />
       <p id={hintId} className="mt-1.5 text-[13px] text-[var(--paper-muted)]">
-        Only {hostName} sees it.
+        {nameHint(hostName)}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
