@@ -11,6 +11,7 @@ import { site } from "@/lib/site"
 import { CopyLinkButton } from "./copy-link-button"
 import { plural, shortDate, timeAgo } from "./format"
 import { eyebrow, smallButton } from "./styles"
+import { giftEditorPath } from "./tabs"
 
 // One gift on the My gifts tab: who it is for, the design, whether it has
 // been opened, on an invitation with a gift list who is bringing what, and on
@@ -76,7 +77,7 @@ export function GiftCard({
       ) : null}
 
       <div className="mt-6 flex flex-wrap gap-2">
-        <Link href={`/create/${letter.id}`} className={`${smallButton} bg-night-petal/5`}>
+        <Link href={giftEditorPath(letter)} className={`${smallButton} bg-night-petal/5`}>
           Continue
         </Link>
         {letter.hasContent && (

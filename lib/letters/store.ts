@@ -278,6 +278,49 @@ function validateContent(input: { kind: LetterKind; templateId: TemplateId; cont
   return { templateId: templateId.data, content: content.data }
 }
 
+// Added for issue #48 (calendars filled door by door). Changes the signed-in
+// user's calendar content through `update`, which gets the content as stored
+// now and returns the new content (or null to change nothing). The write lands
+// only if the row has not changed since it was read (updated_at, set by a
+// trigger on every update), and is retried on the fresh content otherwise, so
+// a door saved while Majnu was writing notes is never overwritten.
+// Throws "Letter not found" for a letter that is not the user's or not a
+// calendar, and on content that does not validate.
+export async function updateMyCalendar(
+  id: string,
+  update: (current: CalendarContent, letter: { templateId: CalendarTemplateId; slug: string }) => CalendarContent | null,
+): Promise<{ content: CalendarContent; slug: string; templateId: CalendarTemplateId }> {
+  if (!UUID.test(id)) throw new Error("Letter not found")
+  const supabase = await createClient()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase
+      .from("letters")
+      .select("id, slug, kind, template_id, content, updated_at")
+      .eq("id", id)
+      .maybeSingle<{ id: string; slug: string; kind: string; template_id: string | null; content: unknown; updated_at: string }>()
+    if (error) throw new Error(`Could not load the calendar: ${error.message}`)
+    if (!data || data.kind !== "calendar") throw new Error("Letter not found")
+    const templateId = CalendarTemplateId.safeParse(data.template_id)
+    const current = CalendarContent.safeParse(data.content)
+    if (!templateId.success || !current.success) throw new Error("Letter not found")
+
+    const next = update(current.data, { templateId: templateId.data, slug: data.slug })
+    if (!next) return { content: current.data, slug: data.slug, templateId: templateId.data }
+    const valid = validateContent({ kind: "calendar", templateId: templateId.data, content: next })
+
+    const { data: written, error: writeError } = await supabase
+      .from("letters")
+      .update({ content: valid.content })
+      .eq("id", id)
+      .eq("updated_at", data.updated_at)
+      .select("id")
+      .maybeSingle()
+    if (writeError) throw new Error(`Could not save the calendar: ${writeError.message}`)
+    if (written) return { content: valid.content as CalendarContent, slug: data.slug, templateId: templateId.data }
+  }
+  throw new Error("The calendar changed while it was being saved. Try again.")
+}
+
 // Replaces the stored conversation. Callers only ever append to what they loaded.
 // Ownership is checked through RLS first; the write itself uses the service
 // role because the browser is not allowed to change `chat` (see the migration).

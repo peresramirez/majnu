@@ -7,8 +7,9 @@
 // invitations, advent calendars and the template gallery are the optional
 // extras, grouped under Create. /dashboard stays the letters chat it has always
 // been, so every existing link to it (emails, "New gift" buttons, the template
-// gallery's "Use this template") still opens the same screen; it, /create/<id>
-// and /dashboard/templates all belong to Create. Purchases (the personalised
+// gallery's "Use this template") still opens the same screen; it, /create/<id>,
+// /dashboard/templates and the advent calendar editor at /dashboard/calendars
+// (issue #48) all belong to Create. Purchases (the personalised
 // wrappers bought) is in the account menu, so the phone tab bar stays at four.
 
 export type TabId = "find" | "gifts" | "create" | "tracker"
@@ -38,6 +39,13 @@ export const LETTERS_CHAT = "/dashboard"
 
 export const PURCHASES = "/dashboard/purchases"
 
+// Where a gift is carried on: a calendar in its door-by-door editor (issue #48,
+// which sends a calendar made in the letters chat back to its chat), anything
+// else in the letters chat at /create/<id>.
+export function giftEditorPath(letter: { id: string; kind: "letter" | "calendar" }): string {
+  return letter.kind === "calendar" ? `/dashboard/calendars/${letter.id}` : `/create/${letter.id}`
+}
+
 function under(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
 }
@@ -48,7 +56,9 @@ export function activeTab(pathname: string): TabId | null {
   if (under(pathname, "/dashboard/find")) return "find"
   if (under(pathname, "/dashboard/gifts")) return "gifts"
   if (under(pathname, "/dashboard/tracker")) return "tracker"
-  if (under(pathname, "/dashboard/create") || under(pathname, "/dashboard/templates")) return "create"
+  if (under(pathname, "/dashboard/create") || under(pathname, "/dashboard/templates") || under(pathname, "/dashboard/calendars")) {
+    return "create"
+  }
   if (pathname === LETTERS_CHAT || under(pathname, "/create")) return "create"
   return null
 }
