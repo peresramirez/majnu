@@ -138,8 +138,8 @@ export const MAIN_TOOLS: BetaTool[] = [
 
 // ---------- Gates ----------
 
-// Calendars need Full moon; the first build of an empty letter counts as one
-// of the month's gifts on the free plan. Rebuilding or editing does not.
+// Calendars need a real account: a guest is asked to sign up first. New gifts
+// are free for everyone (lib/limits.ts); the spending guard bounds them.
 export async function checkBuild(kind: LetterKind, hasContent: boolean): Promise<LimitResult> {
   if (kind === "calendar") {
     const calendar = await canUseFeature("calendar")

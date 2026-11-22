@@ -3,8 +3,24 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/agents/client", () => ({ getClient: vi.fn(), agentRequestBase: () => ({}), AGENT_EFFORT: "low" }))
 
-import { BUILDER_SYSTEM_PROMPT, BuilderLetterContent, checkContent, contentForBuilder, sanitize, titleFor } from "@/lib/agents/builder"
+import {
+  BUILDER_SYSTEM_PROMPT,
+  BuilderLetterContent,
+  EVENT_TEMPLATES,
+  GIFT_TEMPLATES,
+  checkContent,
+  contentForBuilder,
+  sanitize,
+  titleFor,
+} from "@/lib/agents/builder"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
+import type { LetterContent } from "@/lib/letters/schema"
+
+function withoutEvent(content: LetterContent): LetterContent {
+  const { event, ...rest } = content
+  void event
+  return rest
+}
 
 describe("checkContent", () => {
   it("accepts every fixture for its own template", () => {
@@ -31,6 +47,40 @@ describe("checkContent", () => {
     void event
     expect(checkContent("party-invite", { kind: "letter", content: noEvent })).toHaveLength(1)
     expect(checkContent("gift-reveal", { kind: "letter", content: { ...letterFixtures["gift-reveal"], gifts: [] } })).toHaveLength(1)
+  })
+
+  it("needs a gift in a 3D gift box", () => {
+    const content = { ...letterFixtures["gift-box-3d"], gifts: [] }
+    expect(checkContent("gift-box-3d", { kind: "letter", content })).toEqual(["a 3D gift box needs at least one gift"])
+    // Given as a gift or not, the box opens on its gift card.
+    expect(checkContent("gift-box-3d", { kind: "letter", content }, { giftRequired: true })).toEqual(["a 3D gift box needs at least one gift"])
+  })
+
+  it("needs a gift in a party box only when it is given as a gift", () => {
+    const content = { ...letterFixtures["party-box"], gifts: [] }
+    expect(checkContent("party-box", { kind: "letter", content })).toEqual([])
+    expect(checkContent("party-box", { kind: "letter", content }, { giftRequired: true })).toEqual([
+      "this page is given as a gift, so it needs the gift from the brief",
+    ])
+    expect(checkContent("party-box", { kind: "letter", content: letterFixtures["party-box"] }, { giftRequired: true })).toEqual([])
+  })
+
+  it("never needs an event on a party box, which is an invitation only when it has one", () => {
+    expect(checkContent("party-box", { kind: "letter", content: withoutEvent(letterFixtures["party-box"]) })).toEqual([])
+  })
+
+  it("needs the event on the 3D wedding envelope", () => {
+    expect(checkContent("wedding-envelope-3d", { kind: "letter", content: withoutEvent(letterFixtures["wedding-envelope-3d"]) })).toEqual([
+      "an invitation needs the event (title, startsAt, locationName, address)",
+    ])
+  })
+
+  it("names every template that needs an event or a gift in the builder prompt", () => {
+    expect(EVENT_TEMPLATES).toEqual(["wedding-invite", "party-invite", "wedding-envelope-3d"])
+    expect(GIFT_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d"])
+    expect(BUILDER_SYSTEM_PROMPT).toContain(`Invitations (${EVENT_TEMPLATES.join(", ")})`)
+    expect(BUILDER_SYSTEM_PROMPT).toContain(`(${GIFT_TEMPLATES.join(", ")}) needs at least one gift`)
+    expect(BUILDER_SYSTEM_PROMPT).toContain("A party pop box (party-box) needs one when the brief gives a gift.")
   })
 })
 
@@ -60,6 +110,13 @@ describe("titleFor", () => {
     expect(titleFor("gift-reveal", "Tom")).toBe("A gift for Tom")
     expect(titleFor("wedding-invite", "Sophie")).toBe("An invitation for Sophie")
     expect(titleFor("advent-classic", "  Lena ")).toBe("An advent calendar for Lena")
+  })
+
+  it("calls the two gift boxes a gift and the 3D wedding envelope an invitation", () => {
+    expect(titleFor("gift-box-3d", "Mara")).toBe("A gift for Mara")
+    expect(titleFor("party-box", "Jonas")).toBe("A gift for Jonas")
+    expect(titleFor("wedding-envelope-3d", "Everyone")).toBe("An invitation for Everyone")
+    expect(titleFor("treasure-map", "Ana")).toBe("A letter for Ana")
   })
 })
 
