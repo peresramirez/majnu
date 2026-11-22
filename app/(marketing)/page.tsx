@@ -37,8 +37,12 @@ const questions = [
     a: "No. Majnu finds gifts and wraps one for you without signing in. Sign up when you want to keep your gifts on any device. Advent calendars are free too, but need an account.",
   },
   {
+    q: "How does Majnu get to know them?",
+    a: "From what you tell it, in words or by voice, and from what you choose to share: their public Instagram, TikTok or LinkedIn, a photo or a document. Majnu builds a short profile of the person from it, asks a few quick questions you answer with a tap, and searches with that.",
+  },
+  {
     q: "Where do the gift ideas come from?",
-    a: "Majnu searches shops that sell in your country and links to each shop's own page. You buy the gift there, from the shop.",
+    a: "Majnu searches shops that sell in your country and shows you six ideas, each linked to the shop's own page. You buy the gift there, from the shop.",
   },
   {
     q: "How does Majnu know where I am?",

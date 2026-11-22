@@ -79,7 +79,7 @@ export function SystemDiagram() {
   return (
     <svg viewBox="0 30 1600 640" className="pd-diagram" preserveAspectRatio="xMinYMid meet" role="img" aria-labelledby="pd-system-title">
       <title id="pd-system-title">
-        Your phone talks to Majnu&apos;s agents on Claude, which research the web and public profiles, recommend three gifts and
+        Your phone talks to Majnu&apos;s agents on Claude, which build a profile of the person from what you share, research the web, recommend six gifts and
         write the gift page. The page&apos;s link is sent, and its opens are tracked. Payments go through Stripe Checkout, and
         the personalised wrapper is designed by Claude Code in a Daytona sandbox.
       </title>
@@ -95,7 +95,7 @@ export function SystemDiagram() {
           Your phone
         </text>
         <text x={145} y={306} textAnchor="middle" className="dg-sub" fontSize={25}>
-          words, voice, a profile
+          words, socials, photos
         </text>
       </g>
       <Arrow d="M296 230H352" marker={m} i={2} />
@@ -105,7 +105,7 @@ export function SystemDiagram() {
         <text x={408} y={112} className="dg-title" fontSize={38}>
           Majnu’s agents on Claude
         </text>
-        {["Research the web", "Read public profiles", "Recommend three gifts", "Write the page"].map((line, n) => (
+        {["Build their profile", "Research the web", "Recommend six gifts", "Write the page"].map((line, n) => (
           <g key={line}>
             <circle cx={420} cy={180 + n * 62} r={8} className="dg-dot" style={{ opacity: 0.4 + n * 0.2 }} />
             <text x={448} y={191 + n * 62} className="dg-text" fontSize={32}>
@@ -144,10 +144,10 @@ export function AgentsDiagram() {
   return (
     <svg viewBox="0 0 1600 800" className="pd-diagram" preserveAspectRatio="xMinYMid meet" role="img" aria-labelledby="pd-agents-title">
       <title id="pd-agents-title">
-        The finder agent on Claude has three tools: read_profile reads Instagram or TikTok through Apify, or another public
-        page through Tavily Extract, into three to six interests; ask_questions asks up to three questions with answers to
-        tap; find_gifts hands who the gift is for, age, budget and interests to a research sub-agent, which searches the web
-        with Tavily in the visitor&apos;s language and country and returns three gifts, one recommended. The chosen gift is
+        The finder agent on Claude has three tools: read_profile reads Instagram or TikTok through Apify, LinkedIn through Bright Data, or another public
+        page through Tavily Extract, into a profile of the person; ask_questions asks one round of quick questions with answers
+        to tap before the first search; find_gifts hands who the gift is for, age, budget and interests to a research sub-agent, which searches the web
+        with Tavily in the visitor&apos;s language and country and returns six gifts, one recommended. The chosen gift is
         wrapped by the builder sub-agent, whose structured output is checked against the letter schema, into a template,
         and published as a gift page at /l/ and its slug. Data lives in Supabase Postgres behind row-level security; opens
         are recorded by a beacon with a hashed visitor id in letter_events; a paid wrapper goes from Stripe through a
@@ -170,12 +170,12 @@ export function AgentsDiagram() {
         w={460}
         h={110}
         title="read_profile"
-        lines={["Instagram, TikTok or a public page", "→ 3 to 6 interests"]}
+        lines={["Instagram, TikTok, LinkedIn, a page", "→ a profile of the person"]}
         scale={SMALL}
         code
         i={3}
       />
-      <Box x={360} y={200} w={460} h={110} title="ask_questions" lines={["Up to 3 questions, answers to tap"]} scale={SMALL} code i={4} />
+      <Box x={360} y={200} w={460} h={110} title="ask_questions" lines={["One round, answers to tap"]} scale={SMALL} code i={4} />
       <Box x={360} y={340} w={460} h={110} title="find_gifts" lines={["Who it is for, age, budget, interests"]} scale={SMALL} code i={5} />
       <Arrow d="M826 395H892" marker={m} i={6} />
       <Box
@@ -189,7 +189,7 @@ export function AgentsDiagram() {
         i={7}
       />
       <Arrow d="M1236 395H1302" marker={m} i={8} />
-      <Box x={1310} y={320} w={290} h={150} title="Three gifts" lines={["real shops, local prices", "one recommended, and why"]} scale={SMALL} i={9} />
+      <Box x={1310} y={320} w={290} h={150} title="Six gifts" lines={["real shops, local prices", "one recommended, and why"]} scale={SMALL} i={9} />
 
       <text x={0} y={490} className="dg-label">
         WRAPPING AND SENDING
