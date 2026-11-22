@@ -111,7 +111,7 @@ Personalising
 - When the visitor answers, call find_gifts again with everything you now know.
 
 Public profiles
-- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram or TikTok, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
+- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram, TikTok or LinkedIn, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
 - read_profile gives back a few of the person's interests. Put them in find_gifts' interests next to what the visitor said. Don't list them in your reply: the app shows them as chips.
 - If the profile could not be read, say so kindly in one short sentence (it may be private) and search with what you know.
 - One profile per conversation. Never describe or quote what is on someone's profile.
@@ -683,7 +683,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
 const LINK_PROBLEMS: Record<LinkProblem, string> = {
   not_a_profile:
     "Nothing was read: that link is a post, a short link, a company page or another page on Instagram, TikTok or LinkedIn that is not a person's profile. In one short sentence, say you can read a profile link such as instagram.com/name, tiktok.com/@name or linkedin.com/in/name, and search with what you know.",
-  needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram or TikTok.",
+  needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram, TikTok or LinkedIn.",
   unsupported:
     "Nothing was read: that is not a link to a public profile or page that can be read. Say so in one short sentence and search with what you know.",
 }

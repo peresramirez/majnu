@@ -556,7 +556,7 @@ describe("reading a public profile", () => {
   it("asks which platform a bare handle is on, and reads it once the visitor says", async () => {
     const { requests } = scriptModel(reply([readCall({ link: "@natgeo" })]), reply([text("Instagram oder TikTok?")], "end_turn"))
     await runFinderTurn({ history: [], message: "@natgeo", state: state() })
-    expect(toolResult(requests[1], "read-1").content).toContain("whether it is on Instagram or TikTok")
+    expect(toolResult(requests[1], "read-1").content).toContain("whether it is on Instagram, TikTok or LinkedIn")
 
     scriptModel(reply([readCall({ link: "@natgeo", platform: "tiktok" })]), reply([findCall(SISTER)]))
     await runFinderTurn({ history: [], message: "TikTok", state: state() })
