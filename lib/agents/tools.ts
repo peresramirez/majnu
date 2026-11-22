@@ -9,7 +9,8 @@ import { saveLetterContent } from "@/lib/letters/store"
 import { TemplateId, type CalendarContent, type LetterContent, type LetterKind } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { canUseFeature, type LimitResult } from "@/lib/limits"
-import { BuilderRefusal, buildContent, titleFor, type BuiltContent } from "./builder"
+import { BuilderRefusal, buildContent, contentForBuilder, titleFor, type BuiltContent } from "./builder"
+import { createDraftStream, mergeOverCurrent, toCalendarDraft, toLetterDraft, type DraftSink } from "./draft"
 import type { ChatEvent } from "./events"
 import { describeError } from "./errors"
 import { ResearchRefusal, researchGifts } from "./research"
@@ -30,7 +31,14 @@ export type TurnState = {
     templateId: TemplateId | null
     content: LetterContent | CalendarContent | null
   }
+  // Builder runs so far in this turn (build_letter and edit_letter), for MAX_BUILDS_PER_TURN.
+  builds?: number
 }
+
+// Builder runs per sender message. The main agent edits the page after every
+// message that adds a fact (issue #30), so this bounds what one message spends:
+// a first build and one edit, or two edits. Each run is at most two builder requests.
+export const MAX_BUILDS_PER_TURN = 2
 
 export const TOOL_LABELS: Record<ToolName, { start: string; error: string }> = {
   suggest_templates: { start: "Picking a few templates…", error: "Something went wrong showing the templates." },
@@ -225,6 +233,39 @@ async function saveBuilt(state: TurnState, templateId: TemplateId, fresh: BuiltC
   state.emit({ type: "preview", letterId: state.letterId, kind: built.kind, templateId })
 }
 
+// Live drafts for the create page while the builder writes (lib/agents/draft.ts).
+// An edit is shown over the current content, so what is not rewritten yet stays.
+function draftSink(state: TurnState, kind: LetterKind, templateId: TemplateId, current: TurnState["letter"]["content"]): DraftSink {
+  const base = current ? contentForBuilder(current) : null
+  const merged = (partial: unknown) => (base ? mergeOverCurrent(base, partial) : partial)
+  const { letterId } = state
+  if (kind === "calendar") {
+    return createDraftStream({
+      shape: (partial) => toCalendarDraft(merged(partial)),
+      emit: (content) => state.emit({ type: "draft", letterId, kind: "calendar", templateId, content }),
+    })
+  }
+  return createDraftStream({
+    shape: (partial) => toLetterDraft(merged(partial)),
+    emit: (content) => state.emit({ type: "draft", letterId, kind: "letter", templateId, content }),
+  })
+}
+
+// Counts a builder run against MAX_BUILDS_PER_TURN; false when none is left.
+function takeBuild(state: TurnState): boolean {
+  const used = state.builds ?? 0
+  if (used >= MAX_BUILDS_PER_TURN) return false
+  state.builds = used + 1
+  return true
+}
+
+function buildCapResult(toolUse: BetaToolUseBlock): BetaToolResultBlockParam {
+  return result(
+    toolUse,
+    `Not done: the page was already changed ${MAX_BUILDS_PER_TURN} times for this message, the most one message allows. Tell the sender in a sentence what is still to change, and make it after their next message, with every change in one edit_letter call.`,
+  )
+}
+
 async function buildLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise<BetaToolResultBlockParam> {
   const input = BuildLetterInput.safeParse(toolUse.input)
   if (!input.success) return result(toolUse, `Invalid input: ${input.error.message}`, true)
@@ -236,12 +277,15 @@ async function buildLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise
     return limitResult(toolUse, gate)
   }
 
+  if (!takeBuild(state)) return buildCapResult(toolUse)
   const built = await buildContent({
     mode: "build",
     templateId: template.id,
     brief: input.data.brief,
     now: state.now,
     timezone: state.timezone,
+    // A new build starts from nothing, even over content built before.
+    draft: draftSink(state, template.kind, template.id, null),
   })
   await saveBuilt(state, template.id, built)
   return result(toolUse, describeBuilt(built, template.name, state.shareUrl))
@@ -270,6 +314,7 @@ async function editLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise<
     return limitResult(toolUse, gate)
   }
 
+  if (!takeBuild(state)) return buildCapResult(toolUse)
   const built = await buildContent({
     mode: "edit",
     templateId: template.id,
@@ -277,6 +322,7 @@ async function editLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise<
     change: input.data.change,
     now: state.now,
     timezone: state.timezone,
+    draft: draftSink(state, template.kind, template.id, content),
   })
   await saveBuilt(state, template.id, built)
   return result(toolUse, describeBuilt(built, template.name, state.shareUrl))

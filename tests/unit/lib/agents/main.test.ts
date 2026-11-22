@@ -187,3 +187,39 @@ describe("MAIN_SYSTEM_PROMPT", () => {
     expect(step).toContain("wedding-invite, party-invite, wedding-envelope-3d, party-box")
   })
 })
+
+// The preview grows with every message (issue #30).
+describe("MAIN_SYSTEM_PROMPT and live drafts", () => {
+  it("asks for a first draft as soon as the recipient and occasion are known, and an edit for each new fact", () => {
+    expect(MAIN_SYSTEM_PROMPT).toContain("A first draft, in the same turn you learn both. Call build_letter")
+    expect(MAIN_SYSTEM_PROMPT).toContain("call edit_letter in that same turn, before you reply")
+    expect(MAIN_SYSTEM_PROMPT).toContain("One edit_letter per message")
+    expect(MAIN_SYSTEM_PROMPT).toContain("A message can change the page at most twice")
+  })
+})
+
+describe("the status line while tools run", () => {
+  it("names the tool that is running, not the last one announced while the reply streamed", async () => {
+    replies.push(
+      {
+        content: [
+          text("Here is a first draft."),
+          toolUse("t1", "build_letter", { templateId: "classic-envelope", brief: "x" }),
+          toolUse("t2", "suggest_templates", { templateIds: ["classic-envelope", "postcard"] }),
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [text("What is her name?")], stop_reason: "end_turn" },
+    )
+    const seen: string[] = []
+    // What the status line shows when each tool starts running: the last start announced so far.
+    const record = async (toolUse: { id: string }) => {
+      const last = events.filter((e): e is Extract<ChatEvent, { type: "tool" }> => e.type === "tool" && e.status === "start").at(-1)
+      seen.push(last?.name ?? "")
+      return { type: "tool_result" as const, tool_use_id: toolUse.id, content: "Done." }
+    }
+    vi.mocked(runTool).mockImplementationOnce(record).mockImplementationOnce(record)
+    await runMainAgent({ history: [], message: "A birthday letter for my sister", state: state() })
+    expect(seen).toEqual(["build_letter", "suggest_templates"])
+  })
+})

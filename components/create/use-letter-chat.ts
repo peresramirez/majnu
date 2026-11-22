@@ -1,10 +1,12 @@
 "use client"
 
 // Sends a message to POST /api/chat and turns the streamed events into chat
-// state (see chat-state.ts for what each event does to the screen).
+// state (see chat-state.ts for what each event does to the screen) and the
+// live draft of the page (draft-state.ts).
 import { useCallback, useEffect, useReducer, useRef } from "react"
 import type { ChatRequest } from "@/lib/agents/events"
 import { chatReducer, initialChatState, type ChatInit } from "./chat-state"
+import { draftReducer, initialDraftState } from "./draft-state"
 import { readChatEvents } from "./ndjson"
 
 const OFFLINE = "Your message didn't reach Majnu. Check your connection and try again."
@@ -26,6 +28,7 @@ function browserTimezone(): string | undefined {
 
 export function useLetterChat(init: ChatInit) {
   const [state, dispatch] = useReducer(chatReducer, init, initialChatState)
+  const [draftState, dispatchDraft] = useReducer(draftReducer, initialDraftState)
   const letterIdRef = useRef<string | null>(init.letterId ?? null)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -50,6 +53,7 @@ export function useLetterChat(init: ChatInit) {
       const isStream = (res.headers.get("content-type") ?? "").includes("ndjson")
       if (!res.body || (!res.ok && !isStream)) {
         dispatch({ type: "failed", message: failureMessage(res.status) })
+        dispatchDraft({ type: "ended" })
         return
       }
       for await (const event of readChatEvents(res.body)) {
@@ -61,10 +65,13 @@ export function useLetterChat(init: ChatInit) {
           if (isNew) window.history.replaceState(null, "", `/create/${encodeURIComponent(event.letterId)}`)
         }
         dispatch({ type: "event", event })
+        dispatchDraft({ type: "event", event })
       }
       dispatch({ type: "closed" })
+      dispatchDraft({ type: "ended" })
     } catch {
       if (!controller.signal.aborted) dispatch({ type: "failed", message: OFFLINE })
+      dispatchDraft({ type: "ended" })
     } finally {
       busyRef.current = false
       if (abortRef.current === controller) abortRef.current = null
@@ -85,5 +92,9 @@ export function useLetterChat(init: ChatInit) {
     [stream],
   )
 
-  return { ...state, send }
+  // The preview pane calls this once the reloaded preview is on screen, so the
+  // saved draft it was showing in the meantime can go.
+  const previewShown = useCallback(() => dispatchDraft({ type: "shown" }), [])
+
+  return { ...state, send, draft: draftState.draft, draftChanges: draftState.changes, previewShown }
 }

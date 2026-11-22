@@ -24,7 +24,7 @@ vi.mock("@/lib/agents/research", async (importOriginal) => ({
 import { buildContent } from "@/lib/agents/builder"
 import type { ChatEvent } from "@/lib/agents/events"
 import { researchGifts } from "@/lib/agents/research"
-import { MAIN_TOOLS, checkBuild, keepGiftList, runTool, type TurnState } from "@/lib/agents/tools"
+import { MAIN_TOOLS, MAX_BUILDS_PER_TURN, checkBuild, keepGiftList, runTool, type TurnState } from "@/lib/agents/tools"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { saveLetterContent } from "@/lib/letters/store"
 import { canUseFeature, type LimitResult } from "@/lib/limits"
@@ -298,5 +298,57 @@ describe("the gift list across builds and edits", () => {
     })
     expect(keepGiftList(letterFixtures["classic-envelope"], built)).toBe(built)
     expect(keepGiftList(null, built)).toBe(built)
+  })
+})
+
+// Live drafts (issue #30): the builder's streamed text becomes draft events.
+describe("live drafts", () => {
+  // A builder that streams `text` into its draft sink, then returns `content`.
+  function streamingBuilder(text: string, content: unknown) {
+    vi.mocked(buildContent).mockImplementation(async (input) => {
+      input.draft?.push(text)
+      input.draft?.flush()
+      return { kind: "letter", content } as Awaited<ReturnType<typeof buildContent>>
+    })
+  }
+
+  it("sends drafts while build_letter writes, then the preview of the saved content", async () => {
+    const content = letterFixtures["gift-reveal"]
+    streamingBuilder(`{"recipientName": "Mara", "headline": "For you", "gifts": [{"title": "Spa", "code": "SECRET-1", "url": "https://x.example"`, content)
+    await runTool(call("build_letter", { templateId: "gift-reveal", brief }), makeState())
+
+    expect(events.map((e) => e.type)).toEqual(["draft", "preview", "tool"])
+    expect(events[0]).toEqual({
+      type: "draft",
+      letterId: "letter-1",
+      kind: "letter",
+      templateId: "gift-reveal",
+      content: { recipientName: "Mara", headline: "For you", gifts: [{ title: "Spa" }] },
+    })
+    expect(JSON.stringify(events[0])).not.toContain("SECRET-1")
+  })
+
+  it("shows an edit over the current content, so what is not rewritten yet stays", async () => {
+    const current = letterFixtures["classic-envelope"]
+    streamingBuilder(`{"recipientName": "${current.recipientName}", "headline": "A new headline`, current)
+    const state = makeState({ kind: "letter", templateId: "classic-envelope", content: current })
+    await runTool(call("edit_letter", { change: "New headline" }), state)
+
+    const draft = events.find((e) => e.type === "draft")
+    expect(draft).toMatchObject({ kind: "letter", templateId: "classic-envelope" })
+    expect(draft && "content" in draft ? draft.content : null).toMatchObject({ headline: "A new headline", body: current.body, signOff: current.signOff })
+  })
+
+  it("runs the builder at most twice for one message", async () => {
+    vi.mocked(buildContent).mockResolvedValue({ kind: "letter", content: letterFixtures["classic-envelope"] })
+    const state = makeState()
+    await runTool(call("build_letter", { templateId: "classic-envelope", brief }), state)
+    await runTool(call("edit_letter", { change: "Warmer" }), state)
+    const third = await runTool(call("edit_letter", { change: "Shorter" }), state)
+
+    expect(MAX_BUILDS_PER_TURN).toBe(2)
+    expect(buildContent).toHaveBeenCalledTimes(2)
+    expect(String(third.content)).toMatch(/^Not done: the page was already changed 2 times/)
+    expect(third.is_error).toBeUndefined()
   })
 })

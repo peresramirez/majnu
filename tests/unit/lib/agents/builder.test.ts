@@ -3,16 +3,24 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/agents/client", () => ({ getClient: vi.fn(), agentRequestBase: () => ({}), AGENT_EFFORT: "low" }))
 
+import Anthropic from "@anthropic-ai/sdk"
 import {
   BUILDER_SYSTEM_PROMPT,
+  BuilderInvalidOutput,
   BuilderLetterContent,
+  BuilderRefusal,
   EVENT_TEMPLATES,
   GIFT_TEMPLATES,
+  buildContent,
   checkContent,
   contentForBuilder,
   sanitize,
   titleFor,
 } from "@/lib/agents/builder"
+import { getClient } from "@/lib/agents/client"
+import { createDraftStream, toLetterDraft, type DraftSink } from "@/lib/agents/draft"
+import type { LetterDraft } from "@/lib/agents/events"
+import { fakeClient, type Scripted } from "./fake-stream"
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import type { LetterContent } from "@/lib/letters/schema"
 
@@ -138,5 +146,121 @@ describe("the gift list and the builder", () => {
     expect(shown).not.toHaveProperty("wishlist")
     expect(shown).toMatchObject({ headline: letterFixtures["party-invite"].headline })
     expect(contentForBuilder(calendarFixtures.countdown)).toBe(calendarFixtures.countdown)
+  })
+})
+
+// The builder streams (issue #30): these run the real SDK stream, its
+// structured output parsing and the zod schema against replayed answers.
+describe("buildContent, streamed", () => {
+  const now = new Date("2026-11-21T12:00:00Z")
+  const giftReveal = BuilderLetterContent.parse(letterFixtures["gift-reveal"])
+  const answer = (content: unknown, stop_reason: "end_turn" | "max_tokens" | "refusal" = "end_turn"): Scripted => ({
+    content: [{ type: "text", text: typeof content === "string" ? content : JSON.stringify(content) }],
+    stop_reason,
+  })
+
+  function script(...replies: Scripted[]) {
+    const requests: Array<Record<string, unknown>> = []
+    vi.mocked(getClient).mockReturnValue(
+      fakeClient(() => {
+        const next = replies.shift()
+        if (!next) throw new Error("no scripted answer left")
+        return next
+      }, requests),
+    )
+    return requests
+  }
+
+  // Records every draft, and how often the sink was restarted for a retry.
+  function recorder() {
+    const drafts: LetterDraft[] = []
+    let clock = 0
+    const inner = createDraftStream({ shape: toLetterDraft, emit: (d) => drafts.push(d), intervalMs: 0, now: () => clock++ })
+    const sink: DraftSink & { restarts: number } = {
+      restarts: 0,
+      push: (delta) => inner.push(delta),
+      flush: () => inner.flush(),
+      restart: () => {
+        sink.restarts++
+        inner.restart()
+      },
+    }
+    return { drafts, sink }
+  }
+
+  const userText = (request: Record<string, unknown>) => JSON.stringify(request.messages)
+
+  it("streams the same structured output request and returns the validated, sanitised content", async () => {
+    const requests = script(answer(giftReveal))
+    const { drafts, sink } = recorder()
+    const built = await buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin", draft: sink })
+
+    expect(built).toEqual(sanitize({ kind: "letter", content: giftReveal }, "Europe/Berlin"))
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.stream).toBe(true)
+    expect(requests[0]!.system).toBe(BUILDER_SYSTEM_PROMPT)
+    expect(requests[0]!.output_config).toMatchObject({ effort: "low", format: { type: "json_schema" } })
+    expect(requests[0]).not.toHaveProperty("temperature")
+
+    // The draft grew in reading order and ended on the whole content, without codes or links.
+    const firstWith = (key: keyof LetterDraft) => drafts.findIndex((d) => d[key] !== undefined)
+    expect(drafts.length).toBeGreaterThan(5)
+    expect(firstWith("headline")).toBeLessThan(firstWith("body"))
+    expect(firstWith("body")).toBeLessThan(firstWith("gifts"))
+    expect(drafts.at(-1)).toEqual(toLetterDraft(giftReveal))
+    for (const gift of giftReveal.gifts) {
+      if (gift.code) expect(JSON.stringify(drafts)).not.toContain(gift.code)
+    }
+    expect(sink.restarts).toBe(0)
+  })
+
+  it("builds without a draft sink, as the finder's wrap step does", async () => {
+    script(answer(giftReveal))
+    const built = await buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin" })
+    expect(built.kind).toBe("letter")
+  })
+
+  it("asks once more with the problems when the content does not fit, and the draft starts again", async () => {
+    const requests = script(answer({ ...giftReveal, gifts: [] }), answer(giftReveal))
+    const { sink } = recorder()
+    const built = await buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin", draft: sink })
+
+    expect(built.content).toMatchObject({ headline: giftReveal.headline })
+    expect(requests).toHaveLength(2)
+    expect(userText(requests[1]!)).toContain("a gift reveal needs at least one gift")
+    expect(sink.restarts).toBe(1)
+  })
+
+  it("gives up after the second answer that does not fit", async () => {
+    script(answer({ ...giftReveal, gifts: [] }), answer({ ...giftReveal, gifts: [] }))
+    await expect(buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin" })).rejects.toBeInstanceOf(
+      BuilderInvalidOutput,
+    )
+  })
+
+  it("retries JSON that does not match the schema", async () => {
+    const requests = script(answer({ recipientName: 5 }), answer(giftReveal))
+    await buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin" })
+    expect(userText(requests[1]!)).toContain("the JSON did not match the schema")
+  })
+
+  it("tells a cut-off answer apart from bad JSON", async () => {
+    const requests = script(answer(JSON.stringify(giftReveal).slice(0, 80), "max_tokens"), answer(giftReveal))
+    await buildContent({ mode: "build", templateId: "gift-reveal", brief: "For Mara", now, timezone: "Europe/Berlin" })
+    expect(userText(requests[1]!)).toContain("the answer was cut off")
+  })
+
+  it("throws a refusal as a refusal, even when its JSON is unfinished", async () => {
+    const requests = script(answer('{"recipientName": "Ma', "refusal"))
+    await expect(buildContent({ mode: "build", templateId: "gift-reveal", brief: "x", now, timezone: "Europe/Berlin" })).rejects.toBeInstanceOf(BuilderRefusal)
+    expect(requests).toHaveLength(1)
+  })
+
+  it("passes API errors such as a spend limit to the caller without retrying", async () => {
+    const requests = script({ status: 429, type: "rate_limit_error", message: "over the limit" })
+    await expect(buildContent({ mode: "build", templateId: "gift-reveal", brief: "x", now, timezone: "Europe/Berlin" })).rejects.toBeInstanceOf(
+      Anthropic.APIError,
+    )
+    expect(requests).toHaveLength(1)
   })
 })
