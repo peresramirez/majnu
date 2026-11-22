@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isPublicHostname, parseProfileLink, usesApify } from "@/lib/social/links"
+import { isPublicHostname, PAID_SOURCES, parseProfileLink, usesApify } from "@/lib/social/links"
 
 describe("parseProfileLink", () => {
   it("reads Instagram profile links in their usual shapes", () => {
@@ -41,12 +41,55 @@ describe("parseProfileLink", () => {
     }
   })
 
+  it("reads LinkedIn profile links from any country subdomain, with or without a trailing slash or query", () => {
+    for (const link of [
+      "https://www.linkedin.com/in/lena-example-1a2b3c/",
+      "https://linkedin.com/in/lena-example-1a2b3c",
+      "linkedin.com/in/lena-example-1a2b3c",
+      "https://de.linkedin.com/in/lena-example-1a2b3c?originalSubdomain=de",
+      "https://uk.linkedin.com/in/lena-example-1a2b3c/?trk=public_profile",
+      "http://m.linkedin.com/in/lena-example-1a2b3c//",
+      "https://www.linkedin.com/in/lena-example-1a2b3c/details/experience/",
+      "<https://www.linkedin.com/in/lena-example-1a2b3c/>.",
+    ]) {
+      expect(parseProfileLink(link), link).toEqual({ ok: true, target: { source: "linkedin", username: "lena-example-1a2b3c" } })
+    }
+    expect(parseProfileLink("https://www.linkedin.com/in/j%C3%BCrgen-beispiel/")).toEqual({
+      ok: true,
+      target: { source: "linkedin", username: "jürgen-beispiel" },
+    })
+  })
+
+  it("refuses LinkedIn pages that are not a person's profile", () => {
+    for (const link of [
+      "https://www.linkedin.com/company/example-bikes/",
+      "https://www.linkedin.com/school/example-university/",
+      "https://www.linkedin.com/posts/lena-example_cargo-activity-7123456789",
+      "https://www.linkedin.com/pulse/why-cargo-bikes-lena-example",
+      "https://www.linkedin.com/jobs/view/123456/",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/in/",
+      "https://www.linkedin.com/in/%E0%A4%A/",
+      "https://www.linkedin.com/in/a/",
+      "https://www.linkedin.com/",
+      "https://lnkd.in/dAbC123",
+    ]) {
+      expect(parseProfileLink(link), link).toEqual({ ok: false, problem: "not_a_profile" })
+    }
+    // Not LinkedIn at all, just a name that ends like it.
+    expect(parseProfileLink("https://notlinkedin.com/in/lena")).toEqual({ ok: true, target: { source: "web", url: "https://notlinkedin.com/in/lena" } })
+  })
+
   it("takes a bare handle only when the platform is known", () => {
     expect(parseProfileLink("@natgeo")).toEqual({ ok: false, problem: "needs_platform" })
     expect(parseProfileLink("@natgeo", "instagram")).toEqual({ ok: true, target: { source: "instagram", username: "natgeo" } })
     expect(parseProfileLink("anna.climbs", "tiktok")).toEqual({ ok: true, target: { source: "tiktok", username: "anna.climbs" } })
     // Too short for TikTok.
     expect(parseProfileLink("@a", "tiktok")).toEqual({ ok: false, problem: "unsupported" })
+    // LinkedIn keeps the case: generated profile names can depend on it.
+    expect(parseProfileLink("Lena-Example-1a2b3c", "linkedin")).toEqual({ ok: true, target: { source: "linkedin", username: "Lena-Example-1a2b3c" } })
+    expect(parseProfileLink("@lena", "linkedin")).toEqual({ ok: true, target: { source: "linkedin", username: "lena" } })
+    expect(parseProfileLink("le", "linkedin")).toEqual({ ok: false, problem: "unsupported" })
   })
 
   it("reads any other public page over https, without its fragment", () => {
@@ -92,9 +135,11 @@ describe("isPublicHostname", () => {
 })
 
 describe("usesApify", () => {
-  it("counts Instagram and TikTok reads against the Apify cap, not other pages", () => {
+  it("counts paid scraper reads (Instagram, TikTok, LinkedIn) against the cap, not other pages", () => {
     expect(usesApify("instagram")).toBe(true)
     expect(usesApify("tiktok")).toBe(true)
+    expect(usesApify("linkedin")).toBe(true)
     expect(usesApify("web")).toBe(false)
+    expect([...PAID_SOURCES].sort()).toEqual(["instagram", "linkedin", "tiktok"])
   })
 })
