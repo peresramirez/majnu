@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   CUT_OFF,
   DEFAULT_ERROR,
+  chatFrame,
   chatReducer,
   composeMessage,
   initialChatState,
@@ -137,5 +138,28 @@ describe("chatReducer", () => {
     const state = run(initialChatState(), { type: "send", text: "Hi" }, { type: "failed", message: "You're offline." })
     expect(state.streaming).toBe(false)
     expect(state.items.at(-1)).toMatchObject({ role: "notice", tone: "error", message: "You're offline." })
+  })
+})
+
+describe("chatFrame (issue #62)", () => {
+  it("starts a new gift with the starter and no header", () => {
+    expect(chatFrame({ letterId: null, hasContent: false, itemCount: 0 })).toEqual({ header: false, opening: "new", phoneView: "chat" })
+  })
+
+  it("shows no header after a refused first message, because no gift was made", () => {
+    // The sender's message and the day's-limit notice, and still no letter id.
+    expect(chatFrame({ letterId: null, hasContent: false, itemCount: 2 })).toEqual({ header: false, opening: null, phoneView: "chat" })
+  })
+
+  it("opens a built gift with no conversation on its preview, with a chat that starts from it", () => {
+    expect(chatFrame({ letterId: "l1", hasContent: true, itemCount: 0, storedMessages: 0 })).toEqual({ header: true, opening: "built", phoneView: "preview" })
+  })
+
+  it("opens a gift with a conversation on the chat", () => {
+    expect(chatFrame({ letterId: "l1", hasContent: true, itemCount: 4, storedMessages: 4 })).toEqual({ header: true, opening: null, phoneView: "chat" })
+  })
+
+  it("keeps the starter for a gift that exists but was never built", () => {
+    expect(chatFrame({ letterId: "l1", hasContent: false, itemCount: 0 })).toEqual({ header: true, opening: "new", phoneView: "chat" })
   })
 })

@@ -47,6 +47,8 @@ export function describeToday(timezone: string, now: Date): string {
   return `Today is ${weekdayIn(timezone, now)} ${dateIn(timezone, now)} in ${timezone} (UTC${utcOffsetIn(timezone, now)}).`
 }
 
-export function contextBlockText(timezone: string, now: Date): string {
-  return `${CONTEXT_TAG}${describeToday(timezone, now)} The sender's timezone is ${timezone}.</context>`
+// `extra` adds per-request facts after the date, such as a gift that is
+// already built (builtGiftNote in main.ts).
+export function contextBlockText(timezone: string, now: Date, extra?: string | null): string {
+  return `${CONTEXT_TAG}${describeToday(timezone, now)} The sender's timezone is ${timezone}.${extra ? ` ${extra}` : ""}</context>`
 }
