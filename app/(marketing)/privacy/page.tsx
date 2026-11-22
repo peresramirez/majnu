@@ -180,11 +180,12 @@ export default function PrivacyPage() {
         <li><strong>Daytona</strong>: the short-lived sandbox in the EU where a personalised wrapper is designed.</li>
         <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them, and the address of a public page you share.</li>
         <li><strong>Apify</strong>: reads a public Instagram or TikTok profile, only when you paste its link into the gift finder.</li>
+        <li><strong>OpenAI</strong>: turns what you say into text, when you use the microphone or add a voice note to a gift. We do not keep the recording for this; OpenAI does not use data sent through its API to train its models.</li>
       </ul>
 
       <h2>Transfers outside the EU</h2>
       <p>
-        Anthropic, Apify, Cloudflare, Google, Stripe and Tavily may process data in the United States. Where a provider is certified
+        Anthropic, Apify, Cloudflare, Google, OpenAI, Stripe and Tavily may process data in the United States. Where a provider is certified
         under the EU–US Data Privacy Framework, the transfer is based on that adequacy decision; otherwise it is
         covered by the European Commission&apos;s standard contractual clauses (Art. 46 GDPR).
       </p>
