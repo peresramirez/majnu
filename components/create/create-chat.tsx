@@ -56,9 +56,13 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinnedToBottom = useRef(true)
 
-  const { letterId, previewVersion, items, streaming, status, hasContent } = chat
+  const { letterId, previewVersion, items, streaming, status, hasContent, draft: pageDraft, draftChanges, previewShown } = chat
   const started = items.length > 0 || letterId !== null
-  const templateMeta = chat.templateId ? getTemplate(chat.templateId) : undefined
+  const templateMeta = chat.templateId ? getTemplate(chat.templateId) : pageDraft ? getTemplate(pageDraft.templateId) : undefined
+  const drafting = pageDraft?.phase === "writing"
+  // The draft's name once the builder has moved past it, so it is not shown half typed.
+  const draftName = pageDraft && pageDraft.content.headline !== undefined ? pageDraft.content.recipientName?.trim() || null : null
+  const draftHeadline = drafting ? pageDraft.content.headline?.trim() || null : null
 
   // Coming back here with the browser's Back button can restore this new-gift
   // screen at a /create/<id> address. Load that gift properly instead.
@@ -105,10 +109,11 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
   }, [letterId, previewVersion])
 
   // A rebuilt page on a phone, while the chat is showing: mark the Preview button.
+  // A draft being written marks it too, from the first words (issue #30).
   useEffect(() => {
-    if (previewVersion > 0 && view === "chat") setUnseenPreview(true)
+    if ((previewVersion > 0 || draftChanges > 0) && view === "chat") setUnseenPreview(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewVersion])
+  }, [previewVersion, draftChanges])
 
   // Follow the conversation unless the person has scrolled up to read.
   useEffect(() => {
@@ -169,28 +174,32 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
     setUnseenPreview(false)
   }
 
-  const heading = link.recipientName ? `For ${link.recipientName}` : link.title ?? "New gift"
+  const recipientName = link.recipientName ?? draftName
+  const heading = recipientName ? `For ${recipientName}` : link.title ?? "New gift"
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,36%)]">
       <section aria-label="Chat with Majnu" className={`flex min-h-0 flex-col ${view === "preview" ? "max-lg:hidden" : ""}`}>
         {started && (
           <div className="flex flex-none items-center gap-3 border-b border-night-petal/10 px-4 py-2.5 sm:px-6">
-            <MoonPhase lit={hasContent ? 1 : 0.3} size={22} className="flex-none text-night-rose" />
+            <MoonPhase lit={hasContent ? 1 : pageDraft ? 0.6 : 0.3} size={22} className="flex-none text-night-rose" />
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-[15px] font-semibold leading-tight text-night-petal">{heading}</h1>
+              {/* While Majnu writes, the line under the name follows the headline: a live glimpse of the page on phones. */}
               <p className="truncate text-[13px] text-night-lilac">
                 {templateMeta && <span className="max-sm:hidden">{templateMeta.name} · </span>}
-                {hasContent ? "Ready to send" : "In progress"}
+                {drafting ? (draftHeadline ? `Writing “${draftHeadline}”` : "Writing the page…") : hasContent ? "Ready to send" : "In progress"}
               </p>
             </div>
-            {hasContent && (
+            {(hasContent || pageDraft) && (
               <button type="button" onClick={showPreview} className={`relative lg:hidden ${smallButton}`}>
                 <Eye className="h-4 w-4" aria-hidden="true" />
                 Preview
-                {unseenPreview && (
-                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-night-orchid ring-2 ring-night-plum">
-                    <span className="sr-only">(updated)</span>
+                {(unseenPreview || drafting) && (
+                  <span
+                    className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-night-orchid ring-2 ring-night-plum ${drafting ? "motion-safe:animate-pulse" : ""}`}
+                  >
+                    <span className="sr-only">{drafting ? "(being written)" : "(updated)"}</span>
                   </span>
                 )}
               </button>
@@ -253,7 +262,9 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
         linkFailed={linkFailed}
         hasContent={hasContent}
         version={previewVersion}
-        recipientName={link.recipientName}
+        recipientName={recipientName}
+        draft={pageDraft}
+        onPreviewShown={previewShown}
         onBack={() => setView("chat")}
       />
 
