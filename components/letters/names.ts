@@ -4,7 +4,7 @@ import type { TemplateId } from "@/lib/letters/schema"
 
 // "Anna Schmidt" -> "Anna". Falls back to "you" when there is no name.
 // Gift pages use wholeName() instead, so "our friends" and "Mia and Leo" stay
-// whole; this is for places that want one short word.
+// whole; titles and previews use shortName().
 export function firstName(name: string | null | undefined): string {
   const first = (name ?? "").trim().split(/\s+/)[0] ?? ""
   const clean = first.replace(/[.,;:!?]+$/, "").slice(0, 40)
@@ -64,6 +64,16 @@ export function isGroup(name: string | null | undefined): boolean {
   return plural && (!named || words[0].toLowerCase() === "the")
 }
 
+// How titles, link previews and a page's metadata name the recipient (and
+// the calendar's "For …"): the first name of one person, so a surname never
+// reaches a preview ("Anna Schmidt" -> "Anna"; docs/plan.md and AGENTS.md
+// keep previews generic), and the whole phrase for a group, whose first word
+// alone reads wrongly ("our friends", "Mia & Leo", "the Smiths"). "you" when
+// there is no name.
+export function shortName(name: string | null | undefined): string {
+  return isGroup(name) ? wholeName(name) : firstName(name)
+}
+
 // The verb form that agrees with a name: verbFor("Anna", "sees", "see") is
 // "sees", verbFor("Mia & Leo", "sees", "see") and verbFor("you", ...) "see".
 export function verbFor(name: string | null | undefined, singular: string, plural: string): string {
@@ -102,13 +112,14 @@ export function letterNoun(templateId: string | null | undefined): string {
 }
 
 // "A letter for Anna", "An invitation for our friends", "An advent calendar for Lena".
+// One person by the first name only (shortName).
 export function letterTitle(templateId: string, recipientName: string | null | undefined): string {
-  return `${letterNoun(templateId)} for ${wholeName(recipientName)}`
+  return `${letterNoun(templateId)} for ${shortName(recipientName)}`
 }
 
-// Generic link-preview text. Never the message, the gift or the place.
+// Generic link-preview text. Never the message, the gift, the place or a surname.
 export function letterDescription(recipientName: string | null | undefined): string {
-  return `Made for ${wholeName(recipientName)} with Majnu.`
+  return `Made for ${shortName(recipientName)} with Majnu.`
 }
 
 // "With all my love" + "Javier". When the sign-off already names the sender

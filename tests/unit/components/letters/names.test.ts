@@ -8,6 +8,7 @@ import {
   monogram,
   possessive,
   sentenceStart,
+  shortName,
   signOffLines,
   verbFor,
   wholeName,
@@ -91,13 +92,35 @@ describe("letterNoun", () => {
   })
 })
 
+describe("shortName (titles and previews)", () => {
+  it("keeps one person to the first name, so no surname reaches a preview", () => {
+    expect(shortName("Anna Schmidt")).toBe("Anna")
+    expect(shortName("Anna")).toBe("Anna")
+    expect(shortName("Everyone")).toBe("Everyone")
+    expect(shortName("")).toBe("you")
+  })
+  it("keeps a group whole", () => {
+    expect(shortName("our friends")).toBe("our friends")
+    expect(shortName("Mia & Leo")).toBe("Mia & Leo")
+    expect(shortName("the Smiths")).toBe("the Smiths")
+  })
+})
+
 describe("letterTitle", () => {
-  it("names the kind of gift and the recipient as the sender named them", () => {
+  it("names the kind of gift and one recipient by the first name only", () => {
     expect(letterTitle("classic-envelope", "Anna")).toBe("A letter for Anna")
     expect(letterTitle("gift-reveal", "Tom")).toBe("A gift for Tom")
-    expect(letterTitle("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie Meyer")
+    expect(letterTitle("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie")
+    expect(letterDescription("Anna Schmidt")).toBe("Made for Anna with Majnu.")
+  })
+
+  it("names a group whole (issue #62)", () => {
     expect(letterTitle("party-invite", "our friends")).toBe("An invitation for our friends")
+    expect(letterTitle("classic-envelope", "the Smiths")).toBe("A letter for the Smiths")
     expect(letterDescription("Mia & Leo")).toBe("Made for Mia & Leo with Majnu.")
+  })
+
+  it("names the other kinds", () => {
     expect(letterTitle("party-invite", "Everyone")).toBe("An invitation for Everyone")
     expect(letterTitle("postcard", "Grandma")).toBe("A postcard for Grandma")
     expect(letterTitle("advent-classic", "Lena")).toBe("An advent calendar for Lena")
