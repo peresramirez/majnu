@@ -12,8 +12,12 @@ export type PurchaseView = {
   createdAt: string
   paidAt: string | null
   finishedAt: string | null
-  // "€2.99", from what Checkout actually charged.
+  // "€2.99", from what Checkout actually charged; "Free with a code" when a
+  // coupon code paid for it.
   amount: string
+  // Paid with a coupon code (docs/features/coupons.md): no price, no receipt,
+  // and a failed run gives the code back instead of a refund.
+  freeWithCode: boolean
   receiptUrl: string | null
   // The gift page, where the design shows once it is done.
   giftUrl: string | null
@@ -28,6 +32,10 @@ export type WrapperState = {
   unavailable: "not_a_letter" | "not_built" | null
   // The newest purchase for the letter, if any.
   purchase: PurchaseView | null
+  // A coupon code this browser brought from a poster's short link
+  // (GET /c/<code>), normalised and not yet checked: the dialog opens with it
+  // filled in. Null when there is none.
+  rememberedCode: string | null
 }
 
 type Source = {
@@ -39,6 +47,7 @@ type Source = {
   finishedAt: string | null
   amountCents: number
   currency: string
+  couponId: string | null
   receiptUrl: string | null
   letter: { slug: string; title: string | null } | null
 }
@@ -51,7 +60,10 @@ export function formatAmount(cents: number, currency: string): string {
   }
 }
 
+export const FREE_WITH_CODE = "Free with a code"
+
 export function toPurchaseView(purchase: Source): PurchaseView {
+  const freeWithCode = purchase.couponId !== null
   return {
     id: purchase.id,
     status: purchase.status,
@@ -59,8 +71,9 @@ export function toPurchaseView(purchase: Source): PurchaseView {
     createdAt: purchase.createdAt,
     paidAt: purchase.paidAt,
     finishedAt: purchase.finishedAt,
-    amount: formatAmount(purchase.amountCents, purchase.currency),
-    receiptUrl: purchase.receiptUrl,
+    amount: freeWithCode ? FREE_WITH_CODE : formatAmount(purchase.amountCents, purchase.currency),
+    freeWithCode,
+    receiptUrl: freeWithCode ? null : purchase.receiptUrl,
     giftUrl: purchase.letter ? `/l/${encodeURIComponent(purchase.letter.slug)}` : null,
     giftTitle: purchase.letter?.title ?? null,
   }
@@ -78,4 +91,15 @@ export const STATUS_WORDS: Record<PurchaseStatusView, { label: string; detail: s
   done: { label: "Ready", detail: "Your design is on the gift page." },
   failed: { label: "Something went wrong", detail: "The design could not be made. We are refunding you by hand and will email you." },
   refunded: { label: "Refunded", detail: "The design could not be made, so we refunded you in full. It reaches your card in a few days." },
+}
+
+// A purchase made with a coupon code was not paid and is never refunded, so
+// two statuses read differently for it.
+const CODE_WORDS: Partial<Record<PurchaseStatusView, { label: string; detail: string }>> = {
+  paid: { label: "Code accepted, starting soon", detail: "Majnu starts your design in a moment." },
+  failed: { label: "Something went wrong", detail: "The design could not be made. Your code works again, so you can try once more." },
+}
+
+export function statusWords(purchase: Pick<PurchaseView, "status" | "freeWithCode">): { label: string; detail: string } {
+  return (purchase.freeWithCode ? CODE_WORDS[purchase.status] : undefined) ?? STATUS_WORDS[purchase.status]
 }

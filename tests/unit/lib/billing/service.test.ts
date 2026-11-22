@@ -61,7 +61,7 @@ describe("startWrapperCheckout", () => {
       currency: "eur",
       checkoutSessionId: "cs_test_new",
     })
-    expect(Date.parse(stored.consentAt)).toBeGreaterThanOrEqual(before - 1000)
+    expect(Date.parse(stored.consentAt ?? "")).toBeGreaterThanOrEqual(before - 1000)
 
     const [params, options] = stripe.checkout.sessions.create.mock.calls[0]
     expect(params).toMatchObject({

@@ -7,11 +7,14 @@ import { vi } from "vitest"
 import type { WrapperLetter } from "@/lib/billing/my-purchases"
 import type { MarkPaidResult, NewPurchase, Payment, Purchase, PurchaseStatus } from "@/lib/billing/purchases"
 
-export type StoredPurchase = Purchase & { consentText: string; failureReason: string | null }
+export type StoredPurchase = Purchase & { consentText: string | null; failureReason: string | null }
+
+export type StoredCoupon = { id: string; uses: number; maxUses: number }
 
 export const db = {
   purchases: new Map<string, StoredPurchase>(),
   letters: new Map<string, WrapperLetter & { ownerId: string }>(),
+  coupons: new Map<string, StoredCoupon>(),
   // Whose session the user client reads with (row-level security).
   currentUser: "user-1",
   seq: 0,
@@ -20,6 +23,7 @@ export const db = {
 export function resetDb() {
   db.purchases.clear()
   db.letters.clear()
+  db.coupons.clear()
   db.currentUser = "user-1"
   db.seq = 0
 }
@@ -37,6 +41,7 @@ export function addPurchase(overrides: Partial<StoredPurchase> & { letterId: str
     status: "pending",
     request: "A night sky",
     consentAt: "2026-11-21T20:00:00.000Z",
+    couponId: null,
     consentText: "consent",
     amountCents: 299,
     currency: "eur",
@@ -114,6 +119,16 @@ export const purchasesModule = {
   }),
   markFailed: vi.fn(async (id: string, reason: string) => {
     transition(id, ["pending", "paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason })
+  }),
+  // return_coupon_use in 0011_coupons.sql: only a coupon purchase that is
+  // paid or designing, once, and the coupon gets one use back.
+  returnCouponUse: vi.fn(async (id: string, reason: string) => {
+    const p = db.purchases.get(id)
+    if (!p?.couponId) return false
+    if (!transition(id, ["paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason })) return false
+    const coupon = db.coupons.get(p.couponId)
+    if (coupon && coupon.uses > 0) coupon.uses--
+    return true
   }),
 }
 
