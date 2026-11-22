@@ -19,6 +19,9 @@ export const CATALOGUE_GROUPS = [
   "grandparent",
   "colleague",
   "child_teen",
+  "cat",
+  "dog",
+  "bird",
   "general",
 ] as const
 export type CatalogueGroup = (typeof CATALOGUE_GROUPS)[number]
@@ -91,6 +94,22 @@ const GROUP_WORDS: Record<Exclude<CatalogueGroup, "general">, string[]> = {
     "son", "daughter", "kid", "kids", "child", "children", "teen", "teenager", "nephew", "niece", "grandson", "granddaughter", "baby", "toddler",
     "sohn", "tochter", "mein kind", "unser kind", "kinder", "neffe", "nichte", "enkel", "enkelin", "enkelkind", "jugendliche", "jugendlichen",
     "hijo", "hija", "hijos", "nino", "nina", "ninos", "sobrino", "sobrina", "nieto", "nieta", "bebe", "adolescente",
+  ],
+  // Pets (added 22 November): a gift for the animal itself, or for its owner.
+  cat: [
+    "cat", "cats", "kitten", "kittens", "kitty",
+    "katze", "katzen", "kater", "katzchen", "mieze",
+    "gato", "gata", "gatos", "gatito", "gatita",
+  ],
+  dog: [
+    "dog", "dogs", "puppy", "puppies", "pup",
+    "hund", "hunde", "hundin", "welpe", "welpen",
+    "perro", "perra", "perros", "perrito", "perrita", "cachorro",
+  ],
+  bird: [
+    "bird", "birds", "budgie", "budgies", "parakeet", "canary", "parrot", "cockatiel",
+    "vogel", "vogel", "wellensittich", "kanarienvogel", "papagei", "nymphensittich",
+    "pajaro", "pajaros", "periquito", "canario", "loro", "agapornis",
   ],
 }
 
@@ -433,6 +452,9 @@ const GROUP_PHRASES: Record<CatalogueGroup, string> = {
   grandparent: "a grandparent",
   colleague: "a colleague",
   child_teen: "a child or teenager",
+  cat: "a cat (a gift for the cat, or for its owner)",
+  dog: "a dog (a gift for the dog, or for its owner)",
+  bird: "a pet bird (a gift for the bird, or for its owner)",
   general: "anyone (the app could not tell who it is for)",
 }
 

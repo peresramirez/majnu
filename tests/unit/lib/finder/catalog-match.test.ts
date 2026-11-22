@@ -253,3 +253,23 @@ describe("with real catalogue rows", () => {
     expect(real.find((row) => catalogueOptionId(row.id) === first.id)!.occasions).toContain("fathers_day")
   })
 })
+
+describe("detectGroup: pets", () => {
+  it.each([
+    ["A gift for my cat", "cat"],
+    ["Ein Geschenk für unsere Katze", "cat"],
+    ["algo para mi gato", "cat"],
+    ["something for my dog", "dog"],
+    ["Geschenk für meinen Hund", "dog"],
+    ["un regalo para mi perrito", "dog"],
+    ["a present for our budgie", "bird"],
+    ["etwas für den Wellensittich", "bird"],
+    ["un regalo para mi loro", "bird"],
+  ])("%s → %s", (message, group) => {
+    expect(detectGroup(message).group).toBe(group)
+  })
+
+  it("still prefers the person when the pet is only mentioned", () => {
+    expect(detectGroup("a gift for my mother, she loves her cat").group).toBe("mother")
+  })
+})
