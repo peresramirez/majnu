@@ -68,7 +68,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
     el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT)}px`
   }, [draft, open, wrapping])
 
-  // Follow the conversation: new gift ideas scroll to their top (so all three
+  // Follow the conversation: new gift ideas scroll to their top (so all six
   // can be read from the first), anything else to the bottom while the reader
   // is already near it.
   const lastItem = state.items[state.items.length - 1]
@@ -160,7 +160,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
             className={`relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-clip rounded-t-[22px] bg-night-plum text-night-petal shadow-2xl shadow-black/40 outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:ease-calm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=open]:slide-in-from-bottom-6 md:flex-none md:rounded-[24px] md:motion-safe:data-[state=open]:slide-in-from-bottom-2 ${
               ready
                 ? "md:h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[960px]"
-                : "md:max-h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[720px]"
+                : "md:max-h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[min(1200px,90vw)]"
             }`}
           >
             <DropOverlay show={drop.dragging} />
@@ -180,7 +180,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
               </DialogPrimitive.Close>
             </header>
             <DialogPrimitive.Description className="sr-only">
-              Majnu suggests three gifts for the person you describe, and wraps the one you choose in a page you can send.
+              Majnu suggests six gifts for the person you describe, and wraps the one you choose in a page you can send.
             </DialogPrimitive.Description>
 
             {/* From md up the panel is as tall as this, up to its maximum; then this scrolls. */}
@@ -188,8 +188,8 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
               <div className={`px-4 pt-4 sm:px-5 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-4" : "pb-6"}`}>
                 {chips.length > 0 && !wrapping && (
                   <div className="mb-4">
-                    <p className="text-xs text-night-lilac">Majnu assumed this. Tap one to change it.</p>
-                    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="What Majnu assumed">
+                    <p className="text-xs text-night-lilac">Their profile so far. Tap one to change it.</p>
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Their profile so far">
                       {chips.map((c) => (
                         <li key={c.key}>
                           <button
