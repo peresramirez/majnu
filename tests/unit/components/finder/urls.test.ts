@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { productImageSrc, shopHref, shopName } from "@/components/finder/urls"
+import { DEFAULT_GIFT_IMAGES, defaultGiftImage, productImageSrc, shopHref, shopName } from "@/components/finder/urls"
 
 describe("finder urls", () => {
   it("links only to https shop pages", () => {
@@ -23,5 +23,14 @@ describe("finder urls", () => {
     expect(shopName({ shop: " Thalia ", url: "https://www.thalia.de/p" })).toBe("Thalia")
     expect(shopName({ url: "https://www.thalia.de/p" })).toBe("thalia.de")
     expect(shopName({ url: "nope" })).toBeNull()
+  })
+})
+
+describe("defaultGiftImage", () => {
+  it("picks one of Majnu's own pictures, the same one for the same gift", () => {
+    expect(DEFAULT_GIFT_IMAGES).toContain(defaultGiftImage("Engraved cookie jar"))
+    expect(defaultGiftImage("Engraved cookie jar")).toBe(defaultGiftImage("Engraved cookie jar"))
+    const picks = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map(defaultGiftImage))
+    expect(picks.size).toBeGreaterThan(1)
   })
 })

@@ -100,7 +100,7 @@ export function WrapFooter({ wrap, onNext, onPrevious, last = true }: { wrap: Op
         )}
         <div className="flex items-center gap-3">
           {/* On step 2 a phone needs the room for Back and Wrap. */}
-          <ProductImage src={option.imageUrl} className={`aspect-square w-10 shrink-0 rounded-xl ${details ? "max-sm:hidden" : ""}`} />
+          <ProductImage src={option.imageUrl} seed={option.title} className={`aspect-square w-10 shrink-0 rounded-xl ${details ? "max-sm:hidden" : ""}`} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-snug text-night-petal">{option.title}</p>
             <p className="truncate text-xs leading-snug text-night-lilac" aria-live="polite">

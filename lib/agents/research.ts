@@ -26,6 +26,7 @@ import { AGENT_EFFORT, agentRequestBase, getClient } from "./client"
 import { describeToday } from "./context"
 import type { GiftIdea } from "./events"
 import { echoableContent } from "./history"
+import { withPageImages } from "./page-image"
 import { httpsOnly } from "./safe-url"
 import { type SearchOptions, type SearchResult, searchTavily, TavilySearchError } from "./tavily"
 
@@ -412,7 +413,8 @@ export async function researchGiftReport(input: ResearchInput): Promise<Research
     const reportCall = calls.find((call) => call.name === REPORT_TOOL.name)
     if (reportCall) {
       const report = toReport(reportCall.input, search?.seen, wanted)
-      if (report && report.ideas.length > 0) return report
+      // Ideas the search returned without a photo get the one their page names.
+      if (report && report.ideas.length > 0) return input.images ? { ...report, ideas: await withPageImages(report.ideas) } : report
     }
     // Nothing more can be asked of the model, so run no more searches.
     if (request === MAX_REQUESTS - 1) break
