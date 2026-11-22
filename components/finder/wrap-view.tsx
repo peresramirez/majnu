@@ -43,7 +43,7 @@ type Props = {
 export const WRAP_FORM_ID = "finder-wrap-form"
 
 // What the message box suggests on the wrap step.
-export const WRAP_PLACEHOLDER = "Tell Majnu who it's for, or ask about the gift"
+export const WRAP_PLACEHOLDER = "Tell Majnu who it's for"
 
 // The scrolling area around the wrap step, in the dialog and the inline panel.
 export const SCROLLER_ATTRIBUTE = "data-finder-scroller"
@@ -447,7 +447,7 @@ export function WrapView({ finder, wrap }: Props) {
           </div>
         </fieldset>
       ) : (
-        <fieldset className="mt-4 grid grid-cols-2 items-end gap-x-3 gap-y-3.5" disabled={busy}>
+        <fieldset className="mt-3.5 grid grid-cols-2 items-end gap-x-3 gap-y-3" disabled={busy}>
           <legend className="sr-only">Their name, your name, a note and the gift code</legend>
           {filled.length > 0 && (
             <p role="status" className="col-span-2 text-sm leading-relaxed text-night-lilac">
@@ -487,7 +487,7 @@ export function WrapView({ finder, wrap }: Props) {
           <label className="col-span-2 block text-sm font-medium text-night-petal">
             A note for them {optional}
             <textarea
-              className={`${field} min-h-[72px] resize-y`}
+              className={`${field} min-h-[64px] resize-y`}
               value={details.note}
               onChange={(e) => editDetails({ note: e.target.value })}
               placeholder="Happy birthday. I saw this and thought of you."
@@ -508,7 +508,7 @@ export function WrapView({ finder, wrap }: Props) {
             />
           </label>
           <p id="wrap-code-help" className="col-span-2 -mt-1.5 text-[13px] leading-snug text-night-lilac">
-            Buy the gift in the shop first, then paste the voucher code, gift-card code or order details here. It stays hidden until they open the gift.
+            Buy the gift in the shop first, then paste the voucher code, gift-card code or order details. It stays hidden until they open the gift.
           </p>
         </fieldset>
       )}

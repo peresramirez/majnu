@@ -77,6 +77,16 @@ export function parseFinderEvent(line: string): FinderEvent | null {
         : null
     case "error":
       return { type: "error", message: isString(e.message) ? e.message : "" }
+    case "fill": {
+      // Only the wrap form's four fields, and only text (issue #70).
+      if (!isRecord(e.fields)) return null
+      const fields: Record<string, string> = {}
+      for (const key of ["recipientName", "senderName", "note", "giftCode"] as const) {
+        const value = e.fields[key]
+        if (isString(value) && value.trim()) fields[key] = value
+      }
+      return Object.keys(fields).length ? { type: "fill", fields } : null
+    }
     case "done":
       return { type: "done" }
     default:

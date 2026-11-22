@@ -59,6 +59,23 @@ describe("parseFinderEvent", () => {
     expect(parseFinderEvent('{"type":"done"}')).toEqual({ type: "done" })
   })
 
+  it("reads Majnu's fill for the wrap form, only its four text fields (issue #70)", () => {
+    expect(parseFinderEvent('{"type":"fill","fields":{"recipientName":"Ana","senderName":"Javi","giftCode":"GC-1","other":"x"}}')).toEqual({
+      type: "fill",
+      fields: { recipientName: "Ana", senderName: "Javi", giftCode: "GC-1" },
+    })
+    expect(parseFinderEvent('{"type":"fill","fields":{"note":42,"recipientName":"  "}}')).toBeNull()
+    expect(parseFinderEvent('{"type":"fill"}')).toBeNull()
+  })
+
+  it("reads the new limit reason for a full session", () => {
+    expect(parseFinderEvent('{"type":"limit","reason":"session_full","message":"Start a new search."}')).toEqual({
+      type: "limit",
+      reason: "session_full",
+      message: "Start a new search.",
+    })
+  })
+
   it("skips bad lines instead of throwing", () => {
     expect(parseFinderEvent("not json")).toBeNull()
     expect(parseFinderEvent("[1,2]")).toBeNull()

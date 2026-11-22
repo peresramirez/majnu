@@ -18,7 +18,9 @@ type Props = {
 
 // Under the newest ideas: what else Majnu can use to tailor the next search
 // (issue #70). It reads only links and handles the visitor gives.
-export const MORE_PLACEHOLDER = "Tell Majnu more, or paste a profile link"
+// Short enough for one line beside the microphone at 375px; the line under
+// the ideas (TELL_MORE) says what "more" can be.
+export const MORE_PLACEHOLDER = "Tell Majnu more about them"
 
 export const TELL_MORE = "Tell Majnu more: their Instagram, TikTok or LinkedIn, what they love, what they talk about."
 
