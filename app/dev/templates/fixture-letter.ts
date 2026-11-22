@@ -5,6 +5,9 @@
 // `today` asks for real locking: `live` locks doors as the public page would
 // right now, `today` (YYYY-MM-DD) as it would on that date. `days` rebuilds the
 // countdown with that many doors, and `noEvent` removes an invitation's event.
+// `guest` renders the page as a guest sees it rather than as the owner's
+// preview, so a gift list's "I'll bring this" buttons work (a claim then gets
+// "not found" from POST /api/claim, because fixtures are not in the database).
 import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import { toPublicView } from "@/lib/letters/public-view"
 import {
@@ -73,7 +76,7 @@ export function countdownDoors(days: number): CalendarDoor[] {
 
 export function fixtureLetter(
   id: TemplateId,
-  opts: { now: Date; live?: boolean; today?: Date | null; days?: number | null; noEvent?: boolean; palette?: string; font?: string },
+  opts: { now: Date; live?: boolean; today?: Date | null; days?: number | null; noEvent?: boolean; guest?: boolean; palette?: string; font?: string },
 ): PublicLetter | null {
   let base: LetterContent | CalendarContent = isCalendar(id) ? calendarFixtures[id] : letterFixtures[id as LetterTemplateId]
   if (id === "countdown" && opts.days) base = { ...(base as CalendarContent), doors: countdownDoors(opts.days) }
@@ -100,6 +103,8 @@ export function fixtureLetter(
     updatedAt: at,
   }
   const view = toPublicView(record, now, { ownerPreview: !locked })
-  // The workbench never reports events, even with real locking.
-  return view ? { ...view, ownerPreview: true } : null
+  // The workbench reports no events, even with real locking, unless it is
+  // asked to show the guest's page (open tracking ignores the dev- slugs'
+  // unknown letters anyway).
+  return view ? { ...view, ownerPreview: !opts.guest } : null
 }

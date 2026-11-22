@@ -13,8 +13,10 @@ import { ClassicEnvelope } from "./templates/classic-envelope"
 import { GiftBox3D } from "./templates/gift-box-3d"
 import { GiftReveal } from "./templates/gift-reveal"
 import { Invitation } from "./templates/invitation"
+import { PartyBox } from "./templates/party-box"
 import { Postcard } from "./templates/postcard"
 import { TreasureMap } from "./templates/treasure-map"
+import { WeddingEnvelope3D } from "./templates/wedding-envelope-3d"
 import { themeStyle } from "./theme"
 
 function Template({ letter }: { letter: PublicLetter }) {
@@ -33,9 +35,11 @@ function Template({ letter }: { letter: PublicLetter }) {
     case "gift-box-3d":
       return <GiftBox3D content={letter.content} mood="gift" />
     case "party-box":
-      return <GiftBox3D content={letter.content} mood="party" />
+      return <PartyBox content={letter.content} slug={letter.slug} />
     case "treasure-map":
       return <TreasureMap content={letter.content} />
+    case "wedding-envelope-3d":
+      return <WeddingEnvelope3D content={letter.content} slug={letter.slug} />
     case "classic-envelope":
     default:
       return <ClassicEnvelope content={letter.content} />

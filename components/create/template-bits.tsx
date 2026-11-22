@@ -1,4 +1,4 @@
-import { Box, CalendarDays, Flower2, Gift, Hourglass, Mail, Map as MapIcon, PartyPopper, Sparkles, Stamp, type LucideIcon } from "lucide-react"
+import { Box, CalendarDays, Flower2, Gift, Heart, Hourglass, Mail, Map as MapIcon, PartyPopper, Sparkles, Stamp, type LucideIcon } from "lucide-react"
 import type { TemplateId } from "@/lib/letters/schema"
 
 // One small icon per template, for cards and chips.
@@ -11,6 +11,7 @@ const icons: Record<TemplateId, LucideIcon> = {
   "gift-box-3d": Box,
   "party-box": Sparkles,
   "treasure-map": MapIcon,
+  "wedding-envelope-3d": Heart,
   "advent-classic": CalendarDays,
   countdown: Hourglass,
 }

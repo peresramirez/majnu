@@ -144,6 +144,32 @@ export const letterFixtures: Record<LetterTemplateId, LetterContent> = {
     theme: { palette: "sage", font: "serif" },
     gifts: [],
   },
+  // From the prototype's wedding.json (docs/templates/public/config), moved to
+  // Saturday 13 February: the 14th of February 2027 is a Sunday.
+  "wedding-envelope-3d": {
+    recipientName: "Zara",
+    senderName: "Layla and Omar",
+    occasion: "Wedding",
+    headline: "Request the pleasure of your company",
+    body: [
+      "Together with our families, we are getting married among the roses, and it would mean the world to have you there.",
+      "Dinner and celebration follow until late, so wear shoes you can dance in.",
+    ],
+    signOff: "With love",
+    theme: { palette: "night", font: "serif" },
+    gifts: [],
+    event: {
+      title: "Layla and Omar's wedding",
+      startsAt: "2027-02-13T18:00:00+05:00",
+      locationName: "The Rose Garden Pavilion",
+      address: "Bagh-e-Jinnah, Lawrence Road, Lahore, Pakistan",
+    },
+    wishlist: [
+      { id: "fxenv01", title: "Hand-painted tea set", description: "Blue pottery, for six.", price: "€85" },
+      { id: "fxenv02", title: "Copper cooking pots", description: "The hammered set of three.", price: "€120" },
+      { id: "fxenv03", title: "A night in Hunza", description: "Towards our honeymoon in the mountains.", price: "€150" },
+    ],
+  },
 }
 
 const adventNotes = [

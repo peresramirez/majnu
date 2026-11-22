@@ -44,6 +44,20 @@ const STATES: { title: string; links: [string, string][] }[] = [
       ["Party, no event", "/dev/templates/party-invite?event=0"],
       ["Wedding, script", "/dev/templates/wedding-invite?font=script&palette=sage"],
       ["Party, night", "/dev/templates/party-invite?palette=night&font=serif"],
+      ["Wedding, as a guest", "/dev/templates/wedding-invite?guest=1"],
+    ],
+  },
+  {
+    // Like the 3D boxes: with reduced motion or no WebGL the envelope is a
+    // still drawing and the button opens the invitation at once.
+    title: "3D wedding envelope",
+    links: [
+      ["As a guest (gift list)", "/dev/templates/wedding-envelope-3d?guest=1"],
+      ["No event", "/dev/templates/wedding-envelope-3d?event=0"],
+      ["Rose", "/dev/templates/wedding-envelope-3d?palette=rose"],
+      ["Ink", "/dev/templates/wedding-envelope-3d?palette=ink"],
+      ["Sage, script", "/dev/templates/wedding-envelope-3d?palette=sage&font=script"],
+      ["Petal, sans", "/dev/templates/wedding-envelope-3d?palette=petal&font=sans"],
     ],
   },
   {

@@ -59,7 +59,7 @@ export const templates: TemplateMeta[] = [
     category: "gift",
     name: "Party pop box",
     description:
-      "A box that wobbles, then pops its lid in a burst of confetti and balloons, and shows your note, any gift and, if there is one, the party's date and place.",
+      "A box that wobbles, then pops its lid in a burst of confetti and balloons, and shows your note, any gift and, if there is one, the party's date and place and a gift list.",
     bestFor: ["birthdays", "congratulations", "celebrations", "party surprises"],
     plan: "free",
   },
@@ -79,6 +79,16 @@ export const templates: TemplateMeta[] = [
     name: "Party invitation",
     description: "A playful invitation with date, place, a map and a countdown.",
     bestFor: ["birthday parties", "house parties", "dinners", "get-togethers"],
+    plan: "free",
+  },
+  {
+    id: "wedding-envelope-3d",
+    kind: "letter",
+    category: "invitation",
+    name: "3D wedding envelope",
+    description:
+      "An envelope sealed with wax, in 3D. The seal breaks, the flap opens and the card slides out to them as rose petals fall; then the date, time and place with a map link, your message and a gift list if you add one. Needs the date, time and place.",
+    bestFor: ["weddings", "engagements", "vow renewals", "nikah and walima"],
     plan: "free",
   },
   {
