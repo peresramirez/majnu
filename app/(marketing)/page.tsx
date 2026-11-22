@@ -79,8 +79,12 @@ export default function LandingPage() {
       </header>
 
       <main>
-        {/* Hero and how it works share one scene: as you scroll, Majnu's moon travels to Layla. */}
-        <div data-gift-track className="relative bg-[radial-gradient(120%_80%_at_72%_18%,#3E2759_0%,#1B1226_55%,#100A17_100%)]">
+        {/* Hero and how it works share one scene: as you scroll through the steps,
+            Majnu's moon travels to Layla. On desktop it is pinned behind both; on
+            phones How it works pins its own copy (components/landing/how-it-works.tsx).
+            The glow is sized in pixels around the hero, so the tall How it works
+            track below does not stretch it, and fades to plum like the next section. */}
+        <div data-gift-track className="relative bg-night-plum bg-[radial-gradient(120%_1440px_at_72%_325px,#3E2759_0%,#1B1226_55%)]">
           <div className="hidden md:contents">
             <GiftScene variant="backdrop" />
           </div>
@@ -93,10 +97,6 @@ export default function LandingPage() {
           >
             <HeroFinder />
           </section>
-
-          <div className="relative z-10 px-5 pb-10 sm:px-8 md:hidden">
-            <GiftScene variant="card" />
-          </div>
 
           <HowItWorks />
           </div>
