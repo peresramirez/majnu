@@ -26,4 +26,12 @@ describe("template categories (the Templates tab's groups)", () => {
     expect(getTemplate("party-box")).toMatchObject({ kind: "letter", category: "gift", plan: "free" })
     expect(getTemplate("treasure-map")).toMatchObject({ kind: "letter", category: "letter", plan: "free" })
   })
+
+  it("lists the 3D wedding envelope as an invitation (issue #52)", () => {
+    const t = getTemplate("wedding-envelope-3d")
+    expect(t).toMatchObject({ kind: "letter", category: "invitation", name: "3D wedding envelope", plan: "free" })
+    // The builder reads the description: it must ask for the event.
+    expect(t?.description).toMatch(/date, time and place/)
+    expect(t?.bestFor).toContain("weddings")
+  })
 })

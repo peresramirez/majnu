@@ -1,13 +1,19 @@
-// three.js is about 700 KB. The rule (issue #40): only the 3D box template may
-// load it, and only on demand, so no other gift page ships it. This test reads
-// the source: the scene module is the only file that imports "three", and the
-// template reaches the scene only through import() or a type-only import.
+// three.js is about 700 KB. The rule (issues #40 and #52): only the 3D
+// templates may load it, and only on demand, so no other gift page ships it.
+// This test reads the source: each 3D template's scene module is the only file
+// that imports "three", and the scene is reached only through import() or a
+// type-only import, from that template's client component alone.
 import { readdirSync, readFileSync, statSync } from "node:fs"
-import { join, relative } from "node:path"
+import { dirname, join, normalize, relative } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const root = process.cwd()
-const SCENE = "components/letters/templates/gift-box-3d/scene.ts"
+
+// Each scene and the one client component that loads it with import().
+const SCENES = [
+  { scene: "components/letters/templates/gift-box-3d/scene.ts", loader: "components/letters/templates/gift-box-3d.tsx", specifier: "./gift-box-3d/scene" },
+  { scene: "components/letters/templates/wedding-envelope-3d/scene.ts", loader: "components/letters/templates/wedding-envelope-3d/view.tsx", specifier: "./scene" },
+]
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -31,16 +37,33 @@ function runtimeImports(file: string): string[] {
   return [...withFrom, ...bare]
 }
 
+// A relative or "@/" specifier as a path from the repository root, without
+// its extension, so "./scene" in one folder and "@/components/…/scene" match.
+function resolveFrom(file: string, specifier: string): string | null {
+  if (specifier.startsWith("@/")) return normalize(specifier.slice(2))
+  if (specifier.startsWith(".")) return normalize(join(dirname(file), specifier))
+  return null
+}
+
+const withoutExtension = (path: string) => path.replace(/\.(ts|tsx|mts)$/, "")
+
 describe("three.js loads on demand", () => {
-  it("is imported by the scene module and nothing else", () => {
+  it("is imported by the scene modules and nothing else", () => {
     const importers = files.filter((f) => runtimeImports(f).some((m) => m === "three" || m.startsWith("three/")))
-    expect(importers).toEqual([SCENE])
+    expect(importers.sort()).toEqual(SCENES.map((s) => s.scene).sort())
   })
 
-  it("reaches the template only through import() or a type-only import", () => {
-    const importers = files.filter((f) => runtimeImports(f).some((m) => m.endsWith("gift-box-3d/scene")))
+  it.each(SCENES)("reaches $scene only through import() or a type-only import", ({ scene, loader, specifier }) => {
+    const target = withoutExtension(scene)
+    const importers = files.filter((f) => runtimeImports(f).some((m) => resolveFrom(f, m) === target))
     expect(importers).toEqual([])
-    const template = readFileSync(join(root, "components/letters/templates/gift-box-3d.tsx"), "utf8")
-    expect(template).toMatch(/import\(["']\.\/gift-box-3d\/scene["']\)/)
+    const template = readFileSync(join(root, loader), "utf8")
+    expect(template).toContain(`import("${specifier}")`)
+  })
+
+  it("keeps the wedding envelope's server half free of three.js and of the scene", () => {
+    const src = readFileSync(join(root, "components/letters/templates/wedding-envelope-3d.tsx"), "utf8")
+    expect(src).not.toMatch(/["']three["']/)
+    expect(src).not.toMatch(/["'][^"']*\/scene["']/)
   })
 })

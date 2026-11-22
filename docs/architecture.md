@@ -243,5 +243,6 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 - [The app shell: the finder first, then Create](features/app-shell.md)
 - [Voice input](features/voice-input.md)
 - [Gift list on invitations](features/gift-list.md)
+- [Voice notes in gifts](features/audio-note.md)
 
 The business model (free product, a paid personalised wrapper) is in [business-plan.md](business-plan.md).

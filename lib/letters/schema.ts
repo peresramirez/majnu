@@ -5,7 +5,8 @@
 // zod is imported from "zod/v4" because the Anthropic SDK's zod helpers need it.
 import * as z from "zod/v4"
 
-// Added after setup (issue #40, additive): gift-box-3d, party-box, treasure-map.
+// Added after setup (additive): gift-box-3d, party-box, treasure-map (issue #40);
+// wedding-envelope-3d (issue #52).
 export const LETTER_TEMPLATE_IDS = [
   "classic-envelope",
   "wedding-invite",
@@ -15,6 +16,7 @@ export const LETTER_TEMPLATE_IDS = [
   "gift-box-3d",
   "party-box",
   "treasure-map",
+  "wedding-envelope-3d",
 ] as const
 export const CALENDAR_TEMPLATE_IDS = ["advent-classic", "countdown"] as const
 export const TEMPLATE_IDS = [...LETTER_TEMPLATE_IDS, ...CALENDAR_TEMPLATE_IDS] as const
@@ -80,7 +82,7 @@ export const LetterContent = z.object({
   wishlist: z
     .array(WishlistItem)
     .optional()
-    .describe("Only for wedding and party invitations: the gift list guests claim from. Written by the server, never by the builder"),
+    .describe("Only for wedding and party invitations (lib/claims/rules.ts): the gift list guests claim from. Written by the server, never by the builder"),
 })
 export type LetterContent = z.infer<typeof LetterContent>
 

@@ -21,6 +21,7 @@ describe("letterNoun", () => {
     expect(letterNoun("gift-box-3d")).toBe("A gift")
     expect(letterNoun("party-box")).toBe("A gift")
     expect(letterNoun("treasure-map")).toBe("A letter")
+    expect(letterNoun("wedding-envelope-3d")).toBe("An invitation")
     expect(letterNoun("not-a-template")).toBe("A letter")
     expect(letterNoun(null)).toBe("A letter")
   })

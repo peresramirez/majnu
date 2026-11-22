@@ -19,6 +19,11 @@ describe("takesGiftList", () => {
   it("is true only for wedding and party invitations", () => {
     expect(takesGiftList("wedding-invite")).toBe(true)
     expect(takesGiftList("party-invite")).toBe(true)
+    // Issue #52: the 3D wedding envelope, and the party box as a party invitation.
+    expect(takesGiftList("wedding-envelope-3d")).toBe(true)
+    expect(takesGiftList("party-box")).toBe(true)
+    expect(takesGiftList("gift-box-3d")).toBe(false)
+    expect(takesGiftList("treasure-map")).toBe(false)
     expect(takesGiftList("classic-envelope")).toBe(false)
     expect(takesGiftList("advent-classic")).toBe(false)
     expect(takesGiftList(null)).toBe(false)

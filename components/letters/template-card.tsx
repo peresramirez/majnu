@@ -19,6 +19,7 @@ import { getTemplate } from "@/lib/letters/templates"
 import { displayStyle, paperStyle } from "./chrome"
 import { BoxDrawing } from "./templates/gift-box-3d/drawing"
 import { Compass, ink, parchment } from "./templates/treasure-map/parts"
+import { EnvelopeDrawing } from "./templates/wedding-envelope-3d/drawing"
 import { eventDateParts, formatEventTime, parseEventStart } from "./event-time"
 import { firstName, monogram } from "./names"
 import { paletteOf, themeStyle } from "./theme"
@@ -295,6 +296,26 @@ function Box3DThumb({ c, mood }: { c: LetterContent; mood: "gift" | "party" }) {
   )
 }
 
+// The 3D wedding envelope as its still drawing, sealed, as the invitation
+// shows it before three.js arrives and instead of it with reduced motion.
+function Envelope3DThumb({ c }: { c: LetterContent }) {
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span style={eyebrow}>{c.occasion || "You're invited"}</span>
+      <span className="mt-[2cqw]" style={{ fontFamily: "var(--formal)", fontWeight: 500, fontSize: cq(9), lineHeight: 1.1 }}>
+        For {firstName(c.recipientName)}
+      </span>
+      <EnvelopeDrawing initials={monogram(c.senderName)} idPrefix="thumb-envelope" className="mt-[5cqw] block h-auto w-[86cqw]" />
+      <span
+        className="mt-[5cqw] rounded-full px-[5cqw] py-[2.4cqw]"
+        style={{ background: "var(--accent)", color: "var(--accent-ink)", fontSize: cq(3.4), fontWeight: 600 }}
+      >
+        Break the seal
+      </span>
+    </span>
+  )
+}
+
 function MapThumb({ c }: { c: LetterContent }) {
   const initial = Array.from((c.senderName ?? "").trim())[0]?.toUpperCase() ?? "M"
   return (
@@ -436,6 +457,8 @@ function Drawing({ id }: { id: TemplateId }) {
       return <Box3DThumb c={letterFixtures[id]} mood="party" />
     case "treasure-map":
       return <MapThumb c={letterFixtures[id]} />
+    case "wedding-envelope-3d":
+      return <Envelope3DThumb c={letterFixtures[id]} />
     case "advent-classic":
       return <AdventThumb c={calendarFixtures[id]} />
     case "countdown":

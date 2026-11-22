@@ -8,13 +8,16 @@
 import { letterFontVariables } from "@/app/fonts"
 import { Calendar } from "@/components/calendars/calendar"
 import type { PublicLetter } from "@/lib/letters/schema"
+import { AUDIO_SPACE_CSS, AudioNote, type LetterAudio } from "./audio-note"
 import { LetterProvider } from "./letter-context"
 import { ClassicEnvelope } from "./templates/classic-envelope"
 import { GiftBox3D } from "./templates/gift-box-3d"
 import { GiftReveal } from "./templates/gift-reveal"
 import { Invitation } from "./templates/invitation"
+import { PartyBox } from "./templates/party-box"
 import { Postcard } from "./templates/postcard"
 import { TreasureMap } from "./templates/treasure-map"
+import { WeddingEnvelope3D } from "./templates/wedding-envelope-3d"
 import { themeStyle } from "./theme"
 
 function Template({ letter }: { letter: PublicLetter }) {
@@ -33,22 +36,33 @@ function Template({ letter }: { letter: PublicLetter }) {
     case "gift-box-3d":
       return <GiftBox3D content={letter.content} mood="gift" />
     case "party-box":
-      return <GiftBox3D content={letter.content} mood="party" />
+      return <PartyBox content={letter.content} slug={letter.slug} />
     case "treasure-map":
       return <TreasureMap content={letter.content} />
+    case "wedding-envelope-3d":
+      return <WeddingEnvelope3D content={letter.content} slug={letter.slug} />
     case "classic-envelope":
     default:
       return <ClassicEnvelope content={letter.content} />
   }
 }
 
-export function LetterRenderer({ letter }: { letter: PublicLetter }) {
+// `audio` is the sender's voice note, when the letter has one (issue #38):
+// the page fills it on the server and every letter template shows the same
+// "Tap to hear" button at the top, in a band the template's first screen
+// makes room for (AUDIO_SPACE_CSS). Calendars never get one.
+export function LetterRenderer({ letter, audio }: { letter: PublicLetter; audio?: LetterAudio | null }) {
+  const note = audio && letter.kind === "letter" ? audio : null
   return (
     <div
       className={`${letterFontVariables} min-h-[100svh] antialiased`}
       style={{ ...themeStyle(letter.content.theme), background: "var(--page-flat)", color: "var(--page-ink)" }}
       data-template={letter.templateId}
+      data-audio-space={note ? "" : undefined}
     >
+      {note ? <style>{AUDIO_SPACE_CSS}</style> : null}
+      {/* First in the page, as it is first on screen: keyboards and screen readers meet it before the letter. */}
+      {note && letter.kind === "letter" ? <AudioNote audio={note} senderName={letter.content.senderName} /> : null}
       <LetterProvider slug={letter.slug} ownerPreview={letter.ownerPreview}>
         <Template letter={letter} />
       </LetterProvider>

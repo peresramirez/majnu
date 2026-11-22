@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ArrowUpRight, CalendarDays, Mail } from "lucide-react"
 import { ReleaseClaim } from "@/app/(app)/dashboard/gifts/release-claim"
 import { TemplateIcon } from "@/components/create/template-bits"
+import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
+import type { AudioNoteSummary } from "@/lib/audio/rules"
 import type { HostGiftList } from "@/lib/claims/owner"
 import type { LetterSummary } from "@/lib/letters/store"
 import { getTemplate } from "@/lib/letters/templates"
@@ -11,8 +13,20 @@ import { plural, shortDate, timeAgo } from "./format"
 import { eyebrow, smallButton } from "./styles"
 
 // One gift on the My gifts tab: who it is for, the design, whether it has
-// been opened, and on an invitation with a gift list, who is bringing what.
-export function GiftCard({ letter, giftList, now }: { letter: LetterSummary; giftList?: HostGiftList; now: Date }) {
+// been opened, on an invitation with a gift list who is bringing what, and on
+// a letter (not a calendar) its voice note. `audioNote` is null for none, or
+// left out to let the recorder load it.
+export function GiftCard({
+  letter,
+  giftList,
+  audioNote,
+  now,
+}: {
+  letter: LetterSummary
+  giftList?: HostGiftList
+  audioNote?: AudioNoteSummary | null
+  now: Date
+}) {
   const template = letter.templateId ? getTemplate(letter.templateId) : undefined
   const name = letter.recipientName ? `For ${letter.recipientName}` : letter.title ?? "A gift in progress"
   const { stats } = letter
@@ -56,6 +70,10 @@ export function GiftCard({ letter, giftList, now }: { letter: LetterSummary; gif
       </div>
 
       {giftList?.items.length ? <GiftListClaims list={giftList} now={now} /> : null}
+
+      {letter.kind === "letter" ? (
+        <AudioNoteRecorder letterId={letter.id} initial={audioNote} recipientName={letter.recipientName} className="mt-5" />
+      ) : null}
 
       <div className="mt-6 flex flex-wrap gap-2">
         <Link href={`/create/${letter.id}`} className={`${smallButton} bg-night-petal/5`}>

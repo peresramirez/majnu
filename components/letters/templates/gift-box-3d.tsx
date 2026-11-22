@@ -12,6 +12,9 @@
 // is ready, and whenever it cannot run, the page shows a still drawing of the
 // box and the button opens the gift straight away. The code is not on the
 // page until the box is open.
+//
+// A party box with a gift list (issue #52) shows it at the end; ./party-box.tsx
+// renders it on the server with the claimed ids.
 import { useCallback, useEffect, useId, useRef, useState } from "react"
 import type { LetterContent, LetterEvent } from "@/lib/letters/schema"
 import { displayStyle, focusRing, MadeWith, paperStyle, Stars } from "../chrome"
@@ -21,6 +24,7 @@ import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { firstName } from "../names"
 import { paletteOf } from "../theme"
+import { Wishlist } from "../wishlist"
 import { BoxDrawing } from "./gift-box-3d/drawing"
 import { hasWebGL, type BoxMood } from "./gift-box-3d/layout"
 // Types only: erased at build time, so this does not pull three.js in.
@@ -104,7 +108,8 @@ const LANDED: [number, number, number, string][] = [
   [93, 10, 30, "var(--accent-soft)"],
 ]
 
-export function GiftBox3D({ content, mood }: { content: LetterContent; mood: BoxMood }) {
+// `claimed`: the party box's gift list, claimed ids read on the server.
+export function GiftBox3D({ content, mood, claimed }: { content: LetterContent; mood: BoxMood; claimed?: string[] }) {
   const [stage, setStage] = useState<Stage>("closed")
   // True once the 3D scene is drawing over the still picture.
   const [live, setLive] = useState(false)
@@ -283,6 +288,7 @@ export function GiftBox3D({ content, mood }: { content: LetterContent; mood: Box
             <SignOff signOff={content.signOff} senderName={content.senderName} className="mt-8" />
           </article>
 
+          {party && content.wishlist?.length ? <Wishlist items={content.wishlist} claimed={claimed} mood="playful" hostName={content.senderName} /> : null}
           <MadeWith />
         </div>
       )}

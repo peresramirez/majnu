@@ -65,6 +65,32 @@ describe("recordOpenEvent", () => {
     expect(options).toEqual({ onConflict: "letter_id,type,day,visitor_id", ignoreDuplicates: true })
   })
 
+  it("writes the place, language and device it is given, and nulls without them", async () => {
+    let upserts = fakeAdmin(calendarRow)
+    await recordOpenEvent({
+      ...event,
+      type: "open",
+      details: { country: "DE", city: "Berlin", language: "de", device: "phone" },
+    })
+    expect(upserts[0]?.values).toMatchObject({ country: "DE", city: "Berlin", language: "de", device: "phone" })
+    expect(JSON.stringify(upserts[0]?.values)).not.toContain(IP)
+
+    upserts = fakeAdmin(calendarRow)
+    await recordOpenEvent({ ...event, type: "open" })
+    expect(upserts[0]?.values).toMatchObject({ country: null, city: null, language: null, device: null })
+  })
+
+  it("ignores crawlers that ran the beacon, without a lookup", async () => {
+    for (const userAgent of [
+      "WhatsApp/2.24.23.78 A",
+      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/131.0.0.0 Safari/537.36",
+    ]) {
+      await recordOpenEvent({ ...event, userAgent, type: "open" })
+    }
+    expect(fakes.adminClient).not.toHaveBeenCalled()
+  })
+
   it("writes a door open for a door that is open now", async () => {
     const upserts = fakeAdmin(calendarRow)
     await recordOpenEvent({ ...event, type: "door_open", day: 3 })
