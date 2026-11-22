@@ -100,6 +100,16 @@ export function wrapBrief(input: Omit<WrapInput, "now" | "timezone" | "giftCode"
       "The sender also put a voucher or gift code in the gift, which the page reveals once it is opened. You don't see it: never write a code, but you may say that something is waiting inside.",
     )
   }
+  // What photos and documents the sender shared showed about the recipient
+  // (issue #77). The personalised wrapper's designer works from the page, so
+  // it sees these through what the builder writes.
+  const notes = (context.notes ?? []).map((note) => note.replace(/[<>]/g, "").trim()).filter(Boolean)
+  if (notes.length > 0) {
+    lines.push(
+      "What the photos and files the sender shared showed about the recipient, for your own writing: a detail or two can make the page personal. Never list them, never copy a price, and never mention a photo or a file.",
+      ...notes.map((note) => `- ${note}`),
+    )
+  }
   if (input.note) {
     lines.push("What the sender wants to say, in their own words (use them):", "<note>", input.note, "</note>")
   } else {

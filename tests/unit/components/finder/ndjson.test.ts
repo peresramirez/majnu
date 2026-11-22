@@ -50,6 +50,15 @@ describe("parseFinderEvent", () => {
       text: "How old?",
       suggestions: ["40", "60"],
     })
+    // Issue #82: the label for the combined answer, and whether a profile was read.
+    expect(parseFinderEvent('{"type":"question","text":"Free time?","label":"Free time","suggestions":["Gaming"],"profileRead":true}')).toEqual({
+      type: "question",
+      text: "Free time?",
+      label: "Free time",
+      suggestions: ["Gaming"],
+      profileRead: true,
+    })
+    expect(parseFinderEvent('{"type":"question","text":"Free time?","label":" ","profileRead":"yes"}')).toEqual({ type: "question", text: "Free time?" })
     expect(parseFinderEvent('{"type":"limit","reason":"finder_daily","message":"Tomorrow"}')).toEqual({
       type: "limit",
       reason: "finder_daily",
