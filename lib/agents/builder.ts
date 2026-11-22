@@ -26,7 +26,8 @@ export type BuildInput = {
   // The sender's IANA timezone.
   timezone: string
   // The page is given as a gift, so it must carry one even on a template where
-  // a gift is optional (party-box). The finder's wrap step sets it.
+  // a gift is optional (party-box). The finder's wrap step sets it, and so does
+  // build_letter when the main agent says the page is a present (givenAsGift).
   giftRequired?: boolean
   // Receives the streamed JSON text for live drafts. Optional: the finder's
   // wrap step builds without one.
