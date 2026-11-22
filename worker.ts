@@ -10,6 +10,9 @@
 // time. Only the default export is allowed here: the runtime reads every
 // export of the entry module as a possible entrypoint.
 
+// First, before anything that builds a zod schema: no compiled parsers in the
+// Worker (see lib/zod-jitless.ts).
+import "./lib/zod-jitless"
 // @ts-ignore .open-next/worker.js is generated at build time by `opennextjs-cloudflare build`.
 import { default as handler } from "./.open-next/worker.js"
 // @ts-ignore .open-next/cloudflare/next-env.mjs is generated at build time too: the public values from .env.production.
