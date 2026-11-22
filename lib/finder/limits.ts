@@ -40,7 +40,7 @@
 // as searches: record first, count second, take back when over the cap.
 import "server-only"
 import { countChatTurns, startOfUtcDay } from "@/lib/limits"
-import { usesApify, type ProfileSource } from "@/lib/social/links"
+import { PAID_SOURCES, usesApify, type ProfileSource } from "@/lib/social/links"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { FinderContext, FinderLimitReason } from "./events"
 import { textsFor } from "./messages"
@@ -276,9 +276,10 @@ export async function releaseSearch(claimId: number): Promise<void> {
 // ---------- Public profile reads ----------
 
 export const DEFAULT_APIFY_DAILY_CAP = 20
-const APIFY_SOURCES: readonly ProfileSource[] = ["instagram", "tiktok"]
 
-// Instagram and TikTok reads the whole site may run per UTC day. 0 switches them off.
+// Paid profile reads (Instagram and TikTok through Apify, LinkedIn and
+// Instagram's second route through Bright Data) the whole site may run per UTC
+// day. 0 switches them off.
 export function apifyDailyCap(): number {
   const raw = process.env.APIFY_DAILY_CAP?.trim()
   if (!raw) return DEFAULT_APIFY_DAILY_CAP
@@ -289,7 +290,7 @@ export function apifyDailyCap(): number {
 export type ProfileClaim = { ok: true; profile: ProfileRead } | { ok: false; reason: "session" | "daily_cap" }
 
 // Claims this session's one profile read. A read that then fails still counts,
-// because Apify may already have charged for it.
+// because Apify or Bright Data may already have charged for it.
 export async function claimProfileRead(input: {
   session: Pick<FinderSession, "id" | "ownerId">
   context: FinderContext
@@ -306,7 +307,7 @@ export async function claimProfileRead(input: {
 
   let count: number
   try {
-    count = await countProfileReadsSince(startOfUtcDay(input.now), APIFY_SOURCES)
+    count = await countProfileReadsSince(startOfUtcDay(input.now), PAID_SOURCES)
   } catch (error) {
     await clearProfileRead(input.session, input.context)
     throw error

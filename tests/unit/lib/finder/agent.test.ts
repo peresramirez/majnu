@@ -529,6 +529,30 @@ describe("reading a public profile", () => {
     expect(readProfileInterests).not.toHaveBeenCalled()
   })
 
+  it("reads a LinkedIn profile link, and refuses a LinkedIn company page with the profile shapes it can read", async () => {
+    scriptModel(reply([readCall({ link: "https://de.linkedin.com/in/lena-example-1a2b3c/?originalSubdomain=de" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "linkedin.com/in/lena-example-1a2b3c", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example-1a2b3c" }, "de")
+    expect(claimProfileRead).toHaveBeenCalledWith(expect.objectContaining({ source: "linkedin" }))
+
+    vi.mocked(readProfileInterests).mockClear()
+    vi.mocked(claimProfileRead).mockClear()
+    const { requests } = scriptModel(
+      reply([readCall({ link: "https://www.linkedin.com/company/example-bikes/" })]),
+      reply([text("Schick mir den Link zu ihrem Profil.")], "end_turn"),
+    )
+    await runFinderTurn({ history: [], message: "https://www.linkedin.com/company/example-bikes/", state: state() })
+    expect(toolResult(requests[1], "read-1").content).toContain("linkedin.com/in/name")
+    expect(readProfileInterests).not.toHaveBeenCalled()
+    expect(claimProfileRead).not.toHaveBeenCalled()
+  })
+
+  it("reads a bare LinkedIn name when the visitor said it is on LinkedIn", async () => {
+    scriptModel(reply([readCall({ link: "lena-example-1a2b3c", platform: "linkedin" })]), reply([findCall(SISTER)]))
+    await runFinderTurn({ history: [], message: "Auf LinkedIn: lena-example-1a2b3c", state: state() })
+    expect(readProfileInterests).toHaveBeenCalledWith({ source: "linkedin", username: "lena-example-1a2b3c" }, "de")
+  })
+
   it("asks which platform a bare handle is on, and reads it once the visitor says", async () => {
     const { requests } = scriptModel(reply([readCall({ link: "@natgeo" })]), reply([text("Instagram oder TikTok?")], "end_turn"))
     await runFinderTurn({ history: [], message: "@natgeo", state: state() })
