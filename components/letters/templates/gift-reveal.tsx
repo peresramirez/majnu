@@ -75,7 +75,7 @@ export function GiftReveal({ content }: { content: LetterContent }) {
             type="button"
             onClick={unwrap}
             disabled={stage !== "wrapped"}
-            aria-label={`Unwrap the gift from ${content.senderName}`}
+            aria-label={content.senderName?.trim() ? `Unwrap the gift from ${content.senderName}` : "Unwrap the gift"}
             className={`gift group relative mt-14 h-[280px] w-[250px] rounded-3xl ${focusRing}`}
             data-stage={stage}
           >
@@ -97,16 +97,18 @@ export function GiftReveal({ content }: { content: LetterContent }) {
               </span>
             </span>
 
-            {/* Name tag on a string */}
-            <span aria-hidden="true" className="gift-tag absolute right-[-14px] top-[34px] origin-top-left rotate-[10deg]">
-              <span className="absolute -left-7 -top-6 h-10 w-px rotate-[-40deg] bg-[var(--page-muted)] opacity-70" />
-              <span className="block rounded-[4px] px-3 py-2 text-left shadow-md" style={paperStyle}>
-                <span className="block text-[9px] font-semibold uppercase tracking-[0.25em] opacity-60">From</span>
-                <span className="line-clamp-2 block max-w-[112px] break-words text-[16px] leading-[1.15]" style={displayStyle}>
-                  {content.senderName}
+            {/* Name tag on a string, once there is a name: an early draft may not have one yet */}
+            {content.senderName?.trim() ? (
+              <span aria-hidden="true" className="gift-tag absolute right-[-14px] top-[34px] origin-top-left rotate-[10deg]">
+                <span className="absolute -left-7 -top-6 h-10 w-px rotate-[-40deg] bg-[var(--page-muted)] opacity-70" />
+                <span className="block rounded-[4px] px-3 py-2 text-left shadow-md" style={paperStyle}>
+                  <span className="block text-[9px] font-semibold uppercase tracking-[0.25em] opacity-60">From</span>
+                  <span className="line-clamp-2 block max-w-[112px] break-words text-[16px] leading-[1.15]" style={displayStyle}>
+                    {content.senderName}
+                  </span>
                 </span>
               </span>
-            </span>
+            ) : null}
           </button>
 
           <button

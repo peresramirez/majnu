@@ -148,7 +148,7 @@ export function TreasureMap({ content }: { content: LetterContent }) {
                 type="button"
                 onClick={breakSeal}
                 disabled={stage !== "sealed"}
-                aria-label={`Break the seal and open the map from ${content.senderName}`}
+                aria-label={`Break the seal and open the map${content.senderName?.trim() ? ` from ${content.senderName}` : ""}`}
                 className={`seal-button relative mt-7 rounded-full transition-transform duration-200 ease-calm hover:-rotate-6 hover:scale-105 ${focusRing}`}
               >
                 <WaxSeal initial={initial} cracked={stage !== "sealed"} />
@@ -156,7 +156,7 @@ export function TreasureMap({ content }: { content: LetterContent }) {
               <p className="relative mt-4 text-[14px] italic opacity-70" style={{ fontFamily: "var(--body)" }}>
                 Break the seal to open it
               </p>
-              <p className="relative mt-1 text-[13px] opacity-60">from {content.senderName}</p>
+              {content.senderName?.trim() ? <p className="relative mt-1 text-[13px] opacity-60">from {content.senderName}</p> : null}
             </div>
           </div>
         </div>
