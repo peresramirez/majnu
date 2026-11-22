@@ -188,9 +188,13 @@ export async function runMainAgent(opts: {
       }
 
       // One at a time: a build and an edit in the same reply must not race.
+      // Each call's start is announced again as it runs: every call in the reply
+      // announced itself while it streamed, and the status line should name the
+      // one running now ("Writing your letter…" while the draft is written, not
+      // the template cards that come after it).
       const results = []
       for (const call of calls) {
-        if (!started.has(call.id) && isToolName(call.name)) {
+        if (isToolName(call.name) && (calls.length > 1 || !started.has(call.id))) {
           emit({ type: "tool", name: call.name, status: "start", label: TOOL_LABELS[call.name].start })
         }
         results.push(await runTool(call, state))

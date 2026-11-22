@@ -174,7 +174,8 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
     setUnseenPreview(false)
   }
 
-  const recipientName = link.recipientName ?? draftName
+  // While a draft is on screen it is the newest name: an edit may have just changed it.
+  const recipientName = draftName ?? link.recipientName
   const heading = recipientName ? `For ${recipientName}` : link.title ?? "New gift"
 
   return (
