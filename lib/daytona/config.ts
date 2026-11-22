@@ -9,7 +9,7 @@
 // (majnu-letters-v2, ...) when the templates, the skill or the Claude Code
 // version change, then point DAYTONA_SNAPSHOT at it; sandboxes already running
 // keep the old one, and a bad build never replaces a working one.
-export const DEFAULT_SNAPSHOT = "majnu-letters-v1"
+export const DEFAULT_SNAPSHOT = "majnu-letters-v2"
 
 // The API for our keys. DAYTONA_API_URL overrides it.
 export const DEFAULT_API_URL = "https://app.daytona.io/api"
@@ -59,3 +59,17 @@ export const CLAUDE_RUN_RESERVE_USD = MAX_BUDGET_USD * 1.5
 export const MAX_DESIGN_BYTES = 500 * 1024
 export const MIN_DESIGN_BYTES = 200
 export const MAX_REQUEST_CHARS = 2000
+
+// The one script a design may load: our pinned copy of three.js, one minified
+// ES module made by scripts/daytona/vendor-three.mts and served from public/
+// with long-lived cache headers (public/_headers). A design imports it by this
+// root-relative path, which resolves against /l/<slug>/design on whatever host
+// serves it; the design CSP allows exactly this file, and the checker
+// (lib/daytona/validate.ts) refuses every other import. Published versions are
+// never overwritten: stored designs import them by URL. A new version gets a
+// new folder, a new hash here and a new snapshot.
+export const THREE_VERSION = "0.187.0"
+export const THREE_MODULE_PATH = `/vendor/three/${THREE_VERSION}/three.module.min.js`
+export const THREE_MODULE_SHA256 = "ea0b317604d082b1393cb2bbe5c6e5f97884a3b66eaa55cf55d89104f8779a2a"
+// The bare name an import map may give it: `{"imports":{"three":"<path>"}}`.
+export const THREE_SPECIFIER = "three"

@@ -215,7 +215,7 @@ describe("redesignLetter", () => {
     expect(created).toHaveLength(1)
     const [params, options] = created[0]
     expect(params).toMatchObject({
-      snapshot: "majnu-letters-v1",
+      snapshot: "majnu-letters-v2",
       ephemeral: true,
       ttlMinutes: 20,
       domainAllowList: "api.anthropic.com",
@@ -378,7 +378,7 @@ describe("redesignLetter", () => {
     await expect(redesignLetter(LETTER_ID, REQUEST, { db, sandboxes, log: (l) => logs.push(l) })).resolves.toMatchObject({ designId: "design-1" })
     expect(created).toHaveLength(2)
     expect(created[1][0].domainAllowList).toBeUndefined()
-    expect(created[1][0]).toMatchObject({ snapshot: "majnu-letters-v1", ephemeral: true, ttlMinutes: 20 })
+    expect(created[1][0]).toMatchObject({ snapshot: "majnu-letters-v2", ephemeral: true, ttlMinutes: 20 })
     expect(logs.join("\n")).toMatch(/tier's own network policy/)
     expect(calls.deletes).toHaveLength(1)
   })
