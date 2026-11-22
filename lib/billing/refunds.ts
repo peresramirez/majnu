@@ -1,10 +1,24 @@
 // Refunding a wrapper whose design could not be made. The buyer gets every
-// cent back automatically (docs/business-plan.md, "Receipts and refunds").
+// cent back automatically (docs/business-plan.md, "Receipts and refunds"); a
+// wrapper paid with a coupon code gets its code's use back instead, and never
+// reaches Stripe (docs/features/coupons.md).
 import "server-only"
-import { markFailed, markRefunded, type Purchase } from "./purchases"
+import { markFailed, markRefunded, returnCouponUse, type Purchase } from "./purchases"
 import { createStripeClient } from "./stripe"
 
 export type RefundOutcome = { outcome: "refunded"; refundId: string } | { outcome: "failed"; reason: string }
+
+export type GiveBackOutcome = RefundOutcome | { outcome: "code_returned" } | { outcome: "nothing_to_return" }
+
+// What the design job calls when a run fails: a coupon purchase is marked
+// failed and its code gets the use back (in one database call); a paid one is
+// refunded through Stripe as below.
+export async function giveBack(purchase: Pick<Purchase, "id" | "paymentIntentId" | "couponId">, reason: string): Promise<GiveBackOutcome> {
+  if (purchase.couponId) {
+    return (await returnCouponUse(purchase.id, reason)) ? { outcome: "code_returned" } : { outcome: "nothing_to_return" }
+  }
+  return refundPurchase(purchase, reason)
+}
 
 // Refunds the whole payment and records it. The idempotency key is the
 // purchase id, so a retry (or a second caller) gets the same refund back from
