@@ -2,7 +2,7 @@
 // stream of newline-delimited FinderEvents (lib/finder/events.ts), always
 // ending with `done`. A message without a session id continues today's open
 // session, if there is one (a reload or the finder opened again must not use
-// up one of the day's two sessions, issue #70), or else creates a session; either
+// up one of the day's sessions, issue #70), or else creates a session; either
 // way `session` comes before anything else.
 //
 // Every request needs a Supabase session; anonymous accounts count (docs/plan.md,

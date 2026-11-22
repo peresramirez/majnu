@@ -64,7 +64,7 @@ describe("limit results", () => {
   })
 
   it("writes messages in the brand voice, without a plan or a price", () => {
-    const results = [dailyLettersResult(9), chatTurnsResult(99), signInRequiredResult()]
+    const results = [dailyLettersResult(LIMITS.lettersPerDay), chatTurnsResult(LIMITS.chatTurnsPerLetter), signInRequiredResult()]
     for (const result of results) {
       if (result.ok) throw new Error("expected a limit")
       expect(result.message).not.toMatch(/!|unlock|oops|magic/i)

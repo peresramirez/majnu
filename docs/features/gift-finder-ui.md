@@ -50,7 +50,7 @@ One search, in order:
 
 Screen readers hear each reply once (issue #62). The dialog and the inline panel each keep one polite live region, filled by `finderAnnouncement()` in `finder-state.ts` when a reply ends: "3 gift ideas are ready.", Majnu's question, "Majnu replied." or a limit notice. An error notice is not in it: the notice itself is `role="alert"` (`noticeRole()`), so it interrupts once. Before, a limit notice was both a `role="status"` element and the region's text, and was read twice.
 5. Tapping a context chip puts a correction in the message box ("They're ", "It's for my "); "Personalise the gift" sends that exact text as a message, and the agent answers with questions. Beside it, under the newest ideas, `TELL_MORE` reads "Tell Majnu more: their Instagram, TikTok or LinkedIn, what they love, what they talk about." A follow-up question from Majnu, when it asks one, comes after the ideas with answers to tap.
-6. When a session has used its 10 searches (`session_full`), the notice offers "Start a new search", which empties the finder; the server then starts a new session if one of the day's two is left. When both are used (`finder_daily`) the notice says to choose from the ideas or come back tomorrow, and the ideas stay on screen to choose and wrap.
+6. When a session has used its 30 searches (`session_full`), the notice offers "Start a new search", which empties the finder; the server then starts a new session if one of the day's two is left. When both are used (`finder_daily`) the notice says to choose from the ideas or come back tomorrow, and the ideas stay on screen to choose and wrap.
 
 Wrapping a chosen gift:
 
@@ -118,7 +118,7 @@ No tables are read or written from the browser; everything goes through the two 
 
 ## Limits and costs
 
-- The browser sends at most 1,000 characters per message, and nothing while a reply is still streaming. The real limits (since 22 November: 2 finder sessions a day per visitor, counted from their first search, each with 10 searches, personalised or not; and the site-wide cap, the same for guests and signed-up visitors) are enforced by the server and arrive as `limit` events, which the finder shows with the server's message; `session_full` adds "Start a new search".
+- The browser sends at most 1,000 characters per message, and nothing while a reply is still streaming. The real limits (since 22 November: 100 finder sessions a day per visitor, counted from their first search, each with 30 searches, personalised or not; and the site-wide cap, the same for guests and signed-up visitors) are enforced by the server and arrive as `limit` events, which the finder shows with the server's message; `session_full` adds "Start a new search".
 - The browser itself costs nothing per use. Each search is one `/api/finder` request; each wrap is one `/api/finder/wrap` request; costs are on the server's page.
 - The Turnstile check adds about a second before the very first request; later requests reuse the session.
 

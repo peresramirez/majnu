@@ -13,9 +13,11 @@ import "server-only"
 import type { LimitReason } from "@/lib/agents/events"
 import { createClient } from "@/lib/supabase/server"
 
+// Raised from 5 and 40 by the developer on 22 November, so no one testing or
+// using Majnu runs into them; they stay as a guard against a script.
 export const LIMITS = {
-  lettersPerDay: 5,
-  chatTurnsPerLetter: 40,
+  lettersPerDay: 100,
+  chatTurnsPerLetter: 200,
 } as const
 
 export type LimitResult = { ok: true } | { ok: false; reason: LimitReason; message: string }

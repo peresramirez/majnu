@@ -72,56 +72,58 @@ afterEach(() => {
 
 describe("the finder's limits (issue #70)", () => {
   it("are 2 sessions a day, 10 searches a session and 30 messages a session", () => {
-    expect(FINDER_LIMITS).toMatchObject({ sessionsPerDay: 2, searchesPerSession: 10, messagesPerSession: 30 })
+    expect(FINDER_LIMITS).toMatchObject({ sessionsPerDay: 100, searchesPerSession: 30, messagesPerSession: 100 })
     expect(FINDER_LIMITS).not.toHaveProperty("personalisedPerDay")
   })
 })
 
 describe("searchLimitResult", () => {
   const cap = 300
+  const S = FINDER_LIMITS.searchesPerSession
+  const D = FINDER_LIMITS.sessionsPerDay
   const counts = (c: Partial<SearchCounts>): SearchCounts => ({ session: 0, sessionToday: 0, otherSessions: 0, site: 0, ...c })
 
-  it("allows 10 searches in a session, personalised or not", () => {
-    expect(searchLimitResult(counts({ session: 9, sessionToday: 9 }), {}, cap, "en")).toEqual({ ok: true })
-    expect(searchLimitResult(counts({ session: 10, sessionToday: 10 }), {}, cap, "en")).toMatchObject({ ok: false, reason: "session_full" })
+  it("allows a session's searches, personalised or not", () => {
+    expect(searchLimitResult(counts({ session: S - 1, sessionToday: S - 1 }), {}, cap, "en")).toEqual({ ok: true })
+    expect(searchLimitResult(counts({ session: S, sessionToday: S }), {}, cap, "en")).toMatchObject({ ok: false, reason: "session_full" })
   })
 
-  it("says to start a new search while one of today's two is left, and to come back tomorrow when not", () => {
-    const full = searchLimitResult(counts({ session: 10, sessionToday: 10 }), {}, cap, "en")
+  it("says to start a new search while one of today's sessions is left, and to come back tomorrow when not", () => {
+    const full = searchLimitResult(counts({ session: S, sessionToday: S }), {}, cap, "en")
     expect(full).toMatchObject({ reason: "session_full", message: expect.stringContaining("start a new search") })
-    const bothUsed = searchLimitResult(counts({ session: 10, sessionToday: 4, otherSessions: 1 }), {}, cap, "en")
+    const bothUsed = searchLimitResult(counts({ session: S, sessionToday: 4, otherSessions: D - 1 }), {}, cap, "en")
     expect(bothUsed).toMatchObject({ reason: "finder_daily", message: expect.stringContaining("come back tomorrow") })
     expect(bothUsed.ok ? "" : bothUsed.message).toContain("Choose one of the ideas you found")
   })
 
-  it("counts a session from its first search: a third session may not start searching", () => {
-    expect(searchLimitResult(counts({ otherSessions: 1 }), {}, cap, "en")).toEqual({ ok: true })
-    expect(searchLimitResult(counts({ otherSessions: 2 }), {}, cap, "en")).toMatchObject({ ok: false, reason: "finder_daily" })
+  it("counts a session from its first search: one past the day's sessions may not start searching", () => {
+    expect(searchLimitResult(counts({ otherSessions: D - 1 }), {}, cap, "en")).toEqual({ ok: true })
+    expect(searchLimitResult(counts({ otherSessions: D }), {}, cap, "en")).toMatchObject({ ok: false, reason: "finder_daily" })
   })
 
   it("lets a session that already searched today keep going", () => {
-    expect(searchLimitResult(counts({ session: 3, sessionToday: 3, otherSessions: 1 }), {}, cap, "en")).toEqual({ ok: true })
+    expect(searchLimitResult(counts({ session: 3, sessionToday: 3, otherSessions: D - 1 }), {}, cap, "en")).toEqual({ ok: true })
     // One that searched only on an earlier day counts again today.
-    expect(searchLimitResult(counts({ session: 3, sessionToday: 0, otherSessions: 2 }), {}, cap, "en")).toMatchObject({ reason: "finder_daily" })
+    expect(searchLimitResult(counts({ session: 3, sessionToday: 0, otherSessions: D }), {}, cap, "en")).toMatchObject({ reason: "finder_daily" })
   })
 
-  it("keeps calendars out of the finder's two sessions, with the same 10 searches each", () => {
-    expect(searchLimitResult(counts({ otherSessions: 2 }), { calendar: true }, cap, "en")).toEqual({ ok: true })
-    const full = searchLimitResult(counts({ session: 10 }), { calendar: true }, cap, "en")
+  it("keeps calendars out of the finder's daily sessions, with the same searches each", () => {
+    expect(searchLimitResult(counts({ otherSessions: D }), { calendar: true }, cap, "en")).toEqual({ ok: true })
+    const full = searchLimitResult(counts({ session: S }), { calendar: true }, cap, "en")
     expect(full).toMatchObject({ ok: false, reason: "finder_daily", message: expect.stringContaining("calendar") })
   })
 
   it("stops everyone at the site-wide cap, after the visitor's own limits", () => {
     expect(searchLimitResult(counts({ site: 300 }), {}, cap, "en")).toMatchObject({ ok: false, reason: "site_busy" })
-    expect(searchLimitResult(counts({ site: 300, otherSessions: 2 }), {}, cap, "en")).toMatchObject({ reason: "finder_daily" })
+    expect(searchLimitResult(counts({ site: 300, otherSessions: D }), {}, cap, "en")).toMatchObject({ reason: "finder_daily" })
   })
 
   it("refuses kindly, in German for German visitors", () => {
-    const en = searchLimitResult(counts({ otherSessions: 2 }), {}, cap, "en")
-    const de = searchLimitResult(counts({ otherSessions: 2 }), {}, cap, "de")
-    expect(en).toMatchObject({ message: expect.stringContaining("today's 2 gift searches") })
-    expect(de).toMatchObject({ message: expect.stringContaining("2 Geschenksuchen") })
-    for (const result of [en, de, searchLimitResult(counts({ session: 10, sessionToday: 1 }), {}, cap, "de")]) {
+    const en = searchLimitResult(counts({ otherSessions: D }), {}, cap, "en")
+    const de = searchLimitResult(counts({ otherSessions: D }), {}, cap, "de")
+    expect(en).toMatchObject({ message: expect.stringContaining(`today's ${D} gift searches`) })
+    expect(de).toMatchObject({ message: expect.stringContaining(`${D} Geschenksuchen`) })
+    for (const result of [en, de, searchLimitResult(counts({ session: S, sessionToday: 1 }), {}, cap, "de")]) {
       expect(result.ok ? "" : result.message).not.toContain("!")
     }
   })
@@ -146,22 +148,23 @@ describe("claimSearch", () => {
     addSession("cal", { calendar: true })
   })
 
-  it("records the search with its session and allows 10 in one session, personalised or not", async () => {
+  it("records the search with its session and allows a session's searches, personalised or not", async () => {
     for (let i = 0; i < FINDER_LIMITS.searchesPerSession; i++) expect((await claim("s1", { personalised: i % 2 === 1 })).ok).toBe(true)
-    expect(mine()).toHaveLength(10)
+    expect(mine()).toHaveLength(FINDER_LIMITS.searchesPerSession)
     expect(searches().at(-1)).toMatchObject({ owner_id: ME, session_id: "s1", personalised: true })
 
     expect(await claim("s1")).toMatchObject({ ok: false, reason: "session_full" })
-    expect(mine()).toHaveLength(10)
+    expect(mine()).toHaveLength(FINDER_LIMITS.searchesPerSession)
   })
 
-  it("allows a second session, refuses a third, and lets both of today's go on", async () => {
-    expect((await claim("s1")).ok).toBe(true)
-    expect((await claim("s2")).ok).toBe(true)
-    expect(await claim("s3")).toMatchObject({ ok: false, reason: "finder_daily" })
-    expect(mine()).toHaveLength(2)
+  it("allows the day's sessions, refuses one more, and lets all of today's go on", async () => {
+    const D = FINDER_LIMITS.sessionsPerDay
+    for (let i = 4; i <= D + 1; i++) addSession(`s${i}`)
+    for (let i = 1; i <= D; i++) expect((await claim(`s${i}`)).ok).toBe(true)
+    expect(await claim(`s${D + 1}`)).toMatchObject({ ok: false, reason: "finder_daily" })
+    expect(mine()).toHaveLength(D)
     expect((await claim("s1", { personalised: true })).ok).toBe(true)
-    expect((await claim("s2", { personalised: true })).ok).toBe(true)
+    expect((await claim(`s${D}`, { personalised: true })).ok).toBe(true)
   })
 
   it("does not count yesterday's sessions, other visitors' or calendars", async () => {
@@ -183,10 +186,13 @@ describe("claimSearch", () => {
   })
 
   it("never lets two sessions start searching at the same moment past the limit", async () => {
-    expect((await claim("s1")).ok).toBe(true)
-    const results = await Promise.all([claim("s2"), claim("s3")])
+    const D = FINDER_LIMITS.sessionsPerDay
+    for (let i = 4; i < D; i++) addSession(`s${i}`)
+    for (const id of ["late-a", "late-b"]) addSession(id)
+    for (let i = 1; i < D; i++) expect((await claim(`s${i}`)).ok).toBe(true)
+    const results = await Promise.all([claim("late-a"), claim("late-b")])
     expect(results.filter((r) => r.ok).length).toBeLessThanOrEqual(1)
-    expect(mine()).toHaveLength(1 + results.filter((r) => r.ok).length)
+    expect(mine()).toHaveLength(D - 1 + results.filter((r) => r.ok).length)
   })
 
   it("takes the row back out when counting fails, and throws", async () => {
@@ -209,19 +215,22 @@ describe("releaseSearch", () => {
 describe("before searching", () => {
   it("canSearch checks the session without recording anything", async () => {
     addSession("s1")
-    for (let i = 0; i < 10; i++) addSearch("s1")
+    for (let i = 0; i < FINDER_LIMITS.searchesPerSession; i++) addSearch("s1")
     expect(await canSearch(ME, "s1", NOW, "en")).toMatchObject({ ok: false, reason: "session_full" })
     expect(await canSearch(ME, "s2", NOW, "en")).toEqual({ ok: true })
-    expect(mine()).toHaveLength(10)
+    expect(mine()).toHaveLength(FINDER_LIMITS.searchesPerSession)
   })
 
-  it("canStartSession allows a new session while fewer than 2 have searched today", async () => {
+  it("canStartSession allows a new session while fewer than the day's sessions have searched", async () => {
+    const D = FINDER_LIMITS.sessionsPerDay
     expect(await canStartSession(ME, NOW, "en")).toEqual({ ok: true })
-    addSession("s1")
-    addSearch("s1")
+    for (let i = 1; i < D; i++) {
+      addSession(`s${i}`)
+      addSearch(`s${i}`)
+    }
     expect(await canStartSession(ME, NOW, "en")).toEqual({ ok: true })
-    addSession("s2")
-    addSearch("s2")
+    addSession(`s${D}`)
+    addSearch(`s${D}`)
     expect(await canStartSession(ME, NOW, "en")).toMatchObject({ ok: false, reason: "finder_daily" })
   })
 
@@ -264,7 +273,7 @@ describe("continuing today's open session (reload, or the finder opened again)",
   it("skips a session with no searches or messages left, yesterday's, other visitors' and calendars", async () => {
     addSession("older", { createdAt: "2026-11-21T06:00:00.000Z", messages: 2 })
     addSession("searched-out", { createdAt: "2026-11-21T09:00:00.000Z" })
-    for (let i = 0; i < 10; i++) addSearch("searched-out")
+    for (let i = 0; i < FINDER_LIMITS.searchesPerSession; i++) addSearch("searched-out")
     addSession("talked-out", { createdAt: "2026-11-21T10:00:00.000Z", messages: FINDER_LIMITS.messagesPerSession })
     addSession("calendar", { createdAt: "2026-11-21T11:00:00.000Z", calendar: true })
     addSession("theirs", { createdAt: "2026-11-21T11:30:00.000Z", owner: "someone-else" })
@@ -274,7 +283,7 @@ describe("continuing today's open session (reload, or the finder opened again)",
 
   it("finds none when every session today is spent", async () => {
     addSession("spent")
-    for (let i = 0; i < 10; i++) addSearch("spent")
+    for (let i = 0; i < FINDER_LIMITS.searchesPerSession; i++) addSearch("spent")
     expect(await findOpenSession(ME, NOW)).toBeNull()
   })
 })

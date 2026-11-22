@@ -62,14 +62,14 @@ export type GiftOption = {
 }
 
 export type FinderLimitReason =
-  // Today's 2 finder sessions have searched and none has searches left, so
+  // Today's finder sessions (FINDER_LIMITS.sessionsPerDay) have searched and none has searches left, so
   // searching waits until tomorrow (the ideas shown can still be wrapped).
   // Also a calendar's 2 idea pools a day. Changed for issue #70.
   | "finder_daily"
   // No longer sent (issue #70: personalising has no cap of its own); kept so
   // older pages and lib/calendars/types.ts still type-check.
   | "personalise_daily"
-  // This session's 10 searches or 30 messages are used; a new search can go on
+  // This session's searches or messages (FINDER_LIMITS) are used; a new search can go on
   // while one of today's sessions is left. Added for issue #70.
   | "session_full"
   | "site_busy" // the site-wide daily cap

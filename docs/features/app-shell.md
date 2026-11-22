@@ -129,7 +129,7 @@ flowchart LR
 
 ## Limits and costs
 
-- The inline finder has the finder's own limits (since 22 November: 2 finder sessions a day, counted from their first search, each with 10 searches, personalised or not and without an account, plus the site-wide cap) and costs the same per search. Keeping the conversation in the shell adds no requests; a reply that is still streaming when the sender switches tab simply finishes.
+- The inline finder has the finder's own limits (since 22 November: 100 finder sessions a day, counted from their first search, each with 30 searches, personalised or not and without an account, plus the site-wide cap) and costs the same per search. Keeping the conversation in the shell adds no requests; a reply that is still streaming when the sender switches tab simply finishes.
 - At 375 px the four tabs are 94 × 64 px each. In an iPhone browser tab the bar is 32 px taller (the toolbar's room), so it is 96 px from the bottom edge.
 
 ## How it was checked
