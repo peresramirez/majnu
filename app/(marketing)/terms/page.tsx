@@ -21,7 +21,7 @@ export default function TermsPage() {
           items={[
             "What you write is yours. You are responsible for it, and it must not hurt or deceive anyone.",
             `Majnu is free. The one thing you can buy is a ${wrapper.name.toLowerCase()}: a design made for one gift, ${wrapper.price} once, VAT included. Nothing renews.`,
-            `The gift finder is free without an account: ${finder.searchesPerDay} searches a day, ${finder.personalisedPerDay} of them personalised.`,
+            `The gift finder is free without an account: ${finder.sessionsPerDay} gift searches a day, each looking for ideas up to ${finder.searchesPerSession} times, personalised or not.`,
             "A wrapper is made just for you as soon as you pay, so before paying you agree that this ends your right of withdrawal. If it cannot be made, you get every cent back automatically.",
             "Majnu's suggestions come from an AI. Check prices, dates and links before you send.",
           ]}
@@ -57,12 +57,15 @@ export default function TermsPage() {
       <h2>The gift finder</h2>
       <ul>
         <li>
-          You can search for gift ideas {finder.searchesPerDay} times a day, with or without an account, and{" "}
-          {finder.personalisedPerDay} of those searches can be personalised with more about the person. When very many people use the finder on the
-          same day, we may pause new searches for everyone until the next day.
+          You can start {finder.sessionsPerDay} gift searches a day, with or without an account. A search counts from the first time
+          Majnu looks for ideas in it, and within one search Majnu can look up to {finder.searchesPerSession} times, also when you tell it
+          more about the person to personalise the ideas. Reloading the page or opening the finder again continues the search you
+          started. When your searches for the day are used up, you can still choose and wrap the ideas you found. When very many
+          people use the finder on the same day, we may pause new searches for everyone until the next day.
         </li>
         <li>
-          Reading a public Instagram or TikTok profile is limited to a small number each day across Majnu and may be
+          Majnu reads only the links and handles you paste, such as a public Instagram, TikTok or LinkedIn profile; it never looks
+          anyone up by name or email address. Reading a profile is limited to a small number each day across Majnu and may be
           unavailable. Only paste a profile to find a gift for that person, and only if they would be happy with it.
         </li>
         <li>Gift ideas, prices and shops come from the web and from an AI model. Check them in the shop before you buy.</li>
