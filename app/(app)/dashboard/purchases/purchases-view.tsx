@@ -63,8 +63,6 @@ export function PurchasesView({
         Majnu is free. The one thing you can buy is a {wrapper.name.toLowerCase()}: a design made for one gift, {wrapper.price} once.
       </p>
 
-      <PersonalisationsCard account={account} credits={credits} freeDesigns={freeDesigns} />
-
       {notice !== null && notice !== "processing" && (
         <div role="status" className="mt-6 rounded-2xl bg-night-velvet p-4 ring-1 ring-inset ring-night-petal/15 sm:p-5">
           <p className="font-semibold text-night-petal">Thank you. {personalisations(notice.quantity)} added</p>
@@ -80,6 +78,8 @@ export function PurchasesView({
           <p className="mt-1 text-night-lilac">Your design starts as soon as Stripe confirms it. This page shows it when you reload.</p>
         </div>
       )}
+
+      <PersonalisationsCard account={account} credits={credits} freeDesigns={freeDesigns} />
 
       {live.length > 0 && (
         <div className="mt-8 space-y-3">
