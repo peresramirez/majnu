@@ -410,6 +410,9 @@ export function catalogueAnswer(opts: {
     language,
     ...(query.match.word ? { relationship: query.match.word } : {}),
     ...(query.occasionMatch ? { occasion: query.occasionMatch.word } : {}),
+    // What they love, as the catalogue understood it ("cooking"): a chip the
+    // visitor can correct, and part of the personalisation score.
+    ...(interestTags(query.interests ?? []).length ? { interests: interestTags(query.interests ?? []).map((tag) => tag.replace(/_/g, " ")) } : {}),
   }
   return {
     options: {

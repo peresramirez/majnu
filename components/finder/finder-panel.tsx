@@ -25,6 +25,7 @@ import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/her
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { PersonalisationMeter } from "./personalisation-meter"
+import { PersonalisationRing } from "./personalisation-ring"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
 import { AttachButton, AttachmentTray, DropOverlay } from "./attachment-tray"
 import { filesFromClipboard } from "./attachments"
@@ -331,6 +332,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
               }`}
             >
               {/* Photos and documents about the person (issue #77). */}
+              <PersonalisationRing value={state.personalisation} />
               <AttachButton onFiles={(files) => void attachments.add(files)} disabled={state.streaming} />
               <label htmlFor="finder-panel-message" className="sr-only">
                 {empty ? "Who is the gift for?" : "Message to Majnu"}

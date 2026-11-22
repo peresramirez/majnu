@@ -7,6 +7,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { PersonalisationMeter } from "./personalisation-meter"
+import { PersonalisationRing } from "./personalisation-ring"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
 import { AttachButton, AttachmentTray, DropOverlay } from "./attachment-tray"
 import { filesFromClipboard } from "./attachments"
@@ -241,7 +242,8 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                 <AttachmentTray items={attachments.items} preparing={attachments.preparing} error={attachments.error} onRemove={attachments.remove} />
                 <div className="flex items-end gap-1 rounded-[22px] bg-night-velvet py-1 pl-1 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
                   {/* Photos and documents about the person (issue #77). */}
-                  <AttachButton onFiles={(files) => void attachments.add(files)} disabled={state.streaming} />
+                  <PersonalisationRing value={state.personalisation} />
+              <AttachButton onFiles={(files) => void attachments.add(files)} disabled={state.streaming} />
                   <label htmlFor="finder-message" className="sr-only">
                     Message to Majnu
                   </label>
