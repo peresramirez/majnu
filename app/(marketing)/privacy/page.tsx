@@ -80,7 +80,10 @@ export default function PrivacyPage() {
       <h3>Public social profiles</h3>
       <p>
         Only if you paste the link to a public Instagram or TikTok profile into the gift finder, we use Apify to read
-        that public profile once: its bio and recent captions and hashtags. Anthropic&apos;s AI model turns them into a
+        that public profile once: its bio and recent captions and hashtags. If Apify cannot read an Instagram profile,
+        Bright Data reads it instead. A public LinkedIn profile you paste is read once through Bright Data: the
+        person&apos;s headline, their about text, their roles and studies, and the titles of posts they wrote or shared,
+        never the other people the profile shows. Anthropic&apos;s AI model turns them into a
         short list of the person&apos;s interests, such as &quot;climbing, film photography, ramen&quot;, and only that list
         is kept, with your finder session. We never store their posts, photos or followers, we leave out anything
         about health, beliefs, politics or sexuality, and we never read a profile nobody pasted. Other public pages
@@ -180,14 +183,16 @@ export default function PrivacyPage() {
         <li><strong>Daytona</strong>: the short-lived sandbox in the EU where a personalised wrapper is designed.</li>
         <li><strong>Tavily</strong>: web search for gift ideas. It receives the search queries Majnu writes to find them, and the address of a public page you share.</li>
         <li><strong>Apify</strong>: reads a public Instagram or TikTok profile, only when you paste its link into the gift finder.</li>
+        <li><strong>Bright Data</strong>: reads a public LinkedIn profile, or an Instagram profile Apify could not read, only when you paste its link into the gift finder. Bright Data is based in Israel.</li>
         <li><strong>OpenAI</strong>: turns what you say into text, when you use the microphone or add a voice note to a gift. We do not keep the recording for this; OpenAI does not use data sent through its API to train its models.</li>
       </ul>
 
       <h2>Transfers outside the EU</h2>
       <p>
-        Anthropic, Apify, Cloudflare, Google, OpenAI, Stripe and Tavily may process data in the United States. Where a provider is certified
+        Anthropic, Apify, Bright Data, Cloudflare, Google, OpenAI, Stripe and Tavily may process data in the United States. Where a provider is certified
         under the EU–US Data Privacy Framework, the transfer is based on that adequacy decision; otherwise it is
-        covered by the European Commission&apos;s standard contractual clauses (Art. 46 GDPR).
+        covered by the European Commission&apos;s standard contractual clauses (Art. 46 GDPR). Bright Data is based in
+        Israel, for which the European Commission has found that data is adequately protected (Art. 45 GDPR).
       </p>
 
       <h2>How long we keep it</h2>
