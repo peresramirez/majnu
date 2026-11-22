@@ -10,6 +10,9 @@ import "server-only"
 import type { CSSProperties } from "react"
 import { Fingerprint, Layers, Lightbulb } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+// The limits and the price come from the code that applies them, so the
+// slide stays true when they change.
+import { FINDER_LIMITS as finder } from "@/lib/finder/limits"
 import { wrapper } from "@/lib/plans"
 import { PITCH_NOTES } from "@/lib/pitch/notes"
 import type { DeckLabels, DeckSlide } from "./deck"
@@ -263,7 +266,14 @@ function Inside() {
 
 function Model() {
   const plans = [
-    { price: "€0", name: "No account needed", lines: ["Find, tailor, wrap and send.", "2 sessions a day, 10 searches each."] },
+    {
+      price: "€0",
+      name: "No account needed",
+      lines: [
+        "Find, tailor, wrap and send.",
+        `${finder.sessionsPerDay} sessions a day, ${finder.searchesPerSession} searches each.`,
+      ],
+    },
     { price: "€0", name: "Free account", lines: ["Keeps your gifts and the tracker."] },
     { price: `${wrapper.price} once`, name: "Personalised wrapper", lines: ["A one-of-a-kind design for one gift."], paid: true },
   ]

@@ -17,7 +17,9 @@ vi.mock("next/headers", () => ({
 
 import PitchPage from "@/app/(pitch)/pitch/page"
 import { DECK_LABELS, pitchSlides } from "@/components/pitch/slides"
+import { FINDER_LIMITS } from "@/lib/finder/limits"
 import { pitchCookieValue } from "@/lib/pitch/gate"
+import { wrapper } from "@/lib/plans"
 import { PITCH_NOTES, PITCH_SLIDE_IDS } from "@/lib/pitch/notes"
 
 async function render(search: Record<string, string> = {}): Promise<string> {
@@ -79,8 +81,9 @@ describe("/pitch with the cookie", () => {
     expect(pitchSlides().map((slide) => [slide.id, slide.notes])).toEqual(PITCH_SLIDE_IDS.map((id) => [id, PITCH_NOTES[id]]))
   })
 
-  it("shows the personalised wrapper's real price", () => {
-    expect(unlocked).toContain("€2.99 once")
+  it("shows the real price and the finder's real limits", () => {
+    expect(unlocked).toContain(`${wrapper.price} once`)
+    expect(unlocked).toContain(`${FINDER_LIMITS.sessionsPerDay} sessions a day, ${FINDER_LIMITS.searchesPerSession} searches each.`)
   })
 })
 
@@ -149,6 +152,19 @@ describe("the deck's words stay on the server", () => {
       expect(source, path).not.toMatch(/from "(\.\/slides|\.\/diagrams|@\/lib\/pitch\/notes|@\/lib\/pitch\/gate)"/)
       expect(deck.filter((text) => source.includes(text)), path).toEqual([])
     }
+  })
+})
+
+describe("the deck's stylesheet", () => {
+  // A custom property registered with @property in app/globals.css takes its
+  // type everywhere: the landing page registers --u as a number, which once
+  // turned every canvas size of the deck to zero.
+  it("uses no custom property that the site's global stylesheet registers", () => {
+    const root = join(__dirname, "../../../..")
+    const registered = [...readFileSync(join(root, "app/globals.css"), "utf8").matchAll(/@property\s+(--[\w-]+)/g)].map((m) => m[1])
+    const deck = readFileSync(join(root, "app/(pitch)/pitch/deck.css"), "utf8")
+    const used = new Set([...deck.matchAll(/(--[\w-]+)\s*:|var\((--[\w-]+)/g)].map((m) => m[1] ?? m[2]))
+    expect(registered.filter((name) => used.has(name))).toEqual([])
   })
 })
 
