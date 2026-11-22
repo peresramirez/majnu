@@ -43,9 +43,10 @@ function DoorTile({
     <button
       type="button"
       onClick={onOpen}
+      data-door={door.day}
       aria-label={`Door ${door.day}, ${formatDay(opensOn)}: ${what}`}
       data-filled={filled || undefined}
-      className={`door-tile group relative isolate flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[14px] p-2 text-left sm:p-2.5 ${focusRing} ${
+      className={`door-tile group relative isolate flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[14px] p-2 text-left sm:p-2.5 ${focusRing} ${
         filled ? "bg-night-velvet ring-1 ring-night-rose/35" : "ring-1 ring-dashed ring-night-petal/20 hover:ring-night-rose/50"
       }`}
     >
@@ -57,11 +58,11 @@ function DoorTile({
         </>
       ) : null}
       <span aria-hidden="true" className="flex items-start justify-between">
-        <span className={`font-display text-[26px] leading-none sm:text-[30px] ${filled ? "text-night-petal" : "text-night-petal/45"}`}>{door.day}</span>
+        <span className={`font-display text-[22px] leading-none sm:text-[30px] ${filled ? "text-night-petal" : "text-night-petal/45"}`}>{door.day}</span>
         {filled ? (
-          <MoonPhase lit={door.day / total} size={16} className="text-night-rose" />
+          <MoonPhase lit={door.day / total} size={14} className="mt-0.5 flex-none text-night-rose" />
         ) : (
-          <Plus className="h-4 w-4 text-night-petal/40 transition-colors duration-200 group-hover:text-night-rose" />
+          <Plus className="mt-0.5 h-3.5 w-3.5 flex-none text-night-petal/40 transition-colors duration-200 group-hover:text-night-rose" />
         )}
       </span>
       <span aria-hidden="true" className="min-w-0">
@@ -186,6 +187,7 @@ export function CalendarEditor({ data, autoFind }: { data: CalendarEditorData; a
   const [notes, setNotes] = useState<{ busy: boolean; error?: string }>({ busy: false })
   const [announcement, setAnnouncement] = useState("")
   const started = useRef(false)
+  const lastOpened = useRef<number | null>(null)
 
   const name = content.recipientName
   const total = content.doors.length
@@ -295,7 +297,10 @@ export function CalendarEditor({ data, autoFind }: { data: CalendarEditorData; a
                   total={total}
                   opensOn={doorOpensOn(content.startDate, door.day)}
                   option={optionForGift(door.gift, pool)}
-                  onOpen={() => setOpenDay(door.day)}
+                  onOpen={() => {
+                    lastOpened.current = door.day
+                    setOpenDay(door.day)
+                  }}
                 />
               </li>
             ))}
@@ -360,6 +365,7 @@ export function CalendarEditor({ data, autoFind }: { data: CalendarEditorData; a
         findingSimilar={poolState.status === "loading" ? (poolState.similarTo ?? null) : null}
         poolBusy={poolState.status === "loading"}
         onClose={() => setOpenDay(null)}
+        onClosed={() => document.querySelector<HTMLElement>(`[data-door="${lastOpened.current}"]`)?.focus()}
         onSave={onSave}
         onMoreLikeThis={(id) => void runPool(id)}
         onFindIdeas={() => void runPool()}

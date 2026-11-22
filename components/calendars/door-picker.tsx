@@ -18,7 +18,7 @@ import { formatDay } from "./dates"
 type Tab = "idea" | "own" | "note"
 
 const field =
-  "mt-1.5 block w-full rounded-xl bg-night-velvet px-3.5 py-2.5 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/12 placeholder:text-night-lilac/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-night-rose"
+  "mt-1.5 block w-full rounded-xl bg-night-velvet px-3.5 py-2.5 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/15 placeholder:text-night-lilac/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-night-rose"
 const label = "block text-[14px] font-semibold text-night-petal"
 
 export type PickerProps = {
@@ -32,6 +32,8 @@ export type PickerProps = {
   findingSimilar: string | null
   poolBusy: boolean
   onClose: () => void
+  // After the picker has closed: the editor puts focus back on the door's tile.
+  onClosed: () => void
   onSave: (day: number, body: DoorRequest) => Promise<string | null>
   onMoreLikeThis: (optionId: string) => void
   onFindIdeas: () => void
@@ -67,6 +69,7 @@ function IdeaRow({
   const id = useId()
   return (
     <li
+      data-picker-chosen={selected || undefined}
       className={`relative rounded-2xl bg-night-velvet p-3 transition-shadow duration-200 ease-calm has-[input:focus-visible]:outline has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-night-rose ${
         selected ? "ring-2 ring-night-rose" : "ring-1 ring-night-petal/10 hover:ring-night-petal/25"
       }`}
@@ -103,15 +106,15 @@ function IdeaRow({
             {suggestedForLast ? <span className="text-night-rose"> · Suggested for the last door</span> : null}
           </p>
           <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-night-petal/80">{option.description}</p>
-          <div className="relative z-10 mt-2 flex flex-wrap gap-2">
+          <div className="relative z-10 mt-2 flex gap-2">
             <button type="button" onClick={onMoreLikeThis} disabled={disabled} className={`${smallButton} px-3 py-1.5 text-[13px]`}>
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               {finding ? "Looking…" : "More like this"}
             </button>
             <a href={option.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className={`${smallButton} px-3 py-1.5 text-[13px]`}>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              See it in the shop
-              <span className="sr-only">(opens in a new tab)</span>
+              See it
+              <span className="sr-only">in the shop (opens in a new tab)</span>
             </a>
           </div>
         </div>
@@ -128,7 +131,7 @@ function TabButton({ tab, current, onSelect, children }: { tab: Tab; current: Ta
       role="tab"
       aria-selected={selected}
       onClick={() => onSelect(tab)}
-      className={`flex-1 rounded-full px-3 py-2 text-[14px] font-semibold transition-colors duration-200 ease-calm ${focusRing} ${
+      className={`flex-1 whitespace-nowrap rounded-full px-2 py-2 text-[14px] font-semibold sm:px-3 transition-colors duration-200 ease-calm ${focusRing} ${
         selected ? "bg-night-petal text-night-plum" : "text-night-lilac hover:text-night-petal"
       }`}
     >
@@ -144,6 +147,16 @@ export function DoorPicker(props: PickerProps) {
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="picker-overlay fixed inset-0 z-50 bg-[#0c0812]/70" />
         <DialogPrimitive.Content
+          // There is no Radix Trigger to return to, so the editor refocuses the door.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            props.onClosed()
+          }}
+          // Start at the door's title, as the recipient's door dialog does, not on Close.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            ;(event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[data-picker-title]")?.focus()
+          }}
           className="picker-sheet dark fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-[28px] bg-night-plum text-night-petal ring-1 ring-night-petal/10 focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[86dvh] sm:w-[min(640px,92vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px]"
         >
           {door ? <PickerBody key={door.day} {...props} door={door} /> : null}
@@ -180,6 +193,17 @@ function PickerBody(props: PickerProps & { door: CalendarDoor }) {
   const ids = { title: useId(), message: useId(), ownTitle: useId(), ownUrl: useId(), ownPrice: useId(), ownCode: useId(), ownAbout: useId(), group: useId() }
   const isLast = door.day === props.total
 
+  // A door that already holds an idea opens with that idea in view.
+  // Only the picker's own list scrolls: scrollIntoView would move the page behind it too.
+  useEffect(() => {
+    const list = document.querySelector<HTMLElement>("[data-picker-scroll]")
+    const chosen = list?.querySelector<HTMLElement>("[data-picker-chosen]")
+    if (!list || !chosen) return
+    const a = list.getBoundingClientRect()
+    const b = chosen.getBoundingClientRect()
+    list.scrollTop += b.top - a.top - (a.height - b.height) / 2
+  }, [])
+
   // New ideas from "more like this" land at the end of the list: say so.
   const [poolSize, setPoolSize] = useState(pool.length)
   const [added, setAdded] = useState(0)
@@ -213,7 +237,7 @@ function PickerBody(props: PickerProps & { door: CalendarDoor }) {
             Door {door.day} · {formatDay(props.opensOn)}
             {isLast ? " · the last door" : ""}
           </p>
-          <DialogPrimitive.Title className="mt-1.5 font-display text-[28px] leading-tight">What’s behind door {door.day}?</DialogPrimitive.Title>
+          <DialogPrimitive.Title data-picker-title tabIndex={-1} className="mt-1.5 font-display text-[28px] leading-tight outline-none">What’s behind door {door.day}?</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Choose one of Majnu’s ideas, add your own gift, or leave a note only.</DialogPrimitive.Description>
         </div>
         <DialogPrimitive.Close
@@ -224,10 +248,12 @@ function PickerBody(props: PickerProps & { door: CalendarDoor }) {
         </DialogPrimitive.Close>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-7">
+      <div data-picker-scroll className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-7">
         <div role="tablist" aria-label="What goes behind the door" className="flex gap-1 rounded-full bg-night-velvet p-1">
           <TabButton tab="idea" current={tab} onSelect={setTab}>
-            Majnu’s ideas{pool.length ? ` (${pool.length})` : ""}
+            <span className="sm:hidden">Ideas</span>
+            <span className="hidden sm:inline">Majnu’s ideas</span>
+            {pool.length ? ` (${pool.length})` : ""}
           </TabButton>
           <TabButton tab="own" current={tab} onSelect={setTab}>
             Your own

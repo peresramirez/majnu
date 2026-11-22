@@ -29,7 +29,7 @@ const RELATIONSHIPS: { kind: CalendarRelationshipKind; label: string; words: str
 const DOOR_BUDGETS = ["under 5 €", "under 10 €", "under 20 €"]
 
 const field =
-  "mt-2 block w-full rounded-2xl bg-night-velvet px-4 py-3 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/12 placeholder:text-night-lilac/60 transition-shadow duration-200 ease-calm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-night-rose"
+  "mt-2 block w-full rounded-2xl bg-night-velvet px-4 py-3 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/15 placeholder:text-night-lilac/60 transition-shadow duration-200 ease-calm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-night-rose"
 const label = "block text-[15px] font-semibold text-night-petal"
 const hint = "mt-1.5 text-[14px] leading-relaxed text-night-lilac"
 
