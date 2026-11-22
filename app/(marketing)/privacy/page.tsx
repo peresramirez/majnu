@@ -122,6 +122,14 @@ export default function PrivacyPage() {
         GDPR).
       </p>
 
+      <h3>Voice notes in gifts</h3>
+      <p>
+        If you record a voice note for a gift, we store the recording with the gift until you remove the note or delete
+        the gift. Anyone who has the gift&apos;s link can hear it, so only say what you would write in the gift itself.
+        We also send the recording once to OpenAI, which turns it into text, so that recipients who use a screen reader
+        get the words too; we keep that text with the note (Art. 6 (1) (b) GDPR).
+      </p>
+
       <h3>Payments</h3>
       <p>
         If you buy a personalised wrapper, Stripe handles your payment and emails your receipt. We never see your card
