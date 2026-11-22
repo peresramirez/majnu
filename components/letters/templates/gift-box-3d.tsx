@@ -24,6 +24,7 @@ import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { wholeName } from "../names"
 import { paletteOf } from "../theme"
+import { VoiceNoteSlot } from "../voice-player"
 import { Wishlist } from "../wishlist"
 import { BoxDrawing } from "./gift-box-3d/drawing"
 import { hasWebGL, type BoxMood } from "./gift-box-3d/layout"
@@ -284,6 +285,8 @@ export function GiftBox3D({ content, mood, claimed }: { content: LetterContent; 
           {party && content.event ? <EventDetails event={content.event} /> : null}
 
           <article className="rise mt-6 rounded-[22px] px-6 pb-9 pt-8 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.5)]" style={{ ...paperStyle, animationDelay: "700ms" }}>
+            {/* The sender's voice, on the note that came out of the box. */}
+            <VoiceNoteSlot tone="paper" className="mb-7 border-b border-[var(--line)] pb-6" />
             <Paragraphs body={content.body} />
             <SignOff signOff={content.signOff} senderName={content.senderName} className="mt-8" />
           </article>
