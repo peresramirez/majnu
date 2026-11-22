@@ -120,7 +120,7 @@ describe("the first message (issue #97)", () => {
       // Who it is for and the occasion: 20 points, and the profile would add most.
       personalisation: { score: 20, next: { key: "profile", label: "Add their Instagram, TikTok or LinkedIn", gain: 20 } },
     })
-    expect(events.find((e) => e.type === "text")).toEqual({ type: "text", delta: "Hier sind sechs Ideen für den Anfang. Mein Favorit steht vorne." })
+    expect(events.find((e) => e.type === "text")).toEqual({ type: "text", delta: "Hier sind sechs Ideen aus unserem Katalog, mein Favorit vorne. Soll ich etwas nur für diese Person suchen? Tippe unten auf „Personalise the gift“." })
   })
 
   it("saves the options as the session's last options, with the marker, and leaves the conversation as it was", async () => {
