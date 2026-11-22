@@ -20,6 +20,7 @@ vi.mock("@/lib/finder/limits", async (importOriginal) => ({
   findOpenSession: vi.fn(),
 }))
 vi.mock("@/lib/finder/agent", () => ({ runFinderTurn: vi.fn() }))
+vi.mock("@/lib/finder/catalog", () => ({ loadCatalogue: vi.fn(async () => []) }))
 vi.mock("@/lib/finder/attachments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/finder/attachments")>()),
   readMessageFiles: vi.fn(),

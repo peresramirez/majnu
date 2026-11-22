@@ -1,0 +1,664 @@
+[
+ {
+  "id": "wine-tasting-berlin-pankow",
+  "groups": [
+   "mother",
+   "father"
+  ],
+  "occasions": [
+   "birthday",
+   "mothers_day",
+   "just_because"
+  ],
+  "interests": [
+   "food_drink",
+   "culture"
+  ],
+  "title": "Wine tasting with food in Berlin-Pankow",
+  "description": "A two-hour tasting of eight wines led by a sommelière, with a small buffet of matching dishes.",
+  "why": "An easy evening out for a parent who enjoys good food and a glass of wine.",
+  "shop": "mydays",
+  "price": "€49.90",
+  "price_eur": 49.9,
+  "url": "https://www.mydays.de/kulinarische-geschenke/berlin-weinverkostung/p/52ifu",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/weinverkostung-mit-kulinarischer-begleitung-19253-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "japanese-head-spa-berlin",
+  "groups": [
+   "mother",
+   "best_friend",
+   "partner"
+  ],
+  "occasions": [
+   "birthday",
+   "mothers_day",
+   "just_because"
+  ],
+  "interests": [
+   "wellness"
+  ],
+  "title": "Japanese head spa in Berlin",
+  "description": "A Japanese-style head spa treatment at a studio in Berlin.",
+  "why": "A quiet hour of being looked after, for someone who is always looking after others.",
+  "shop": "mydays",
+  "price": "€99.90",
+  "price_eur": 99.9,
+  "url": "https://www.mydays.de/wellness/head-spa-berlin/p/nvigz",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/head-spa-berlin-59993-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "make-your-own-perfume-berlin",
+  "groups": [
+   "mother",
+   "best_friend"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas",
+   "just_because"
+  ],
+  "interests": [
+   "crafts",
+   "wellness"
+  ],
+  "title": "Make your own perfume in Berlin",
+  "description": "A workshop in Berlin where you blend a perfume of your own.",
+  "why": "She goes home with a scent that is hers alone.",
+  "shop": "mydays",
+  "price": "€108.90",
+  "price_eur": 108.9,
+  "url": "https://www.mydays.de/kultur-kreatives/parfum-selber-herstellen-berlin/p/bmue6",
+  "image_url": "https://main.static.jsmd-group.com/assets/_default_upload_bucket/34988/parfum-selber-herstellen-berlin-akkorde.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "beer-brewing-course-berlin",
+  "groups": [
+   "father",
+   "best_friend"
+  ],
+  "occasions": [
+   "birthday",
+   "fathers_day",
+   "christmas"
+  ],
+  "interests": [
+   "food_drink",
+   "crafts"
+  ],
+  "title": "Beer brewing course in Berlin",
+  "description": "A day of brewing with a brewmaster in a historic Berlin brewhouse, with breakfast, lunch, a tasting and an apron to keep.",
+  "why": "A full day of hands-on brewing for a dad who likes a good beer and how it is made.",
+  "shop": "mydays",
+  "price": "€89.90",
+  "price_eur": 89.9,
+  "url": "https://www.mydays.de/kulinarische-geschenke/berlin-braukurs/p/temh7",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/braukurs-berlin-33734-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "boeing-737-flight-simulator-berlin",
+  "groups": [
+   "father",
+   "sibling",
+   "partner"
+  ],
+  "occasions": [
+   "birthday",
+   "fathers_day",
+   "christmas"
+  ],
+  "interests": [
+   "adventure",
+   "travel",
+   "science"
+  ],
+  "title": "Boeing 737 flight simulator in Berlin",
+  "description": "About an hour flying a Boeing 737-700 cockpit simulator, with a briefing, a debriefing and a certificate.",
+  "why": "A turn in the captain's seat for anyone who has always looked up at planes.",
+  "shop": "mydays",
+  "price": "€159.90",
+  "price_eur": 159.9,
+  "url": "https://www.mydays.de/fliegen/flight-simulator-berlin/p/8hsiy",
+  "image_url": "https://main.static.jsmd-group.com/assets/_default_upload_bucket/21151/flugsimulator-berlin-boeing-b737-cockpit.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "turk-wrought-iron-frying-pan-28",
+  "groups": [
+   "father",
+   "partner",
+   "general"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas",
+   "housewarming"
+  ],
+  "interests": [
+   "cooking"
+  ],
+  "title": "Turk wrought iron frying pan, 28 cm",
+  "description": "A heavy, drop-forged iron frying pan by Turk that takes very high heat and is almost impossible to wear out.",
+  "why": "A pan he will still be cooking with in twenty years.",
+  "shop": "Manufactum",
+  "price": "€42.90",
+  "price_eur": 42.9,
+  "url": "https://de.manufactum.com/turk-schmiedeeiserne-bratpfanne-a10610/",
+  "image_url": "https://assets.manufactum.de/assets/img/0015/00153975/0015397529-01.jpg/turk-schmiedeeiserne-bratpfanne.jpg?profile=pdsmain_1500",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "couple-photo-shoot-berlin",
+  "groups": [
+   "partner"
+  ],
+  "occasions": [
+   "anniversary",
+   "valentines",
+   "birthday"
+  ],
+  "interests": [
+   "photography"
+  ],
+  "title": "Couple photo shoot in Berlin",
+  "description": "A one-hour studio shoot for two in Berlin, with one edited picture and three prints plus the files.",
+  "why": "Lovely photos of the two of you, and an hour of laughing together in front of the camera.",
+  "shop": "mydays",
+  "price": "€72.90",
+  "price_eur": 72.9,
+  "url": "https://www.mydays.de/kultur-kreatives/paar-fotoshooting-berlin/p/i59yb",
+  "image_url": "https://main.static.jsmd-group.com/assets/_default_upload_bucket/25789/partner-fotoshooting-berlin-bg1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "floating-for-two-berlin",
+  "groups": [
+   "partner"
+  ],
+  "occasions": [
+   "anniversary",
+   "valentines",
+   "just_because"
+  ],
+  "interests": [
+   "wellness"
+  ],
+  "title": "Floating for two in Berlin",
+  "description": "A session for two in a floating pool in Berlin.",
+  "why": "Time to switch off together, weightless and quiet.",
+  "shop": "mydays",
+  "price": "€114.90",
+  "price_eur": 114.9,
+  "url": "https://www.mydays.de/wellness/berlin-floating-becken/p/5y6ep",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/berlin-floating-becken-17803-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "sushi-cooking-class-berlin",
+  "groups": [
+   "partner",
+   "best_friend",
+   "sibling"
+  ],
+  "occasions": [
+   "birthday",
+   "anniversary",
+   "just_because"
+  ],
+  "interests": [
+   "cooking",
+   "food_drink"
+  ],
+  "title": "Sushi cooking class in Berlin",
+  "description": "A three-hour class where you learn to roll eight kinds of sushi, then sit down to eat them.",
+  "why": "A fun, hands-on date for someone who loves Japanese food.",
+  "shop": "Jochen Schweizer",
+  "price": "€94.90",
+  "price_eur": 94.9,
+  "url": "https://www.jochen-schweizer.de/essen-trinken/sushi-kochkurs-berlin/p/x172g",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/sushi-kochkurs-berlin-62995-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "paint-and-drink-berlin",
+  "groups": [
+   "best_friend",
+   "sibling"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because"
+  ],
+  "interests": [
+   "crafts"
+  ],
+  "title": "Paint and drink evening in Berlin",
+  "description": "A two-hour painting event in Berlin with acrylics, a canvas and music.",
+  "why": "A night of painting and laughing together, no talent needed.",
+  "shop": "mydays",
+  "price": "€59.90",
+  "price_eur": 59.9,
+  "url": "https://www.mydays.de/kultur-kreatives/paint-and-drink-berlin/p/wqv7k",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/paint-and-drink-frankfurt-60154-2.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "escape-room-berlin",
+  "groups": [
+   "best_friend",
+   "sibling",
+   "colleague"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because",
+   "farewell"
+  ],
+  "interests": [
+   "games",
+   "adventure"
+  ],
+  "title": "Escape room in Berlin",
+  "description": "An escape room game in Berlin, solved as a team before time runs out.",
+  "why": "Teamwork, puzzles and a story to retell for years.",
+  "shop": "mydays",
+  "price": "€149.90",
+  "price_eur": 149.9,
+  "url": "https://www.mydays.de/action-geschenke/escaperoom-berlin/p/v53f6",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/escape-room-berlin-berlin-58915-2.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "high-swing-berlin",
+  "groups": [
+   "best_friend",
+   "sibling"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because"
+  ],
+  "interests": [
+   "adventure"
+  ],
+  "title": "High swing above Berlin",
+  "description": "A swing ride 120 metres up at the edge of the Park Inn hotel roof, with entry to the roof terrace.",
+  "why": "A short thrill with the best view of the city, for a friend who likes a little adrenaline.",
+  "shop": "mydays",
+  "price": "€29.90",
+  "price_eur": 29.9,
+  "url": "https://www.mydays.de/action-geschenke/high-swing-berlin/p/xizwd",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/high-swing-berlin-65453-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "outdoor-escape-game-berlin",
+  "groups": [
+   "sibling",
+   "best_friend"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas"
+  ],
+  "interests": [
+   "games",
+   "adventure",
+   "outdoors"
+  ],
+  "title": "Outdoor escape game in Berlin",
+  "description": "A two-hour puzzle tour through Berlin for two to four players, played with tablets and riddle props.",
+  "why": "A city-wide adventure to solve side by side, just like when you were kids.",
+  "shop": "mydays",
+  "price": "€139.90",
+  "price_eur": 139.9,
+  "url": "https://www.mydays.de/action-geschenke/outdoor-escape-game-berlin/p/ovjy8",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/outdoor-escape-game-berlin-49006-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "scavenger-hunt-berlin",
+  "groups": [
+   "sibling",
+   "best_friend",
+   "colleague"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because"
+  ],
+  "interests": [
+   "games",
+   "outdoors"
+  ],
+  "title": "Scavenger hunt through Berlin",
+  "description": "A city game through Berlin Mitte in a metal gift box of 16 sealed envelopes, started whenever you like.",
+  "why": "An afternoon of clues and teasing each other across the city.",
+  "shop": "mydays",
+  "price": "€44.90",
+  "price_eur": 44.9,
+  "url": "https://www.mydays.de/kultur-kreatives/stadtspiel-schnitzeljagd-berlin/p/yqg81",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/stadt-rallye-berlin-14382-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "kayaking-for-two-berlin",
+  "groups": [
+   "sibling",
+   "partner",
+   "best_friend"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because"
+  ],
+  "interests": [
+   "sport",
+   "outdoors"
+  ],
+  "title": "Kayaking for two on the Wannsee",
+  "description": "A three-hour kayak trip for two on Berlin's Wannsee after a briefing from an instructor.",
+  "why": "A morning on the water to share, with time to talk.",
+  "shop": "mydays",
+  "price": "€49.90",
+  "price_eur": 49.9,
+  "url": "https://www.mydays.de/wassersport/kajak-fahren-fuer-2-berlin/p/c8hpn",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/kajak-fahren-fuer-2-berlin-2.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "oma-erzaehl-mal-book",
+  "groups": [
+   "grandparent"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas",
+   "just_because"
+  ],
+  "interests": [
+   "reading",
+   "family",
+   "writing"
+  ],
+  "title": "Oma, erzähl mal, by Elma van Vliet",
+  "description": "A guided book of questions that a grandmother fills in about her life.",
+  "why": "Her memories, kept safe for the grandchildren in her own words.",
+  "shop": "Amazon.de",
+  "price": "€18.00",
+  "price_eur": 18.0,
+  "url": "https://www.amazon.de/dp/3426655918",
+  "image_url": "https://m.media-amazon.com/images/I/61k2b0SjSlL._SL1500_.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "breakfast-and-spree-cruise-for-two",
+  "groups": [
+   "grandparent",
+   "mother",
+   "partner"
+  ],
+  "occasions": [
+   "birthday",
+   "anniversary"
+  ],
+  "interests": [
+   "travel",
+   "culture"
+  ],
+  "title": "Breakfast and Spree boat tour in Berlin for two",
+  "description": "A breakfast buffet for two followed by a sightseeing boat tour on the Spree, from March to October.",
+  "why": "A gentle day out in Berlin, with good food and the city drifting by.",
+  "shop": "mydays",
+  "price": "€149.90",
+  "price_eur": 149.9,
+  "url": "https://www.mydays.de/kultur-kreatives/berlin-erlebnistag-fruehstueck-schiffsrundfahrt/p/twhp7",
+  "image_url": "https://main.static.jsmd-group.com/assets/_default_upload_bucket/19530/traumtag-fuer-zwei-berlin-bootsfahrt.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "spree-boat-trip-berlin",
+  "groups": [
+   "grandparent",
+   "general"
+  ],
+  "occasions": [
+   "birthday",
+   "thank_you",
+   "just_because"
+  ],
+  "interests": [
+   "travel",
+   "culture"
+  ],
+  "title": "Two-hour Spree boat trip in Berlin",
+  "description": "A two-hour boat trip past Berlin's highlights, including a lock passage at the Mühlendamm.",
+  "why": "A relaxed, seated way to see the city, good at any age.",
+  "shop": "mydays",
+  "price": "€19.90",
+  "price_eur": 19.9,
+  "url": "https://www.mydays.de/kultur-kreatives/schifffahrt-berlin/p/g4h1e",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/schifffahrt-berlin-1-40586.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "fig-pralines",
+  "groups": [
+   "colleague",
+   "grandparent"
+  ],
+  "occasions": [
+   "thank_you",
+   "christmas",
+   "farewell"
+  ],
+  "interests": [
+   "food_drink"
+  ],
+  "title": "Fig pralines (8 pieces)",
+  "description": "Eight Spanish fig pralines: sun-ripened figs with chocolate and cream.",
+  "why": "A small, elegant thank you that feels a little special.",
+  "shop": "Manufactum",
+  "price": "€17.90",
+  "price_eur": 17.9,
+  "url": "https://de.manufactum.com/feigenpralinen-a205672/",
+  "image_url": "https://assets.manufactum.de/p/205/205672/205672_01.jpg/feigenpralinen.jpg?profile=pdsmain_1500",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "french-sables-gift-tin",
+  "groups": [
+   "colleague",
+   "best_friend"
+  ],
+  "occasions": [
+   "thank_you",
+   "christmas",
+   "farewell"
+  ],
+  "interests": [
+   "food_drink"
+  ],
+  "title": "French sablés in a Bouquet Sauvage gift tin",
+  "description": "Salted caramel French sablé biscuits in a decorative Bouquet Sauvage gift tin.",
+  "why": "Something to share at the coffee break, in a tin worth keeping.",
+  "shop": "Manufactum",
+  "price": "€18.90",
+  "price_eur": 18.9,
+  "url": "https://de.manufactum.com/franzoesische-sables-geschenkdose-bouquet-sauvage-a220810/",
+  "image_url": "https://assets.manufactum.de/assets/img/0016/00162223/0016222370-01.jpg/franzoesische-sables-geschenkdose-bouquet-sauvage.jpg?profile=pdsmain_1500",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "solid-hand-cream-queen-bee",
+  "groups": [
+   "colleague",
+   "mother",
+   "grandparent"
+  ],
+  "occasions": [
+   "thank_you",
+   "christmas"
+  ],
+  "interests": [
+   "wellness"
+  ],
+  "title": "Solid hand cream, Queen Bee",
+  "description": "A rich, solid hand cream bar called Queen Bee, small enough to take on a plane.",
+  "why": "A thoughtful little winter comfort for busy hands.",
+  "shop": "Manufactum",
+  "price": "€17.90",
+  "price_eur": 17.9,
+  "url": "https://de.manufactum.com/feste-handcreme-a30366/",
+  "image_url": "https://assets.manufactum.de/assets/img/0001/00018064/0001806473-01.jpg/feste-handcreme.jpg?profile=pdsmain_1500",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "toniebox-2-starter-set-songs",
+  "groups": [
+   "child_teen"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas"
+  ],
+  "interests": [
+   "music",
+   "reading"
+  ],
+  "title": "Toniebox 2 starter set, children's songs (blue)",
+  "description": "A Toniebox 2 audio player for children, bundled with a children's songs Tonie.",
+  "why": "Screen-free songs and stories a small child can start all by themselves.",
+  "shop": "tonies",
+  "price": "€149.99",
+  "price_eur": 149.99,
+  "url": "https://tonies.com/de-de/bundles/toniebox-2-starterset-kinderlieder-blau/",
+  "image_url": "https://res.cloudinary.com/tonies/image/fetch/f_auto,q_auto,c_fill_pad,g_auto,b_rgb:ffffff,w_1920,h_1080/https://images.cdn.europe-west1.gcp.commercetools.com/cffb5678-47af-495c-9f19-1c2ccfc5910c/PDP_Bunde_Kinderlied-IGVd_jUD.png",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "legoland-discovery-centre-berlin",
+  "groups": [
+   "child_teen",
+   "general"
+  ],
+  "occasions": [
+   "birthday",
+   "just_because"
+  ],
+  "interests": [
+   "games",
+   "family"
+  ],
+  "title": "LEGOLAND Discovery Centre Berlin (one adult and one child)",
+  "description": "Entry for one adult and one child to the LEGOLAND Discovery Centre, with a digital photo package.",
+  "why": "A building-brick day out to share with a child you love.",
+  "shop": "mydays",
+  "price": "€26.90",
+  "price_eur": 26.9,
+  "url": "https://www.mydays.de/kultur-kreatives/legoland-discovery-center-in-berlin/p/tojzh",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/legoland-discovery-center-berlin-62362-1.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "harley-benton-ukulele-bundle",
+  "groups": [
+   "child_teen",
+   "best_friend"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas"
+  ],
+  "interests": [
+   "music"
+  ],
+  "title": "Harley Benton Kahuna-S Dolphin ukulele bundle",
+  "description": "A Harley Benton soprano ukulele with a gig bag, a clip-on tuner and spare strings.",
+  "why": "A friendly first instrument that sounds good after one afternoon.",
+  "shop": "Thomann",
+  "price": "€39.00",
+  "price_eur": 39.0,
+  "url": "https://www.thomann.de/de/harley_benton_kahuna_s_dolphin_bundle.htm",
+  "image_url": "https://www.thomann.de/thumb/opengraph/pics/prod/515076.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "mydays-gift-voucher",
+  "groups": [
+   "general",
+   "colleague"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas",
+   "thank_you",
+   "farewell"
+  ],
+  "interests": [
+   "adventure"
+  ],
+  "title": "mydays gift voucher",
+  "description": "A mydays voucher for an amount you choose, from €20, to spend on any experience.",
+  "why": "When you are not sure what they would love, they can choose it themselves.",
+  "shop": "mydays",
+  "price": "from €20.00",
+  "price_eur": 20.0,
+  "url": "https://www.mydays.de/wertgutscheine/wertgutschein/p/zhxpf",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/wertgutschein-md-MDFWG01-7.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "gift-box-for-cooking-friends",
+  "groups": [
+   "general",
+   "father",
+   "mother"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas"
+  ],
+  "interests": [
+   "cooking"
+  ],
+  "title": "Jochen Schweizer gift box for cooking lovers",
+  "description": "A gift box with a voucher for one person to choose a class such as sushi, grilling or brewing, at around 750 places.",
+  "why": "A flexible cooking adventure for anyone who loves to be in the kitchen.",
+  "shop": "Jochen Schweizer",
+  "price": "€99.90",
+  "price_eur": 99.9,
+  "url": "https://www.jochen-schweizer.de/geschenkbox/geschenkbox-kochfreunde/p/x3twf",
+  "image_url": "https://main.static.jsmd-group.com/assets/new_default_upload_bucket/JDEEBXET02_P_Box_FuerKochfreunde_1200x790px.jpg",
+  "checked_at": "2026-11-22"
+ },
+ {
+  "id": "amazon-physical-gift-card",
+  "groups": [
+   "general",
+   "colleague"
+  ],
+  "occasions": [
+   "birthday",
+   "christmas",
+   "thank_you"
+  ],
+  "interests": [
+   "reading",
+   "gaming"
+  ],
+  "title": "Amazon.de physical gift card",
+  "description": "A physical Amazon.de gift card to hand over in person, listed here at €50.",
+  "why": "A simple, safe choice that lets them pick exactly what they want.",
+  "shop": "Amazon.de",
+  "price": "€50.00",
+  "price_eur": 50.0,
+  "url": "https://www.amazon.de/dp/B0GWLFL675",
+  "image_url": "https://m.media-amazon.com/images/I/51r+Rxbq71L._SL1500_.jpg",
+  "checked_at": "2026-11-22"
+ }
+]

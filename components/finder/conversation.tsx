@@ -4,13 +4,17 @@ import Link from "next/link"
 import { Check, Paperclip, RotateCcw } from "lucide-react"
 import type { GiftOption } from "@/lib/finder/events"
 import {
+  CATALOGUE_OFFER,
   NO_PROFILE,
+  OTHER_ANSWER,
+  OTHER_PLACEHOLDER,
   PERSONALISE_MESSAGE,
   PROFILE_FIELD_LABEL,
   SEND_ANSWERS,
   latestOptionsIndex,
   noticeRole,
   openQuestions,
+  pickedAnswer,
   showsProfileField,
   type FinderItem,
   type FinderState,
@@ -29,6 +33,8 @@ type Props = {
   // (with whatever is in the message box) as one message.
   onAnswer: (itemId: string, value: string) => void
   onProfile: (change: { link?: string; none?: boolean }) => void
+  // Issue #97: the visitor's own words for a question's "Other" answer.
+  onOther?: (itemId: string, text: string) => void
   onSendAnswers: () => void
   // The message box has words or files, so the answers can be sent without a pick.
   draftReady?: boolean
@@ -169,13 +175,13 @@ const repliedAfter = (items: FinderItem[], i: number) => items.slice(i + 1).some
 
 // The conversation: what the visitor asked, what Majnu said, the gift ideas,
 // its questions with tappable answers, and limits or errors.
-export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, onProfile, onSendAnswers, draftReady = false }: Props) {
+export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, onProfile, onOther, onSendAnswers, draftReady = false }: Props) {
   const { items, streaming } = state
   const newestOptions = latestOptionsIndex(items)
   // The questions still open; the last one ends with the profile field and "Send answers".
   const open = openQuestions(items)
   const lastOpenId = open.length > 0 ? open[open.length - 1].id : null
-  const picked = open.some((q) => state.answers[q.id]) || (showsProfileField(state) && (state.profile.none || state.profile.link.trim() !== ""))
+  const picked = open.some((q) => pickedAnswer(state, q.id)) || (showsProfileField(state) && (state.profile.none || state.profile.link.trim() !== ""))
   // Between sending and the first words: what Majnu is doing, beside its mark.
   const waiting = streaming && items[items.length - 1]?.role === "user"
   return (
@@ -232,7 +238,18 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
                     {item.why}
                   </p>
                 )}
-                {showPersonalise && (
+                {showPersonalise && item.catalogue && (
+                  <div className="mt-4 rounded-[18px] bg-night-petal/[0.04] px-4 py-3.5 ring-1 ring-inset ring-night-petal/15">
+                    <p className="text-[15px] font-semibold text-night-petal">{CATALOGUE_OFFER}</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-night-lilac">
+                      Answer a few quick questions and Majnu looks for six gifts that suit them.
+                    </p>
+                    <button type="button" className={`${smallPrimary} mt-3`} onClick={() => onSend(PERSONALISE_MESSAGE)}>
+                      {PERSONALISE_MESSAGE}
+                    </button>
+                  </div>
+                )}
+                {showPersonalise && !item.catalogue && (
                   <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
                     <button type="button" className={smallButton} onClick={() => onSend(PERSONALISE_MESSAGE)}>
                       {PERSONALISE_MESSAGE}
@@ -273,13 +290,48 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
                           </button>
                         )
                       })}
+                      {/* Issue #97: the visitor's own answer, typed in a small field. */}
+                      <button
+                        type="button"
+                        aria-pressed={chosen === OTHER_ANSWER}
+                        aria-controls={`${item.id}-other`}
+                        className={`${chip} ${chosen === OTHER_ANSWER ? pickedChip : ""}`}
+                        disabled={streaming}
+                        onClick={() => onAnswer(item.id, OTHER_ANSWER)}
+                      >
+                        {chosen === OTHER_ANSWER && <Check className="mr-1 h-3.5 w-3.5" aria-hidden="true" />}
+                        {OTHER_ANSWER}
+                      </button>
                     </div>
                   )}
-                  {!isOpen && chosen && (
+                  {isOpen && chosen === OTHER_ANSWER && (
+                    <div className="mt-2">
+                      <label htmlFor={`${item.id}-other`} className="sr-only">
+                        {item.label ? `${item.label}: ${OTHER_PLACEHOLDER}` : OTHER_PLACEHOLDER}
+                      </label>
+                      <input
+                        id={`${item.id}-other`}
+                        type="text"
+                        autoComplete="off"
+                        enterKeyHint="done"
+                        maxLength={200}
+                        autoFocus
+                        value={state.others[item.id] ?? ""}
+                        disabled={streaming}
+                        placeholder={OTHER_PLACEHOLDER}
+                        onChange={(e) => onOther?.(item.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.nativeEvent.isComposing) e.preventDefault()
+                        }}
+                        className="h-9 w-full max-w-[22rem] rounded-full bg-night-velvet px-3.5 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/20 placeholder:text-night-lilac/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-night-rose/60 disabled:opacity-50 sm:text-[14px]"
+                      />
+                    </div>
+                  )}
+                  {!isOpen && chosen && (chosen !== OTHER_ANSWER || pickedAnswer(state, item.id)) && (
                     <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-night-rose/10 px-3 py-1 text-[13px] font-medium text-night-petal ring-1 ring-inset ring-night-rose/40">
                       <Check className="h-3.5 w-3.5" aria-hidden="true" />
                       <span className="sr-only">You answered: </span>
-                      {chosen}
+                      {chosen === OTHER_ANSWER ? state.others[item.id]?.trim() : chosen}
                     </p>
                   )}
                   {item.id === lastOpenId && (

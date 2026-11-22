@@ -30,9 +30,20 @@
 // claimed against their limits, read once each (lib/finder/attachments.ts),
 // and only their notes are kept: in the session's context, shown as chips,
 // and as text in the stored conversation. No file is stored.
+//
+// The instant first answer (issue #97): the first message of a conversation
+// as the visitor sees it (no session id, or a session that has shown nothing),
+// without files or a wrap choice, is answered here with six gifts from
+// Majnu's own catalogue (lib/finder/catalog-match.ts) and no model call: the
+// text line, the options with source "catalogue", then done. The options are
+// saved as the session's last options, so they can be chosen and wrapped, with
+// a marker that tells the next model turn what the visitor saw. Without
+// catalogue rows the message goes to Majnu, who asks first, as before.
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import * as z from "zod/v4"
 import { describeError } from "@/lib/agents/errors"
+import { loadCatalogue } from "@/lib/finder/catalog"
+import { catalogueAnswer, catalogueShownText, type CatalogueAnswer } from "@/lib/finder/catalog-match"
 import { runFinderTurn, type FinderTurnState, type WrapFrame } from "@/lib/finder/agent"
 import { mergeNotes, readMessageFiles, sharedFilesText, type ReadableFile } from "@/lib/finder/attachments"
 import { baseContext, canonicalLocale, localeTimezone, requestLocation } from "@/lib/finder/context"
@@ -40,7 +51,7 @@ import { FINDER_FILE_PART, FINDER_REQUEST_PART, type FinderEvent } from "@/lib/f
 import { FILE_LIMITS, checkSharedFile, displayFileName, type FileProblem } from "@/lib/finder/file-rules"
 import { canStartSession, findOpenSession, sessionMessagesResult } from "@/lib/finder/limits"
 import { textsFor } from "@/lib/finder/messages"
-import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession } from "@/lib/finder/sessions"
+import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession, type StoredOptions } from "@/lib/finder/sessions"
 import { NDJSON_CONTENT_TYPE, createFinderStream } from "@/lib/finder/stream"
 import { WRAP_TEMPLATE_IDS } from "@/lib/finder/wrap-templates"
 import { createClient } from "@/lib/supabase/server"
@@ -99,6 +110,12 @@ function fixedEvents(events: FinderEvent[]): Response {
 }
 
 type Texts = ReturnType<typeof textsFor>
+
+function withoutMarker(shown: StoredOptions): StoredOptions {
+  if (!shown.catalogue) return shown
+  const { options, recommendedId, why } = shown
+  return { options, recommendedId, why }
+}
 
 // The body as JSON, or a multipart body's request part and its files. Null
 // when it cannot be read; "too_big" for a multipart body over the limit.
@@ -243,6 +260,26 @@ export async function POST(request: Request): Promise<Response> {
     return json(500, { error: texts.errors.generic })
   }
 
+  // The instant answer for a first message, when the catalogue has gifts for it.
+  const firstView = !body.data.sessionId || (session.chat.length === 0 && !session.lastOptions)
+  let instant: CatalogueAnswer | null = null
+  if (firstView && !body.data.wrap && fileCount === 0 && body.data.message) {
+    instant = catalogueAnswer({
+      rows: await loadCatalogue(),
+      message: body.data.message,
+      seed: session.id,
+      // A fresh start: the visitor sees nothing said before this message.
+      context: base,
+      browserLanguage: base.language,
+      startedOver,
+    })
+  }
+
+  // The first model turn after the instant answer hears what it showed.
+  const marker = !instant && body.data.sessionId ? session.lastOptions?.catalogue : undefined
+  // Saved without the marker after that turn: it is heard once.
+  const lastOptions = session.lastOptions ? withoutMarker(session.lastOptions) : null
+
   const out = createFinderStream()
   const state: FinderTurnState = {
     sessionId: session.id,
@@ -252,13 +289,15 @@ export async function POST(request: Request): Promise<Response> {
     base,
     browserLanguage: canonicalLocale(locale?.language) ?? base.language,
     context: session.context,
-    lastOptions: session.lastOptions,
+    lastOptions,
     profiles: session.profiles,
     wrap,
-    startedOver,
-    // The first message the visitor sees in this conversation: Majnu asks one
-    // round of questions before it searches.
-    askFirst: session.chat.length === 0 || startedOver,
+    startedOver: startedOver || marker?.startedOver === true,
+    // The first message the visitor sees in this conversation, when the
+    // catalogue did not answer it: Majnu asks one round of questions before it
+    // searches. After the catalogue's answer, Majnu may search at once.
+    askFirst: !marker && (session.chat.length === 0 || startedOver),
+    catalogueShown: marker && session.lastOptions ? catalogueShownText({ ...session.lastOptions, catalogue: marker }) : null,
     emit: out.emit,
   }
 
@@ -268,6 +307,22 @@ export async function POST(request: Request): Promise<Response> {
     try {
       // First, so the client can send the id with every later message.
       if (!body.data.sessionId) out.emit({ type: "session", sessionId: session.id })
+
+      if (instant) {
+        // Saved before the cards appear, so a quick "Choose" finds them.
+        try {
+          await saveFinderSession(session, { chat: session.chat, context: instant.context, lastOptions: instant.options })
+        } catch (error) {
+          console.error("[finder] could not save the catalogue's options", describeError(error))
+          out.emit({ type: "error", message: textsFor(instant.language).errors.saving })
+          return
+        }
+        out.emit({ type: "context", context: instant.context })
+        out.emit({ type: "text", delta: instant.line })
+        const { options, recommendedId, why } = instant.options
+        out.emit({ type: "options", options, recommendedId, why, source: "catalogue" })
+        return
+      }
 
       if (fileCount > 0) {
         const shared = await readMessageFiles({ files, session, now, language: base.language, emit: out.emit })

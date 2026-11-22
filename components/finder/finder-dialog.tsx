@@ -218,6 +218,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     onChoose={choose}
                     onAnswer={finder.answer}
                     onProfile={finder.setProfile}
+                    onOther={finder.setOther}
                     onSendAnswers={() => submit()}
                     draftReady={draft.trim() !== ""}
                     onNewSearch={() => {

@@ -283,6 +283,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 onNewSearch={newSearch}
                 onAnswer={finder.answer}
                 onProfile={finder.setProfile}
+                onOther={finder.setOther}
                 onSendAnswers={() => submit()}
                 draftReady={draft.trim() !== ""}
               />

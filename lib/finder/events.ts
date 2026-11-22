@@ -99,7 +99,10 @@ export type FinderEvent =
   | { type: "status"; label: string }
   | { type: "context"; context: FinderContext }
   // Three options (sometimes fewer), with the one Majnu recommends and why.
-  | { type: "options"; options: GiftOption[]; recommendedId: string; why: string }
+  // `source: "catalogue"`: the instant first answer from Majnu's own gift
+  // catalogue (issue #97), with no research; the finder offers "Want ideas
+  // made just for them?" under it. Added for issue #97 (additive).
+  | { type: "options"; options: GiftOption[]; recommendedId: string; why: string; source?: "catalogue" }
   // A personalising question; `suggestions` become answers the visitor picks
   // (issue #82: picked, not sent, until they send all their answers as one
   // message). `label` names what it asks about in a word or two ("Free

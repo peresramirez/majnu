@@ -47,6 +47,22 @@ describe("reading a stored session back", () => {
     expect(parseOptions(null)).toBeNull()
   })
 
+  it("keeps the catalogue's marker with options from the instant answer, and drops a broken one (issue #97)", () => {
+    const option = { id: "cat-a", title: "T", description: "D", reason: "R", url: "https://shop.example/t" }
+    const marker = { message: "für meine Mama", group: "mother" }
+    expect(parseOptions({ options: [option], recommendedId: "cat-a", why: "W", catalogue: marker })).toEqual({
+      options: [option],
+      recommendedId: "cat-a",
+      why: "W",
+      catalogue: marker,
+    })
+    expect(parseOptions({ options: [option], recommendedId: "cat-a", why: "W", catalogue: { message: "x", group: "aunt" } })).toEqual({
+      options: [option],
+      recommendedId: "cat-a",
+      why: "W",
+    })
+  })
+
   it("does not query for an id that is not a uuid", async () => {
     expect(await getMyFinderSession("../etc")).toBeNull()
     expect(calls).toHaveLength(0)

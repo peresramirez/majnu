@@ -20,7 +20,8 @@ export type FinderItem =
   // `filesRefused`: the request was refused before any was read.
   | { id: string; role: "user"; text: string; files?: SentFile[]; filesRefused?: boolean }
   | { id: string; role: "assistant"; text: string }
-  | { id: string; role: "options"; options: GiftOption[]; recommendedId: string; why: string }
+  // `catalogue`: the instant first answer from Majnu's catalogue (issue #97).
+  | { id: string; role: "options"; options: GiftOption[]; recommendedId: string; why: string; catalogue?: boolean }
   | { id: string; role: "question"; text: string; suggestions: string[]; label?: string; profileRead?: boolean }
   | { id: string; role: "notice"; tone: "limit" | "error"; message: string; reason?: FinderLimitReason; retry?: string }
 
@@ -41,6 +42,9 @@ export type FinderState = {
   // nothing; all of them go in one message (composeAnswers). Kept after
   // sending, so answered questions show what was picked.
   answers: Record<string, string>
+  // Issue #97: what the visitor typed for a question's "Other" answer, by
+  // item id; it counts once "Other" is picked (answers[id] === OTHER_ANSWER).
+  others: Record<string, string>
   // The optional profile field under the open questions.
   profile: ProfileAnswer
   // The visitor sent "No public profile": the field is not offered again.
@@ -57,6 +61,8 @@ export type FinderAction =
   | { type: "send"; text: string; answered?: boolean; files?: SentFile[] }
   // Picks an answer, or clears it when it is picked again.
   | { type: "answer"; itemId: string; value: string }
+  // The visitor's own words for a question's "Other" answer (issue #97).
+  | { type: "other"; itemId: string; text: string }
   | { type: "profile"; link?: string; none?: boolean }
   | { type: "event"; event: FinderEvent }
   // The request failed before or while streaming (network, HTTP status, sign-in).
@@ -88,6 +94,7 @@ export function initialFinderState(): FinderState {
     lastMessage: null,
     nextId: 0,
     answers: {},
+    others: {},
     profile: EMPTY_PROFILE,
     profileDeclined: false,
   }
@@ -122,7 +129,13 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
     case "context":
       return { ...state, context: event.context }
     case "options":
-      return push(state, { role: "options", options: event.options, recommendedId: event.recommendedId, why: event.why })
+      return push(state, {
+        role: "options",
+        options: event.options,
+        recommendedId: event.recommendedId,
+        why: event.why,
+        ...(event.source === "catalogue" ? { catalogue: true } : {}),
+      })
     case "question":
       return push(state, {
         role: "question",
@@ -160,9 +173,14 @@ export function finderReducer(state: FinderState, action: FinderAction): FinderS
     }
     case "answer": {
       const question = openQuestions(state.items).find((q) => q.id === action.itemId)
-      if (!question || state.streaming || !question.suggestions.includes(action.value)) return state
+      if (!question || state.streaming || !(question.suggestions.includes(action.value) || action.value === OTHER_ANSWER)) return state
       if (state.answers[action.itemId] === action.value) return { ...state, answers: withoutKeys(state.answers, [action.itemId]) }
       return { ...state, answers: { ...state.answers, [action.itemId]: action.value } }
+    }
+    case "other": {
+      const question = openQuestions(state.items).find((q) => q.id === action.itemId)
+      if (!question || state.streaming) return state
+      return { ...state, others: { ...state.others, [action.itemId]: action.text.slice(0, MAX_OTHER_ANSWER) } }
     }
     case "profile": {
       if (action.none !== undefined) return { ...state, profile: action.none ? { link: "", none: true } : { ...state.profile, none: false } }
@@ -202,6 +220,13 @@ export function finderReducer(state: FinderState, action: FinderAction): FinderS
 export const NO_PROFILE = "No public profile"
 export const PROFILE_FIELD_LABEL = "Their Instagram, TikTok or LinkedIn (optional)"
 export const SEND_ANSWERS = "Send answers"
+// Issue #97: every question's last answer, which opens a field for the
+// visitor's own words. Sent as "Free time: other: restores old motorbikes."
+export const OTHER_ANSWER = "Other"
+export const OTHER_PLACEHOLDER = "Your own answer"
+const MAX_OTHER_ANSWER = 200
+// Under the catalogue's instant ideas (issue #97), above the personalise button.
+export const CATALOGUE_OFFER = "Want ideas made just for them?"
 // The message box's placeholder while questions are open.
 export const ANSWER_PLACEHOLDER = "Or answer in your own words"
 const MAX_PROFILE_LINK = 300
@@ -240,10 +265,13 @@ function sentence(text: string): string {
 // The one message that answers the open questions: each picked answer, as
 // "Free time: video games." (or the question and the answer when Majnu gave
 // no label), then the profile field, then what the visitor typed.
-export function composeAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined">, typed: string): string {
+export function composeAnswers(
+  state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined"> & { others?: Record<string, string> },
+  typed: string,
+): string {
   const parts: string[] = []
   for (const question of openQuestions(state.items)) {
-    const answer = state.answers[question.id]?.trim()
+    const answer = pickedAnswer(state, question.id)
     if (!answer) continue
     parts.push(question.label ? sentence(`${question.label.trim()}: ${answer}`) : `${question.text.trim()} ${sentence(answer)}`)
   }
@@ -255,8 +283,18 @@ export function composeAnswers(state: Pick<FinderState, "items" | "answers" | "p
   return parts.join(" ")
 }
 
+// A question's answer as it is sent: the picked one, or for "Other" the
+// visitor's own words as "other: …" (nothing while the field is empty).
+export function pickedAnswer(state: Pick<FinderState, "answers"> & { others?: Record<string, string> }, itemId: string): string {
+  const answer = state.answers[itemId]?.trim()
+  if (!answer) return ""
+  if (answer !== OTHER_ANSWER) return answer
+  const own = state.others?.[itemId]?.trim().replace(/\s+/g, " ")
+  return own ? `other: ${own}` : ""
+}
+
 // Something to send besides typed words: a picked answer or the profile field.
-export function hasAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined">): boolean {
+export function hasAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined"> & { others?: Record<string, string> }): boolean {
   return composeAnswers(state, "") !== ""
 }
 
