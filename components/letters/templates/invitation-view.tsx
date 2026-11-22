@@ -26,6 +26,7 @@ import {
 } from "../event-time"
 import { GiftList } from "../gift-card"
 import { useLetter, useMounted } from "../letter-context"
+import { VoiceNoteSlot } from "../voice-player"
 import { Wishlist } from "../wishlist"
 import { Paragraphs, SignOff } from "../letter-text"
 import { monogram, wholeName } from "../names"
@@ -216,6 +217,8 @@ function Elegant({ content, start, countdown, claimed }: ViewProps) {
           </h1>
 
           <Paragraphs body={content.body} className="rise mx-auto mt-6 max-w-[34ch] text-[var(--paper-ink)]" style={{ animationDelay: "240ms" }} />
+          {/* The hosts' voice, under their words on the card. */}
+          <VoiceNoteSlot tone="paper" align="center" className="rise mt-8 max-w-[300px]" style={{ animationDelay: "280ms" }} />
 
           {event && start ? (
             <div className="rise mt-9" style={{ animationDelay: "320ms" }}>
@@ -308,6 +311,25 @@ function Playful({ content, start, countdown, claimed }: ViewProps) {
         </h1>
 
         <Paragraphs body={content.body} className="pop mt-6 max-w-[36ch]" style={{ animationDelay: "160ms" }} />
+
+        {/* The host's voice on a paper ticket, like the one below it. */}
+        <VoiceNoteSlot
+          tone="paper"
+          className="pop mt-8 rounded-full py-2 pl-2 pr-5 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.6)]"
+          style={
+            {
+              animationDelay: "200ms",
+              "--vp-surface": "var(--paper)",
+              "--vp-button": "var(--accent)",
+              "--vp-button-ink": "var(--accent-ink)",
+              "--vp-played": "var(--accent)",
+              "--vp-font": "var(--display)",
+              "--vp-font-weight": "700",
+              "--vp-font-style": "normal",
+              "--vp-title-size": "17px",
+            } as CSSProperties
+          }
+        />
 
         {event && parts && start ? (
           <div className="pop mt-9 flex overflow-hidden rounded-[22px] shadow-[0_24px_50px_-28px_rgba(0,0,0,0.6)]" style={{ animationDelay: "240ms" }}>

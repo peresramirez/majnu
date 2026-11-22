@@ -5,7 +5,8 @@
 //   ?days=3            countdown with that many doors (1 to 31)
 //   ?event=0           invitation without its event
 //   ?guest=1           as a guest sees it: the gift list's buttons work
-//   ?audio=1           with a (silent) voice note: the "Tap to hear" band
+//   ?audio=1           with the sample voice note (public/dev/voice-note.m4a):
+//                      the voice player inside the template, once it is open
 //   ?palette=rose, ?font=script  try the other moods
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"

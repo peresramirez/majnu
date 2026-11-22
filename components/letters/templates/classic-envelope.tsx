@@ -10,6 +10,7 @@ import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
 import { wholeName } from "../names"
 import { paletteOf } from "../theme"
+import { VoiceNoteSlot } from "../voice-player"
 
 type Stage = "sealed" | "opening" | "open" | "done"
 
@@ -211,6 +212,8 @@ export function ClassicEnvelope({ content }: { content: LetterContent }) {
               {content.headline}
             </h1>
             <Ornament align="start" className="rise my-8 text-[var(--paper-accent)]" />
+            {/* The sender's voice, clipped to the top of the letter. */}
+            <VoiceNoteSlot tone="paper" className="rise mb-9" style={{ animationDelay: "200ms" }} />
             <Paragraphs body={content.body} stagger />
             <SignOff
               signOff={content.signOff}

@@ -24,6 +24,7 @@ import { useLetter } from "../../letter-context"
 import { Paragraphs, SignOff } from "../../letter-text"
 import { monogram, wholeName } from "../../names"
 import { paletteOf } from "../../theme"
+import { VoiceNoteSlot } from "../../voice-player"
 import { Wishlist } from "../../wishlist"
 import { BrokenSeal, EnvelopeDrawing } from "./drawing"
 import { cardWords, coupleNames, hasWebGL } from "./layout"
@@ -336,6 +337,8 @@ export function WeddingEnvelopeView({ content, claimed }: { content: LetterConte
             className="rise mt-6 rounded-[3px] px-6 pb-9 pt-8 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.5)] sm:px-8"
             style={{ ...paperStyle, animationDelay: "650ms" }}
           >
+            {/* The hosts' voice, above their note. */}
+            <VoiceNoteSlot tone="paper" className="mb-7 border-b border-[var(--line)] pb-6" />
             <Paragraphs body={content.body} />
             <SignOff signOff={content.signOff} senderName={content.senderName} className="mt-8" />
           </section>

@@ -19,6 +19,8 @@ import { Postcard } from "./templates/postcard"
 import { TreasureMap } from "./templates/treasure-map"
 import { WeddingEnvelope3D } from "./templates/wedding-envelope-3d"
 import { paletteOf, themeStyle } from "./theme"
+import { VoiceNoteProvider } from "./voice-player"
+import { isOwnAudioSrc, templateHasVoiceSlot } from "./voice-player-model"
 
 // Safari 26 and later colour their status bar and toolbar from the root's
 // background (theme-color is ignored), so the page's root takes the template's
@@ -55,26 +57,34 @@ function Template({ letter }: { letter: PublicLetter }) {
   }
 }
 
-// `audio` is the sender's voice note, when the letter has one (issue #38):
-// the page fills it on the server and every letter template shows the same
-// "Tap to hear" button at the top, in a band the template's first screen
-// makes room for (AUDIO_SPACE_CSS). Calendars never get one.
+// `audio` is the sender's voice note, when the letter has one (issues #38 and
+// #83). The page fills it on the server. Templates that place
+// <VoiceNoteSlot /> in their own story (VOICE_NOTE_IN_TEMPLATE) get it through
+// VoiceNoteProvider and show the voice player there, once the envelope or the
+// gift is open. Any other letter template shows the "Tap to hear" pill at the
+// top, in a band its first screen makes room for (AUDIO_SPACE_CSS). Calendars
+// never get a note, and a note that is not on our own domain is dropped.
 export function LetterRenderer({ letter, audio }: { letter: PublicLetter; audio?: LetterAudio | null }) {
-  const note = audio && letter.kind === "letter" ? audio : null
+  const note = audio && letter.kind === "letter" && isOwnAudioSrc(audio.src) ? audio : null
+  const inTemplate = note ? templateHasVoiceSlot(letter.templateId) : false
+  const pill = note && !inTemplate ? note : null
   return (
     <div
       className={`${letterFontVariables} min-h-[100svh] antialiased`}
       style={{ ...themeStyle(letter.content.theme), background: "var(--page-flat)", color: "var(--page-ink)" }}
       data-template={letter.templateId}
       data-letter-page=""
-      data-audio-space={note ? "" : undefined}
+      data-audio-space={pill ? "" : undefined}
+      data-voice-note={note ? (inTemplate ? "template" : "pill") : undefined}
     >
       <style>{rootColourCss(paletteOf(letter.content.theme).pageFlat)}</style>
-      {note ? <style>{AUDIO_SPACE_CSS}</style> : null}
+      {pill ? <style>{AUDIO_SPACE_CSS}</style> : null}
       {/* First in the page, as it is first on screen: keyboards and screen readers meet it before the letter. */}
-      {note && letter.kind === "letter" ? <AudioNote audio={note} senderName={letter.content.senderName} /> : null}
+      {pill ? <AudioNote audio={pill} senderName={letter.content.senderName} /> : null}
       <LetterProvider slug={letter.slug} ownerPreview={letter.ownerPreview}>
-        <Template letter={letter} />
+        <VoiceNoteProvider note={note && inTemplate ? { audio: note, senderName: letter.content.senderName } : null}>
+          <Template letter={letter} />
+        </VoiceNoteProvider>
       </LetterProvider>
     </div>
   )
