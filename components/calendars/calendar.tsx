@@ -351,7 +351,7 @@ export function Calendar({ content, variant }: { content: PublicCalendarContent;
         <MadeWith />
       </div>
 
-      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-10 flex justify-center px-4">
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(1.5rem+var(--safe-bottom))] z-10 flex justify-center px-4">
         {notice ? (
           <p className="cal-notice rounded-full px-4 py-2.5 text-[14px] font-medium shadow-lg" style={{ background: "var(--page-ink)", color: "var(--page-flat)" }}>
             {notice}

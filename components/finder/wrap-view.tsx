@@ -56,7 +56,7 @@ export function WrapFooter({ wrap }: { wrap: OpenWrap }) {
   const meta = [option.price, shopName(option)].filter(Boolean).join(" · ")
   const error = wrap.stage === "choose" ? wrap.error : undefined
   return (
-    <div className="shrink-0 border-t border-night-petal/10 bg-night-plum pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5">
+    <div className="shrink-0 border-t border-night-petal/10 bg-night-plum pb-[max(10px,var(--safe-bottom))] pt-2.5">
       {/* Same padding as the content above, so the edges line up. */}
       <div className="px-4 sm:px-5">
         {error && (
