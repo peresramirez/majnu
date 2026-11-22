@@ -217,9 +217,11 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
             return (
               <li key={item.id} data-options className="scroll-mt-4">
                 <h2 className="sr-only">{item.options.length === 1 ? "One gift idea" : `${item.options.length} gift ideas`}</h2>
-                <ul className="grid gap-3 md:grid-cols-3">
+                {/* Six ideas, the recommended one first: a row to swipe on phones (the
+                    next card peeks in), three by two from md up. */}
+                <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] md:grid md:grid-cols-3 md:overflow-visible md:pb-0">
                   {item.options.map((option) => (
-                    <li key={option.id}>
+                    <li key={option.id} className="w-[78%] max-w-[300px] shrink-0 snap-start md:w-auto md:max-w-none">
                       <GiftOptionCard option={option} recommended={option.id === item.recommendedId} onChoose={onChoose} />
                     </li>
                   ))}

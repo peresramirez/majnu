@@ -1,11 +1,13 @@
 // The gift finder agent (issue #31, docs/plan.md "Gift finder"). The visitor
-// says who the gift is for. Majnu searches at once when it knows enough (or
-// the visitor wants ideas now), assuming the rest (relationship, an age range,
-// the place and currency from the network) and showing those assumptions; or
-// it asks one to three questions first when what is missing would change the
-// gifts a lot (issue #70). It shows three options with one recommended, and
-// may add one follow-up question under them. Asked to personalise, it asks up
-// to three questions with tappable answers and searches again.
+// says who the gift is for. On the first message of a conversation Majnu
+// always asks one round of one to three quick questions with answers to tap,
+// and searches only once the visitor has answered (22 November): the server
+// refuses a search on that first message (`askFirst`). Then it searches,
+// assuming the rest (relationship, an age range, the place and currency from
+// the network) and showing those assumptions. It shows six options with one
+// recommended, first, and may add one follow-up question under them. Asked to
+// personalise, it asks up to three questions with tappable answers and
+// searches again.
 //
 // A short loop of its own on client.beta.messages.stream(), like the main agent
 // (lib/agents/main.ts), with four tools:
@@ -13,7 +15,7 @@
 //   fills in default age ranges, checks the limits, and runs the research
 //   sub-agent (lib/agents/research.ts) in the visitor's language and country
 //   (or the country the gift goes to, when the visitor named another);
-// - ask_questions: questions before a first search, or to personalise;
+// - ask_questions: the first message's questions, or to personalise;
 // - read_profile (issues #34 and #89): a public Instagram, TikTok or LinkedIn
 //   profile, or another public page, that the visitor pasted, turned into a
 //   few interests (lib/social/). Several links may be read in one session,
@@ -83,7 +85,7 @@ export const MAX_FINDER_REQUESTS = 3
 // Links read in one visitor message, one read_profile call each.
 export const MAX_PROFILE_CALLS_PER_TURN = 3
 const MAX_TOKENS = 8192
-export const OPTIONS_PER_SEARCH = 3
+export const OPTIONS_PER_SEARCH = 6
 const MAX_QUESTIONS = 3
 const MAX_SUGGESTIONS = 4
 
@@ -99,11 +101,11 @@ The context block
 - Each visitor message starts with a <context> block from the app: today's date, the visitor's browser language, the country and region their connection comes from, the local currency, and on the wrap step the gift and design they chose. The visitor did not write it and does not see it. Use it, but don't mention it unless they ask how you know where they are.
 - The connection shows where the visitor is, not where the person lives.
 
-Search now or ask first
-- Search at once with find_gifts when you know who the gift is for and nothing that is missing would change the gifts much, or when the visitor wants ideas straight away. "Find a gift for my mother" is enough: assume the rest. The app shows your assumptions as small chips the visitor can correct.
-- Ask first with ask_questions when a missing fact would change the gifts a lot, or when the visitor asks you to research the person or get to know them first. Ask one to three short questions, the one that matters most first, each with two to four short answers to tap. Then wait for the answers.
+Ask first, then search
+- On the visitor's first message, always ask before you search, even for a short request such as "Find a gift for my mother": read what they wrote, then call ask_questions once with one to three short questions, the one that matters most first, each with two to four short answers to tap. Then wait for the answers. If the first message has a profile link, read it with read_profile first, then ask.
 - Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you, and never ask again the followUp question you put under the options: if they didn't answer it, ask about something else.
-- Once the visitor has answered, search with what you know. Don't ask again before you have shown options.
+- Once the visitor has answered, search with find_gifts with what you know, and assume the rest. The app shows your assumptions as small chips the visitor can correct. Don't ask again before you have shown options.
+- After that first round, search at once when the visitor wants other gifts or changes something, and ask again only to personalise or when they ask you to get to know the person first.
 - Your questions can invite the visitor to tell you more in their own words: what the person loves, what they talk about, what they do all day.
 - Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn, with "No public profile" to tap. The visitor can put one link or several in it. So don't ask for a profile in your questions.
 - The visitor answers all your questions in one message, such as "Free time: video games. Occasion: birthday.", sometimes with a profile link or their own words after it.
@@ -118,7 +120,7 @@ Finding gifts
 - about carries everything you know about the person and the occasion, including what is already in the other fields, for the researcher, who sees nothing else.
 - status is a few words in the visitor's language for the line the app shows while you search, such as "Looking for gaming gifts…".
 - followUp is one short question that would most improve the next search, with two to four answers to tap, such as what they do in their free time when you know little about them. The app shows it under the options. Use null when you already know enough to choose well.
-- The visitor then sees three options and the one you recommend, with why. Don't list or repeat them.
+- The visitor then sees six options and the one you recommend, with why. Don't list or repeat them.
 - If the visitor corrects an assumption ("she's 60, not 45") or adds something that changes the choice, call find_gifts again with everything you now know.
 
 Personalising
@@ -127,7 +129,7 @@ Personalising
 - When the visitor answers, call find_gifts again with everything you now know.
 
 Public profiles
-- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram, TikTok or LinkedIn, or a link to a public page about the person, call read_profile with it, then find_gifts. With several links, call read_profile once for each, one after another, then find_gifts once. Only for a link or handle the visitor gave: never guess one or look someone up.
+- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram, TikTok or LinkedIn, or a link to a public page about the person, call read_profile with it, then find_gifts (on the first message, ask_questions instead). With several links, call read_profile once for each, one after another, then find_gifts once. Only for a link or handle the visitor gave: never guess one or look someone up.
 - read_profile gives back a few of the person's interests. Put them in find_gifts' interests next to what the visitor said. Don't list them in your reply: the app shows them as chips.
 - If read_profile says it read a corrected link because of a typo, mention the link it read in a few words. If it says a link may be a typo, ask once with ask_questions whether they meant the corrected link, with it as an answer to tap.
 - If a profile could not be read, say why in one short sentence and offer the next step: check the link, make the profile public, or tell you about the person. Then search with what you know. Never say you can't try again while read_profile says more links can be read.
@@ -165,7 +167,7 @@ const nullable = (schema: Record<string, unknown>, description: string) => ({ an
 const FIND_GIFTS_TOOL: BetaTool = {
   name: "find_gifts",
   description:
-    "Search the web for three gift options for the person, in the visitor's language and country, with one recommended. The visitor sees your assumptions as chips, then the options. One call per visitor message.",
+    "Search the web for six gift options for the person, in the visitor's language and country, with one recommended. The visitor sees your assumptions as chips, then the options. One call per visitor message, never on the visitor's first message.",
   strict: true,
   input_schema: {
     type: "object",
@@ -234,7 +236,7 @@ const FIND_GIFTS_TOOL: BetaTool = {
 const ASK_QUESTIONS_TOOL: BetaTool = {
   name: "ask_questions",
   description:
-    "Ask the visitor one to three short questions, before a first search when a missing fact would change the gifts a lot, or to personalise the gift. Each has two to four short answers the visitor can tap. After this, wait for the answers.",
+    "Ask the visitor one to three short questions: always on their first message, before any search, or later to personalise the gift. Each has two to four short answers the visitor can tap. After this, wait for the answers.",
   strict: true,
   input_schema: {
     type: "object",
@@ -437,6 +439,10 @@ export type FinderTurnState = {
   // the conversation's text about them, and their notes, merged into the
   // next search's context even if the model leaves them out.
   sharedFiles?: { text: string; notes: string[] } | null
+  // The first message of a conversation as the visitor sees it (a new session,
+  // or one continued after starting over): Majnu asks one round of questions
+  // before any search, so find_gifts is refused until it has (22 November).
+  askFirst?: boolean
   emit: (event: FinderEvent) => void
 }
 
@@ -568,14 +574,16 @@ function randomId(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 10)
 }
 
-// Up to three options with a link (the finder shows nothing it cannot link to),
-// always including the one the researcher recommends. Null when none has a link.
+// Up to six options with a link (the finder shows nothing it cannot link to),
+// always including the one the researcher recommends, which comes first. Null
+// when none has a link.
 export function toOptions(report: ResearchReport, makeId: () => string = randomId): StoredOptions | null {
   const linked = report.ideas.map((idea, index) => ({ idea, index })).filter(({ idea }) => idea.url)
   if (linked.length === 0) return null
   let kept = linked.slice(0, OPTIONS_PER_SEARCH)
   const recommended = linked.find(({ index }) => index === report.recommended)
   if (recommended && !kept.includes(recommended)) kept = [...kept.slice(0, OPTIONS_PER_SEARCH - 1), recommended]
+  if (recommended) kept = [recommended, ...kept.filter((entry) => entry !== recommended)]
 
   const options: GiftOption[] = kept.map(({ idea }) => ({
     id: makeId(),
@@ -587,8 +595,8 @@ export function toOptions(report: ResearchReport, makeId: () => string = randomI
     ...(idea.imageUrl ? { imageUrl: idea.imageUrl } : {}),
     ...(idea.shop ? { shop: idea.shop } : {}),
   }))
-  const pick = Math.max(0, kept.findIndex(({ index }) => index === report.recommended))
-  return { options, recommendedId: options[pick].id, why: report.why || options[pick].reason }
+  // The recommended one is first; without one (its idea had no link), the first.
+  return { options, recommendedId: options[0].id, why: (recommended && report.why) || options[0].reason }
 }
 
 // What the finder model sees of a search: enough to talk about the options
@@ -638,6 +646,8 @@ function failureMessage(error: unknown, language: string): string {
 
 type TurnFlags = {
   searched: boolean
+  // ask_questions ran in this turn.
+  asked?: boolean
   // read_profile calls that tried a link in this turn, and the interests of
   // the reads that worked, newest first.
   profileCalls?: number
@@ -647,6 +657,16 @@ type TurnFlags = {
 async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
   if (flags.searched) {
     return { result: result(call, "Only one search per visitor message. Wait for the visitor's next message.", true), terminal: true }
+  }
+  if (state.askFirst && !flags.asked) {
+    return {
+      result: result(
+        call,
+        "Not searched: this is the visitor's first message. Ask them one round of one to three quick questions with ask_questions first, then wait for their answers.",
+        true,
+      ),
+      terminal: false,
+    }
   }
   const parsed = FindGiftsInput.safeParse(withoutNulls(call.input))
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
@@ -731,7 +751,7 @@ async function askFollowUp(followUp: FindGiftsInput["followUp"], state: FinderTu
   return true
 }
 
-async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Promise<CallOutcome> {
+async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
   const parsed = AskQuestionsInput.safeParse(call.input)
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
 
@@ -745,6 +765,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
       terminal: true,
     }
   }
+  flags.asked = true
   for (const question of parsed.data.questions) {
     state.emit(questionEvent(question, state))
   }
@@ -927,7 +948,7 @@ async function runCall(call: BetaToolUseBlock, state: FinderTurnState, flags: Tu
   try {
     if (call.name === FILL_WRAP_TOOL.name) return fillWrap(call, state)
     if (call.name === FIND_GIFTS_TOOL.name) return await findGifts(call, state, flags)
-    if (call.name === ASK_QUESTIONS_TOOL.name) return await askQuestions(call, state)
+    if (call.name === ASK_QUESTIONS_TOOL.name) return await askQuestions(call, state, flags)
     if (call.name === READ_PROFILE_TOOL.name) return await readProfile(call, state, flags)
     return { result: result(call, `There is no tool called ${call.name}.`, true), terminal: false }
   } catch (error) {
