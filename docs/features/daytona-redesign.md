@@ -44,14 +44,14 @@ flowchart LR
 
 ### The snapshot
 
-Every sandbox starts from the snapshot `majnu-letters-v2` (22 November, with the 3D skill; `majnu-letters-v1` still exists and is no longer the default), built in the `eu` region by [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts) (`--print` shows the Dockerfile and builds nothing):
+Every sandbox starts from the snapshot `majnu-letters-v3` (22 November, with the 3D skill; `majnu-letters-v1` and the intermediate `majnu-letters-v2`, which lacked the skill's `[hidden]` rule, still exist and are no longer used), built in the `eu` region by [`scripts/daytona/build-snapshot.mts`](../../scripts/daytona/build-snapshot.mts) (`--print` shows the Dockerfile and builds nothing):
 
 - `node:22-bookworm-slim`, with Claude Code pinned to **2.1.323**, the version npm tagged `stable` when the snapshot was defined, so a CLI release cannot change flags under us. Auto-update, telemetry, error reporting and non-essential traffic are switched off.
 - The project Claude Code works in, [`daytona/sandbox/`](../../daytona/sandbox/), copied to `/home/daytona/letter`: the [`majnu-letter` skill](../../daytona/sandbox/.claude/skills/majnu-letter/SKILL.md) with the page rules and its [3D file](../../daytona/sandbox/.claude/skills/majnu-letter/3d.md), a [`CLAUDE.md`](../../daytona/sandbox/CLAUDE.md), [permissions](../../daytona/sandbox/.claude/settings.json) that allow only the file tools, and one rendered example per template in `daytona/sandbox/reference/rendered/` (made by [`export-references.mts`](../../scripts/daytona/export-references.mts) from the workbench).
 - The template sources, the schema and the fixtures as read-only reference.
 - No keys. The Anthropic key is passed to each run's command only.
 
-Snapshots are immutable by name. After changing the templates, the skill or the CLI version, refresh the rendered examples, build the next name (`majnu-letters-v3`) by setting `DAYTONA_SNAPSHOT` for the build, and then move `DEFAULT_SNAPSHOT` in `lib/daytona/config.ts` to it (or set `DAYTONA_SNAPSHOT` where the job runs). Sandboxes already running keep the old one, and a bad build never replaces a working one. The alternative, a plain sandbox with the templates pushed in at every start, would start slower and not pin the CLI, for the same upkeep.
+Snapshots are immutable by name. After changing the templates, the skill or the CLI version, refresh the rendered examples, build the next name (`majnu-letters-v4`) by setting `DAYTONA_SNAPSHOT` for the build, and then move `DEFAULT_SNAPSHOT` in `lib/daytona/config.ts` to it (or set `DAYTONA_SNAPSHOT` where the job runs). Sandboxes already running keep the old one, and a bad build never replaces a working one. The alternative, a plain sandbox with the templates pushed in at every start, would start slower and not pin the CLI, for the same upkeep.
 
 ### The job
 
@@ -154,7 +154,7 @@ flowchart LR
 | `DAYTONA_API_KEY` | Daytona access. A Worker secret, used by the queue consumer |
 | `DAYTONA_ANTHROPIC_API_KEY` | Optional key of its own for the sandbox, with a low spend limit; otherwise `ANTHROPIC_API_KEY` is used |
 | `DAYTONA_API_KEY_FALLBACK`, `ANTHROPIC_API_KEY_FALLBACK` | Optional fallbacks: the sandbox starts with the Daytona fallback when Daytona refuses the primary for its key, quota or billing, and Claude Code gets the Anthropic fallback when a free token count shows its primary refused. Both are counted against `FALLBACK_CAP_USD` a month ([provider-fallbacks.md](provider-fallbacks.md)) |
-| `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v2`, `eu`, `https://app.daytona.io/api` |
+| `DAYTONA_SNAPSHOT`, `DAYTONA_TARGET`, `DAYTONA_API_URL` | Defaults `majnu-letters-v3`, `eu`, `https://app.daytona.io/api` |
 
 The SDK is `@daytona/sdk` 0.233 (`^0.233.0` in `package.json`), used only by the snapshot script. Queues `majnu-designs` and `majnu-designs-dlq` are bound in [`wrangler.jsonc`](../../wrangler.jsonc) and created by `scripts/deploy.sh` if missing.
 

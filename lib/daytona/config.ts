@@ -6,10 +6,10 @@
 // How it fits together is in docs/plan.md, "Daytona redesign".
 
 // The snapshot every redesign sandbox starts from. Rebuild it under a new name
-// (majnu-letters-v3, ...) when the templates, the skill or the Claude Code
+// (majnu-letters-v4, ...) when the templates, the skill or the Claude Code
 // version change, then move this default to it (or set DAYTONA_SNAPSHOT); running
 // sandboxes keep the old one, and a bad build never replaces a working one.
-export const DEFAULT_SNAPSHOT = "majnu-letters-v2"
+export const DEFAULT_SNAPSHOT = "majnu-letters-v3"
 
 // The API for our keys. DAYTONA_API_URL overrides it.
 export const DEFAULT_API_URL = "https://app.daytona.io/api"
