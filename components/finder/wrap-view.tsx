@@ -360,11 +360,22 @@ export function WrapView({ finder, wrap }: Props) {
         </h2>
         <p className="mt-1 text-sm leading-relaxed text-night-lilac">This is the page they will open. Send them the link, or show them the QR code.</p>
         <div className="mt-4 grid gap-5 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)] md:gap-8 lg:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
-          {/* On phones the link comes first: sending it is the point. */}
+          {/* On phones this column comes first. The voice note sits above the
+              link (developer's report, 22 November): with the link first,
+              senders shared it before adding their voice, and the note never
+              reached the gift. It saves itself as soon as recording stops. */}
           <div className="order-first space-y-4 md:order-none md:col-start-2 md:row-start-1 md:min-h-0 md:overflow-y-auto">
+            <div className="rounded-[20px] bg-night-petal/[0.04] px-4 py-3.5 ring-1 ring-inset ring-night-petal/15">
+              <p className="text-[15px] font-semibold text-night-petal">Add your voice (optional)</p>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-night-lilac">Record a few words before you send the link. It saves itself when you stop.</p>
+              <AudioNoteRecorder
+                className="mt-1 !border-t-0 !pt-0"
+                letterId={wrap.letterId}
+                recipientName={wrap.details.recipientName.trim() || null}
+                onChange={() => setNoteVersion((v) => v + 1)}
+              />
+            </div>
             <SharePanel url={transport.shareUrl(wrap.slug)} />
-            {/* A voice note: most senders add it here, right after wrapping. */}
-            <AudioNoteRecorder letterId={wrap.letterId} recipientName={wrap.details.recipientName.trim() || null} onChange={() => setNoteVersion((v) => v + 1)} />
             {/* The personalised wrapper: a guest is asked to create a free account first. */}
             <MakeItUnique letterId={wrap.letterId} />
             <KeepingNote account={account} />

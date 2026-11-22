@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { initialNoteState, noteForm, noteReducer, noteStatus, savedNote, type NoteEvent, type NoteState } from "@/components/voice/audio-note-model"
+import { canSaveRecording, initialNoteState, noteForm, noteReducer, noteStatus, savedNote, type NoteEvent, type NoteState } from "@/components/voice/audio-note-model"
 import type { AudioNoteSummary } from "@/lib/audio/rules"
 
 const note: AudioNoteSummary = { seconds: 42, caption: null, mimeType: "audio/mp4", sizeBytes: 9000, updatedAt: "2026-11-22T10:00:00Z", src: "/api/letters/x/audio/file?v=1" }
@@ -19,24 +19,31 @@ describe("initialNoteState", () => {
 })
 
 describe("noteReducer", () => {
-  it("records, listens back and saves a first note", () => {
+  it("saves a first note as soon as the recording stops, with no second tap", () => {
     const empty = initialNoteState(null)
-    const draft = run(empty, { type: "recorded", recording })
-    expect(draft).toEqual({ view: "draft", recording, saved: null, notice: null })
-    const saving = run(draft, { type: "save" })
-    expect(saving.view).toBe("saving")
+    expect(canSaveRecording(empty)).toBe(true)
+    const saving = run(empty, { type: "recorded", recording })
+    expect(saving).toEqual({ view: "saving", recording, saved: null })
     expect(run(saving, { type: "saved", note })).toEqual({ view: "saved", note, notice: { kind: "saved" } })
   })
 
-  it("re-records over a saved note without losing it until the new one is saved", () => {
-    const draft = run(initialNoteState(note), { type: "recorded", recording })
-    expect(savedNote(draft)).toBe(note)
-    expect(run(draft, { type: "discard" })).toEqual({ view: "saved", note, notice: { kind: "discarded" } })
+  it("re-records over a saved note, keeping the old one until the new one is saved", () => {
+    const saving = run(initialNoteState(note), { type: "recorded", recording })
+    expect(saving.view).toBe("saving")
+    expect(savedNote(saving)).toBe(note)
+    expect(run(saving, { type: "saved", note: newer })).toMatchObject({ view: "saved", note: newer })
+  })
+
+  it("after a failed save, tries again, records again or discards", () => {
+    const draft = run(initialNoteState(note), { type: "recorded", recording }, { type: "save_failed", message: "No." })
+    expect(draft).toMatchObject({ view: "draft", saved: note })
     expect(run(draft, { type: "save" }, { type: "saved", note: newer })).toMatchObject({ view: "saved", note: newer })
+    expect(run(draft, { type: "recorded", recording }).view).toBe("saving")
+    expect(run(draft, { type: "discard" })).toEqual({ view: "saved", note, notice: { kind: "discarded" } })
   })
 
   it("keeps the draft when saving fails, with the reason", () => {
-    const failed = run(initialNoteState(note), { type: "recorded", recording }, { type: "save" }, { type: "save_failed", message: "No." })
+    const failed = run(initialNoteState(note), { type: "recorded", recording }, { type: "save_failed", message: "No." })
     expect(failed).toEqual({ view: "draft", recording, saved: note, notice: { kind: "error", message: "No." } })
   })
 
@@ -53,7 +60,8 @@ describe("noteReducer", () => {
   })
 
   it("ignores events that do not fit: no new recording while saving or removing", () => {
-    const saving = run(initialNoteState(null), { type: "recorded", recording }, { type: "save" })
+    const saving = run(initialNoteState(null), { type: "recorded", recording })
+    expect(canSaveRecording(saving)).toBe(false)
     expect(run(saving, { type: "recorded", recording })).toBe(saving)
     const removing = run(initialNoteState(note), { type: "remove" }, { type: "confirm_remove" })
     expect(run(removing, { type: "recorded", recording })).toBe(removing)

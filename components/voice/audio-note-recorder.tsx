@@ -11,7 +11,8 @@
 // to reload a preview.
 //
 // Recording is useVoiceRecorder in its hand-back mode; the states around it
-// are in audio-note-model.ts. Nothing is uploaded until "Save". The microphone
+// are in audio-note-model.ts. A recording is uploaded as soon as it stops (a
+// failed upload stays as a draft with "Try again"). The microphone
 // is released as soon as a recording stops or the component goes away.
 import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { LoaderCircle, Mic, Pause, Play, RotateCcw, Square, Trash2, X } from "lucide-react"
@@ -19,7 +20,7 @@ import { eyebrow, primaryButton, smallButton } from "@/components/app/styles"
 import { sentenceStart, verbFor, wholeName } from "@/components/letters/names"
 import { MAX_NOTE_SECONDS, NOTE_RECORDING_TYPES, type AudioNoteSummary } from "@/lib/audio/rules"
 import { formatSeconds } from "@/lib/voice/rules"
-import { initialNoteState, noteApi, noteReducer, noteStatus, savedNote, type NoteApi } from "./audio-note-model"
+import { canSaveRecording, initialNoteState, noteApi, noteReducer, noteStatus, savedNote, type NoteApi } from "./audio-note-model"
 import { statusMessage, timerLabel } from "./recorder-state"
 import { useAudioPlayer } from "./use-audio-player"
 import { useVoiceRecorder, type Recording } from "./use-voice-recorder"
@@ -67,10 +68,28 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
   const moveFocus = useRef(false)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const stateRef = useRef(state)
+  stateRef.current = state
 
+  // The upload, for a recording that just stopped and for "Try again".
+  const uploadRef = useRef<(recording: Recording) => Promise<void>>(async () => undefined)
+  uploadRef.current = async (current: Recording) => {
+    const outcome = await api.save(letterId, current, browserLanguages())
+    moveFocus.current = true
+    if (outcome.ok && outcome.note) {
+      dispatch({ type: "saved", note: outcome.note })
+      onChangeRef.current?.(outcome.note)
+    } else {
+      dispatch({ type: "save_failed", message: outcome.ok ? "The voice note couldn't be saved just now. Try again in a moment." : outcome.message })
+    }
+  }
+
+  // Saved as soon as it stops: no second tap to forget before sharing the link.
   const onRecording = useCallback((recording: Recording) => {
     moveFocus.current = true
+    const willSave = canSaveRecording(stateRef.current)
     dispatch({ type: "recorded", recording })
+    if (willSave) void uploadRef.current(recording)
   }, [])
   const recorder = useVoiceRecorder({ onRecording, maxSeconds: MAX_NOTE_SECONDS, recordingTypes: NOTE_RECORDING_TYPES })
   const recording = recorder.state.phase !== "idle"
@@ -124,18 +143,13 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
     dispatch(event)
   }
 
+  // "Try again" after a failed save.
   async function save() {
     if (state.view !== "draft") return
     const current = state.recording
     player.stop()
     act({ type: "save" })
-    const outcome = await api.save(letterId, current, browserLanguages())
-    if (outcome.ok && outcome.note) {
-      act({ type: "saved", note: outcome.note })
-      onChangeRef.current?.(outcome.note)
-    } else {
-      act({ type: "save_failed", message: outcome.ok ? "The voice note couldn't be saved just now. Try again in a moment." : outcome.message })
-    }
+    await uploadRef.current(current)
   }
 
   async function remove() {
@@ -166,11 +180,9 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
   const recorderError = recorderNotice?.kind === "error" ? recorderNotice.message : null
   const noteNotice = "notice" in state ? state.notice : null
   const noteError = noteNotice?.kind === "error" ? noteNotice.message : null
-  // The recorder speaks while recording, on its errors and right after a
-  // recording ("Recorded. Listen back, then save it."); the note's own states
-  // (saving, saved, removed) speak otherwise.
-  const justRecorded = state.view === "draft" && !noteError && recorderNotice?.kind === "recorded"
-  const status = recording || recorderError || justRecorded ? statusMessage(recorder.state) : noteStatus(state, name ? sentenceStart(name) : null)
+  // The recorder speaks while recording and on its errors; the note's own
+  // states (saving, saved, removed) speak otherwise.
+  const status = recording || recorderError ? statusMessage(recorder.state) : noteStatus(state, name ? sentenceStart(name) : null)
   const canRecord = mounted && recorder.supported
   const busy = state.view === "saving" || state.view === "removing" || state.view === "loading"
 
@@ -250,7 +262,11 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
       ) : state.view === "draft" || state.view === "saving" ? (
         <>
           <p className="mt-2 text-sm leading-relaxed text-night-lilac">
-            {state.saved ? "Listen back. Saving replaces the note that's there now." : "Listen back, then save it to the gift."}
+            {state.view === "saving"
+              ? "Saving it to the gift…"
+              : state.saved
+                ? "It wasn't saved, so the gift still has the note from before. Try again, or record again."
+                : "It wasn't saved yet. Try again, or record again."}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {listenButton()}
@@ -267,7 +283,7 @@ export function AudioNoteRecorder({ letterId, initial, recipientName, onChange, 
                   Saving…
                 </>
               ) : (
-                "Save voice note"
+                "Try again"
               )}
             </button>
             {state.view === "draft" ? (
