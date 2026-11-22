@@ -107,6 +107,17 @@ describe("the profile field", () => {
     expect(composeAnswers(run([{ type: "profile", link: "@natgeo" }], asked(true)), "")).toBe("")
   })
 
+  it("stays after a profile was read while the session can read more, and takes several links in one answer (issue #89)", () => {
+    // The server sends profileRead: false while another link can be read.
+    const second = run(
+      [{ type: "send", text: "instagram.com/natgeo", answered: true }, ev({ type: "question", text: "Budget?", label: "Budget", suggestions: ["Under 30 €"], profileRead: false }), ev({ type: "done" })],
+      asked(),
+    )
+    expect(showsProfileField(second)).toBe(true)
+    const links = run([{ type: "profile", link: "tiktok.com/@natgeo linkedin.com/in/lena-example" }], second)
+    expect(composeAnswers(links, "")).toBe("tiktok.com/@natgeo linkedin.com/in/lena-example")
+  })
+
   it("is not offered again once the visitor sent No public profile", () => {
     const declined = run([{ type: "profile", none: true }, { type: "send", text: "No public profile.", answered: true }], asked())
     expect(declined.profileDeclined).toBe(true)

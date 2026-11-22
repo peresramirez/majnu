@@ -44,7 +44,7 @@ const session: FinderSession = {
   timezone: "Europe/Berlin",
   chat: [],
   lastOptions: null,
-  profile: null,
+  profiles: { day: "", paid: 0, reads: [] },
 }
 
 function upload(request: Record<string, unknown>, files: { bytes: Uint8Array; name: string; type?: string }[]): Request {

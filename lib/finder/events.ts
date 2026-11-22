@@ -103,9 +103,10 @@ export type FinderEvent =
   // A personalising question; `suggestions` become answers the visitor picks
   // (issue #82: picked, not sent, until they send all their answers as one
   // message). `label` names what it asks about in a word or two ("Free
-  // time"), for that message. `profileRead` says a public profile was already
-  // read in this session, so the finder offers no profile field under the
-  // questions. Both added for issue #82 (additive).
+  // time"), for that message. `profileRead` says the session can read no
+  // more public profiles (issue #89: its 5 reads or 8 attempts are used), so
+  // the finder offers no profile field under the questions. Both added for
+  // issue #82 (additive); the name is kept from when one read was the limit.
   | { type: "question"; text: string; suggestions?: string[]; label?: string; profileRead?: boolean }
   | { type: "limit"; reason: FinderLimitReason; message: string }
   | { type: "error"; message: string }
