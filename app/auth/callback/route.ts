@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { signInErrorPath } from "@/components/auth/callback-url"
-import { afterSignInPath } from "@/lib/billing/next-path"
 import { createClient } from "@/lib/supabase/server"
+import { afterAuthPath } from "@/app/auth/destination"
 
 // Supabase sends the browser here after Google sign-in, after Google is linked
 // to a guest account, and from email links (a guest confirming the address
@@ -32,7 +32,8 @@ export async function GET(request: Request) {
   }
 
   // Where to go after sign-in: `next` if it is a path on this site (carried
-  // from /signin?plan=full-moon or ?next=...), otherwise the dashboard. Never
+  // from /signin?next=..., for example back to a gift after "Make it unique"
+  // asked a guest to create an account), otherwise the gift finder. Never
   // another site, so the callback cannot be used as an open redirect.
-  return NextResponse.redirect(new URL(afterSignInPath(next), siteUrl))
+  return NextResponse.redirect(new URL(afterAuthPath(next), siteUrl))
 }

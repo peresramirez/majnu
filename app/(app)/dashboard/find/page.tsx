@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
-import { FindInvite } from "@/components/app/find-invite"
+import { SharedFinderPanel } from "@/components/finder/finder-panel"
 
 export const metadata: Metadata = { title: "Find a gift" }
 
-// The Find a gift tab, first in the app. Kept thin on purpose: when the finder
-// component can live in the app, it replaces <FindInvite /> here.
+// The Find a gift tab, the app's first screen (issue #47): the gift finder
+// inline. Its state lives in the app shell (FinderProvider), so a conversation
+// survives a visit to another tab.
 export default function FindPage() {
-  return <FindInvite />
+  return <SharedFinderPanel />
 }

@@ -5,8 +5,11 @@
 import * as z from "zod/v4"
 import type { TemplateId, WishlistItem } from "@/lib/letters/schema"
 
-// Only these templates show a gift list and accept claims.
-export const GIFT_LIST_TEMPLATES = ["wedding-invite", "party-invite"] as const satisfies readonly TemplateId[]
+// Only these templates show a gift list and accept claims: the two invitations,
+// the 3D wedding envelope (issue #52), and the party pop box, which is a party
+// invitation when it carries an event. The agent's update_gift_list, POST
+// /api/claim and the host's view in My gifts all go by this list.
+export const GIFT_LIST_TEMPLATES = ["wedding-invite", "party-invite", "wedding-envelope-3d", "party-box"] as const satisfies readonly TemplateId[]
 
 export function takesGiftList(templateId: TemplateId | string | null | undefined): boolean {
   return (GIFT_LIST_TEMPLATES as readonly string[]).includes(templateId ?? "")

@@ -142,6 +142,20 @@ describe("claimGift", () => {
     expect(claims.length).toBeLessThanOrEqual(MAX_CLAIMS_PER_VISITOR)
   })
 
+  it("accepts claims on the 3D wedding envelope and the party pop box (issue #52)", async () => {
+    const envelope = letterFixtures["wedding-envelope-3d"]
+    const claims = fakeDb({ ...invitation, template_id: "wedding-envelope-3d", content: envelope })
+    expect(await claimGift({ slug: SLUG, itemId: "fxenv02", guestName: "Sam", ...guest })).toEqual({ status: "claimed", claimed: ["fxenv02"] })
+    expect(claims[0]).toMatchObject({ item_id: "fxenv02", guest_name: "Sam" })
+
+    fakeDb({ ...invitation, template_id: "party-box", content: { ...letterFixtures["party-box"], wishlist: party.wishlist } })
+    expect(await claimGift({ slug: SLUG, itemId: "fxpty01", guestName: null, ...guest })).toEqual({ status: "claimed", claimed: ["fxpty01"] })
+
+    // The 3D gift box stays a gift: no list, no claims.
+    fakeDb({ ...invitation, template_id: "gift-box-3d" })
+    expect(await claimGift({ slug: SLUG, itemId: "fxpty01", guestName: null, ...guest })).toEqual({ status: "not_found" })
+  })
+
   it("refuses a gift that is not on the list", async () => {
     fakeDb()
     expect(await claimGift({ slug: SLUG, itemId: "nope", guestName: null, ...guest })).toEqual({ status: "item_not_found", claimed: [] })

@@ -81,19 +81,25 @@ export function useFinder(transport: FinderTransport) {
     [run],
   )
 
+  // Back to an empty finder ("New search" in the app's Find a gift tab): stop
+  // any reply, and forget the conversation, its session and the gift being wrapped.
+  const reset = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    busyRef.current = false
+    sessionRef.current = null
+    dispatch({ type: "reset" })
+    dispatchWrap({ type: "back" })
+  }, [])
+
   // A new search from the landing page: forget the conversation and its session.
   const restart = useCallback(
     (raw: string): boolean => {
       if (!raw.trim()) return false
-      abortRef.current?.abort()
-      abortRef.current = null
-      busyRef.current = false
-      sessionRef.current = null
-      dispatch({ type: "reset" })
-      dispatchWrap({ type: "back" })
+      reset()
       return send(raw)
     },
-    [send],
+    [reset, send],
   )
 
   const choose = useCallback((option: GiftOption) => dispatchWrap({ type: "choose", option }), [])
@@ -128,7 +134,7 @@ export function useFinder(transport: FinderTransport) {
     [transport, wrap],
   )
 
-  return { state, wrap, send, restart, choose, chooseTemplate, wrapGift, backToIdeas, checkHostRef, transport }
+  return { state, wrap, send, restart, reset, choose, chooseTemplate, wrapGift, backToIdeas, checkHostRef, transport }
 }
 
 export type Finder = ReturnType<typeof useFinder>

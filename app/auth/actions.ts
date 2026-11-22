@@ -10,8 +10,10 @@ import { createClient } from "@/lib/supabase/server"
 export type GoogleSignInResult = { error: { message: string; code?: string } }
 
 // Continue with Google. `next` is where to land after Google sends the user
-// back, for example the Plan tab for "Choose Full moon". It comes from the
-// browser, so it is checked here (only same-site paths) and again in the callback.
+// back, for example the gift a guest was making when "Make it unique" (the
+// €2.99 personalised wrapper) asked them to create a free account; without
+// one, the callback lands on the gift finder. It comes from the browser, so it
+// is checked here (only same-site paths) and again in the callback.
 //
 // A guest (anonymous account) gets Google linked to the guest account
 // (linkIdentity), so the same user id, and every gift made as a guest, stays.
