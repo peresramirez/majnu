@@ -1,21 +1,29 @@
 // Refunding a wrapper whose design could not be made. The buyer gets every
 // cent back automatically (docs/business-plan.md, "Receipts and refunds"); a
-// wrapper paid with a coupon code gets its code's use back instead, and never
-// reaches Stripe (docs/features/coupons.md).
+// wrapper paid with a coupon code gets its code's use back instead, and one of
+// the day's free designs gets that free design back (docs/features/coupons.md,
+// docs/features/free-designs.md). Neither of those ever reaches Stripe.
 import "server-only"
-import { markFailed, markRefunded, returnCouponUse, type Purchase } from "./purchases"
+import { markFailed, markRefunded, returnCouponUse, returnFreeDesign, type Purchase } from "./purchases"
 import { createStripeClient } from "./stripe"
 
 export type RefundOutcome = { outcome: "refunded"; refundId: string } | { outcome: "failed"; reason: string }
 
-export type GiveBackOutcome = RefundOutcome | { outcome: "code_returned" } | { outcome: "nothing_to_return" }
+export type GiveBackOutcome = RefundOutcome | { outcome: "code_returned" } | { outcome: "free_returned" } | { outcome: "nothing_to_return" }
 
 // What the design job calls when a run fails: a coupon purchase is marked
-// failed and its code gets the use back (in one database call); a paid one is
+// failed and its code gets the use back, a free purchase is marked failed and
+// the free design is given back (each in one database call); a paid one is
 // refunded through Stripe as below.
-export async function giveBack(purchase: Pick<Purchase, "id" | "paymentIntentId" | "couponId">, reason: string): Promise<GiveBackOutcome> {
+export async function giveBack(
+  purchase: Pick<Purchase, "id" | "paymentIntentId" | "couponId" | "freeDay">,
+  reason: string,
+): Promise<GiveBackOutcome> {
   if (purchase.couponId) {
     return (await returnCouponUse(purchase.id, reason)) ? { outcome: "code_returned" } : { outcome: "nothing_to_return" }
+  }
+  if (purchase.freeDay) {
+    return (await returnFreeDesign(purchase.id, reason)) ? { outcome: "free_returned" } : { outcome: "nothing_to_return" }
   }
   return refundPurchase(purchase, reason)
 }

@@ -13,16 +13,23 @@ export type PurchaseView = {
   paidAt: string | null
   finishedAt: string | null
   // "€2.99", from what Checkout actually charged; "Free with a code" when a
-  // coupon code paid for it.
+  // coupon code paid for it; "Free" for one of the day's free designs.
   amount: string
   // Paid with a coupon code (docs/features/coupons.md): no price, no receipt,
   // and a failed run gives the code back instead of a refund.
   freeWithCode: boolean
+  // One of the day's free designs (docs/features/free-designs.md): no price,
+  // no receipt, and a failed run gives the free design back.
+  freeDesign: boolean
   receiptUrl: string | null
   // The gift page, where the design shows once it is done.
   giftUrl: string | null
   giftTitle: string | null
 }
+
+// Today's free designs for this visitor's connection (issue #85): "Free
+// today: 2 of 3 left".
+export type FreeDesigns = { left: number; perDay: number }
 
 // The dialog's starting point for one letter.
 export type WrapperState = {
@@ -36,6 +43,10 @@ export type WrapperState = {
   // (GET /c/<code>), normalised and not yet checked: the dialog opens with it
   // filled in. Null when there is none.
   rememberedCode: string | null
+  // Today's free designs for this connection. While one is left the dialog
+  // offers it first, with no account step and no consent box. Null when free
+  // designs are not offered (switched off, or the address is unknown).
+  freeDesigns: FreeDesigns | null
 }
 
 type Source = {
@@ -48,6 +59,8 @@ type Source = {
   amountCents: number
   currency: string
   couponId: string | null
+  // Set for one of the day's free designs (0012_free_designs.sql).
+  freeDay?: string | null
   receiptUrl: string | null
   letter: { slug: string; title: string | null } | null
 }
@@ -61,9 +74,11 @@ export function formatAmount(cents: number, currency: string): string {
 }
 
 export const FREE_WITH_CODE = "Free with a code"
+export const FREE_DESIGN = "Free"
 
 export function toPurchaseView(purchase: Source): PurchaseView {
   const freeWithCode = purchase.couponId !== null
+  const freeDesign = !freeWithCode && purchase.freeDay != null
   return {
     id: purchase.id,
     status: purchase.status,
@@ -71,9 +86,10 @@ export function toPurchaseView(purchase: Source): PurchaseView {
     createdAt: purchase.createdAt,
     paidAt: purchase.paidAt,
     finishedAt: purchase.finishedAt,
-    amount: freeWithCode ? FREE_WITH_CODE : formatAmount(purchase.amountCents, purchase.currency),
+    amount: freeWithCode ? FREE_WITH_CODE : freeDesign ? FREE_DESIGN : formatAmount(purchase.amountCents, purchase.currency),
     freeWithCode,
-    receiptUrl: freeWithCode ? null : purchase.receiptUrl,
+    freeDesign,
+    receiptUrl: freeWithCode || freeDesign ? null : purchase.receiptUrl,
     giftUrl: purchase.letter ? `/l/${encodeURIComponent(purchase.letter.slug)}` : null,
     giftTitle: purchase.letter?.title ?? null,
   }
@@ -100,6 +116,19 @@ const CODE_WORDS: Partial<Record<PurchaseStatusView, { label: string; detail: st
   failed: { label: "Something went wrong", detail: "The design could not be made. Your code works again, so you can try once more." },
 }
 
-export function statusWords(purchase: Pick<PurchaseView, "status" | "freeWithCode">): { label: string; detail: string } {
-  return (purchase.freeWithCode ? CODE_WORDS[purchase.status] : undefined) ?? STATUS_WORDS[purchase.status]
+// One of the day's free designs: nothing was paid either, and a failed run
+// gives the free design back.
+const FREE_WORDS: Partial<Record<PurchaseStatusView, { label: string; detail: string }>> = {
+  paid: { label: "Free design, starting soon", detail: "Majnu starts your design in a moment." },
+  failed: {
+    label: "Something went wrong",
+    detail: "The design could not be made, so it didn't count as one of your free designs. You can try again.",
+  },
+}
+
+export function statusWords(
+  purchase: Pick<PurchaseView, "status" | "freeWithCode"> & Partial<Pick<PurchaseView, "freeDesign">>,
+): { label: string; detail: string } {
+  const special = purchase.freeWithCode ? CODE_WORDS : purchase.freeDesign ? FREE_WORDS : undefined
+  return special?.[purchase.status] ?? STATUS_WORDS[purchase.status]
 }
