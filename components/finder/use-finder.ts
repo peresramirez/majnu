@@ -113,6 +113,7 @@ export function useFinder(transport: FinderTransport) {
 
   const answer = useCallback((itemId: string, value: string) => dispatch({ type: "answer", itemId, value }), [])
   const setProfile = useCallback((change: { link?: string; none?: boolean }) => dispatch({ type: "profile", ...change }), [])
+  const setOther = useCallback((itemId: string, text: string) => dispatch({ type: "other", itemId, text }), [])
 
   // Back to an empty finder ("New search" in the app's Find a gift tab): stop
   // any reply, and forget the conversation, its session and the gift being wrapped.
@@ -175,6 +176,7 @@ export function useFinder(transport: FinderTransport) {
     send,
     answer,
     setProfile,
+    setOther,
     restart,
     reset,
     choose,

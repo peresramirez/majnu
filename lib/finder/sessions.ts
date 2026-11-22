@@ -37,9 +37,13 @@ import { createClient } from "@/lib/supabase/server"
 import type { ReadFailure } from "@/lib/social/apify"
 import type { ProfileSource } from "@/lib/social/links"
 import type { FinderContext, GiftOption } from "./events"
+import { CATALOGUE_GROUPS, type CatalogueMarker } from "./catalog-match"
 import { DEFAULT_LANGUAGE } from "./context"
 
-export type StoredOptions = { options: GiftOption[]; recommendedId: string; why: string }
+// `catalogue`: these options are the finder's instant first answer from the
+// gift catalogue (issue #97), and the next model turn has not heard about
+// them yet; it is dropped once one has (lib/finder/catalog-match.ts).
+export type StoredOptions = { options: GiftOption[]; recommendedId: string; why: string; catalogue?: CatalogueMarker }
 
 // One attempt to read a public profile or page in a session: where from, when
 // (ISO 8601, UTC), a fingerprint of the link (linkFingerprint in
@@ -121,6 +125,10 @@ const StoredOptionsSchema = z.object({
   options: z.array(StoredOption),
   recommendedId: z.string(),
   why: z.string(),
+  catalogue: z
+    .object({ message: z.string(), group: z.enum(CATALOGUE_GROUPS), startedOver: z.boolean().optional() })
+    .optional()
+    .catch(undefined),
 })
 
 const SOURCES = z.enum(["instagram", "tiktok", "linkedin", "web"])
@@ -191,7 +199,9 @@ export function parseProfiles(context: unknown): ProfileReads {
 export function parseOptions(value: unknown): StoredOptions | null {
   if (value === null || value === undefined) return null
   const parsed = StoredOptionsSchema.safeParse(value)
-  return parsed.success ? { ...parsed.data, options: parsed.data.options.map(withoutUndefined) } : null
+  if (!parsed.success) return null
+  const { catalogue, ...rest } = parsed.data
+  return { ...rest, options: rest.options.map(withoutUndefined), ...(catalogue ? { catalogue: withoutUndefined(catalogue) } : {}) }
 }
 
 function toSession(row: SessionRow): FinderSession {

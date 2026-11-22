@@ -155,3 +155,35 @@ describe("readFinderEvents", () => {
     expect(cancelled).toBe(true)
   })
 })
+
+describe("issue #97 fields", () => {
+  const option = { id: "cat-a", title: "Buch", description: "D", reason: "R", url: "https://shop.example/a" }
+  it("keeps the catalogue's source on options, and nothing else in its place", () => {
+    expect(parseFinderEvent(JSON.stringify({ type: "options", options: [option], recommendedId: "cat-a", why: "W", source: "catalogue" }))).toEqual({
+      type: "options",
+      options: [option],
+      recommendedId: "cat-a",
+      why: "W",
+      source: "catalogue",
+    })
+    expect(parseFinderEvent(JSON.stringify({ type: "options", options: [option], recommendedId: "cat-a", why: "W", source: "x" }))).not.toHaveProperty("source")
+  })
+
+  it("keeps a whole personalisation score on context events and drops a broken one", () => {
+    const personalisation = { score: 30, next: { key: "occasion", label: "Name the occasion", gain: 10 } }
+    expect(parseFinderEvent(JSON.stringify({ type: "context", context: { language: "de" }, personalisation }))).toEqual({
+      type: "context",
+      context: { language: "de" },
+      personalisation,
+    })
+    expect(parseFinderEvent(JSON.stringify({ type: "context", context: { language: "de" }, personalisation: { score: 100, next: null } }))).toEqual({
+      type: "context",
+      context: { language: "de" },
+      personalisation: { score: 100, next: null },
+    })
+    expect(parseFinderEvent(JSON.stringify({ type: "context", context: { language: "de" }, personalisation: { score: "x" } }))).toEqual({
+      type: "context",
+      context: { language: "de" },
+    })
+  })
+})

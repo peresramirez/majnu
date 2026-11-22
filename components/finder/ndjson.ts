@@ -52,8 +52,17 @@ export function parseFinderEvent(line: string): FinderEvent | null {
       return isString(e.delta) ? { type: "text", delta: e.delta } : null
     case "status":
       return isString(e.label) ? { type: "status", label: e.label } : null
-    case "context":
-      return isRecord(e.context) ? ({ type: "context", context: e.context } as FinderEvent) : null
+    case "context": {
+      if (!isRecord(e.context)) return null
+      // Issue #97: the personalisation score, kept only when it is whole.
+      const p = e.personalisation
+      const next = isRecord(p) && isRecord(p.next) && isString(p.next.label) && isString(p.next.key) && typeof p.next.gain === "number" ? p.next : null
+      const personalisation =
+        isRecord(p) && typeof p.score === "number" && Number.isFinite(p.score)
+          ? { score: p.score, next: next ? { key: next.key, label: next.label, gain: next.gain } : null }
+          : undefined
+      return { type: "context", context: e.context, ...(personalisation ? { personalisation } : {}) } as FinderEvent
+    }
     case "options": {
       if (!Array.isArray(e.options)) return null
       // Keep the options the cards can show; drop any the server got wrong.
@@ -64,7 +73,7 @@ export function parseFinderEvent(line: string): FinderEvent | null {
       }))
       if (options.length === 0) return null
       const recommendedId = isString(e.recommendedId) ? e.recommendedId : ""
-      return { type: "options", options, recommendedId, why: isString(e.why) ? e.why : "" }
+      return { type: "options", options, recommendedId, why: isString(e.why) ? e.why : "", ...(e.source === "catalogue" ? { source: "catalogue" as const } : {}) }
     }
     case "question": {
       if (!isString(e.text)) return null

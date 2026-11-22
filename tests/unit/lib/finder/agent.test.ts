@@ -731,17 +731,17 @@ describe("reading a public profile", () => {
 })
 
 describe("searching now or asking first (issue #70)", () => {
-  it("always asks one round first, then searches (22 November)", () => {
+  it("asks one round first when it answers a first message itself, then searches (22 November, issue #97)", () => {
     expect(FINDER_SYSTEM_PROMPT).not.toContain('"Find a gift for my mother" is enough')
-    expect(FINDER_SYSTEM_PROMPT).toContain("On the visitor's first message, always ask before you search")
+    expect(FINDER_SYSTEM_PROMPT).toContain("without a <catalogue_shown> block (they shared files, or the catalogue could not be read), always ask before you search")
     expect(FINDER_SYSTEM_PROMPT).toContain("call ask_questions once with one to three short questions")
     expect(FINDER_SYSTEM_PROMPT).toContain("Once the visitor has answered, search with find_gifts")
     expect(FINDER_SYSTEM_PROMPT).toContain("Don't ask again before you have shown options")
     expect(FINDER_SYSTEM_PROMPT).toContain("six options")
     expect(FINDER_SYSTEM_PROMPT).not.toMatch(/three options/)
     expect(FINDER_TOOLS[0].description).toContain("six gift options")
-    expect(FINDER_TOOLS[0].description).toContain("never on the visitor's first message")
-    expect(FINDER_TOOLS[1].description).toContain("always on their first message")
+    expect(FINDER_TOOLS[0].description).toContain("never on a first message the app asks you to ask about first")
+    expect(FINDER_TOOLS[1].description).toContain("to personalise the gift, before a search")
   })
 
   it("refuses a search on the first message, so the model asks instead", async () => {
@@ -900,6 +900,24 @@ describe("on the wrap step (issue #70)", () => {
     expect(parseFillWrap(null)).toBeNull()
     const schema = FINDER_TOOLS[3].input_schema as { properties: Record<string, unknown>; required: string[] }
     expect([...schema.required].sort()).toEqual(Object.keys(schema.properties).sort())
+  })
+})
+
+describe("after the catalogue's instant answer (issue #97)", () => {
+  it("puts what the visitor saw after the context block and before their words", () => {
+    const shown = "<catalogue_shown>\nThe visitor's first message was: \"für meine Mama\"\n</catalogue_shown>"
+    const blocks = userTurn("Personalise the gift", state({ catalogueShown: shown })).content as { type: string; text?: string }[]
+    expect(blocks).toHaveLength(3)
+    expect(blocks[0].text).toContain("<context>")
+    expect(blocks[1].text).toBe(shown)
+    expect(blocks[2].text).toBe("Personalise the gift")
+    expect((userTurn("Hi", state()).content as unknown[]).length).toBe(2)
+  })
+
+  it("tells Majnu that the app answers the first message and what to do with Personalise the gift", () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain("<catalogue_shown>")
+    expect(FINDER_SYSTEM_PROMPT).toContain('When that message is "Personalise the gift"')
+    expect(FINDER_SYSTEM_PROMPT).toContain("other:")
   })
 })
 
