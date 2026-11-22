@@ -3,7 +3,10 @@
 import type { ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import type { LetterKind } from "@/lib/letters/schema"
+import { plural, timeAgo } from "../format"
 import { eyebrow, focusRing } from "../styles"
+import { giftNumbers } from "./analytics"
+import { cardSurface, formatCount } from "./card"
 import {
   countryFlag,
   deviceName,
@@ -11,6 +14,7 @@ import {
   groupByDay,
   languageName,
   placeName,
+  shortDateTime,
   timeOfDay,
   trackerStatus,
   type TrackedEvent,
@@ -29,46 +33,66 @@ export type TrackedGiftInfo = TrackerLetter & {
 // The newest lines shown per gift. The counts in the status line cover all of them.
 const MAX_LINES = 100
 
-// One gift on the Tracker tab: its status, and behind "Show timeline" every
-// open, door and gift tap with the time in the viewer's timezone, the place,
-// the language and the device. A native <details>, so it opens with the
-// keyboard and without JavaScript.
+// One gift in the Tracker's list (issues #49 and #75): whether it was opened,
+// how often and by how many people, when first and last, and behind "Show
+// timeline" every open, door and gift tap with the time in the viewer's
+// timezone, the place, the language and the device. A native <details>, so it
+// opens with the keyboard and without JavaScript.
 export function TrackedGift({ gift, events, now, icon }: { gift: TrackedGiftInfo; events: TrackedEvent[]; now: string; icon: ReactNode }) {
   const timeZone = useViewerTimeZone() ?? "UTC"
   const nowDate = new Date(now)
   const status = trackerStatus(gift, events, nowDate)
+  const numbers = giftNumbers(gift, events)
   const shown = events.slice(0, MAX_LINES)
   const days = groupByDay(shown, timeZone, nowDate)
 
   return (
-    <article className="rounded-3xl bg-night-velvet p-5 ring-1 ring-inset ring-night-petal/10 sm:p-6">
-      <div className="flex items-center gap-2.5">
-        <span className="text-night-rose">{icon}</span>
-        <p className={`truncate ${eyebrow}`}>{gift.eyebrow}</p>
+    <article className={cardSurface}>
+      <div className="flex items-start gap-3.5">
+        <span
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-2xl bg-night-plum text-night-rose ring-1 ring-inset ring-night-petal/10"
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-[22px] leading-snug text-night-petal [overflow-wrap:anywhere]">{gift.name}</h3>
+          <p className="mt-0.5 text-sm text-night-lilac">{gift.eyebrow}</p>
+        </div>
+        <StatusChip state={status.state} />
       </div>
 
-      <h2 className="mt-4 font-display text-2xl leading-snug text-night-petal">{gift.name}</h2>
-
-      <div className="mt-3">
-        <p className={`flex items-center gap-2 text-[15px] ${status.state === "opened" ? "font-medium text-night-petal" : "text-night-lilac"}`}>
-          <span
-            className={`h-2 w-2 flex-none rounded-full ${status.state === "opened" ? "bg-night-rose" : "ring-1 ring-inset ring-night-lilac/60"}`}
-            aria-hidden="true"
-          />
-          {status.headline}
-        </p>
-        <p className="mt-1 text-sm leading-relaxed text-night-lilac">{status.detail}</p>
-      </div>
+      {status.state === "opened" ? (
+        <>
+          <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-[auto_auto_1fr_1fr] sm:gap-x-7">
+            <Figure label="Opens" value={formatCount(numbers.opens)} />
+            <Figure label="People" value={formatCount(numbers.visitors)} />
+            {numbers.firstOpenedAt && (
+              <Figure label="First opened" value={<time dateTime={numbers.firstOpenedAt}>{shortDateTime(numbers.firstOpenedAt, timeZone, nowDate)}</time>} small />
+            )}
+            {numbers.lastOpenedAt && (
+              <LastOpened at={numbers.lastOpenedAt} timeZone={timeZone} now={nowDate} />
+            )}
+          </dl>
+          {numbers.taps > 0 && (
+            <p className="mt-4 text-sm text-night-lilac">
+              The gift was tapped {numbers.taps === 1 ? "once" : numbers.taps === 2 ? "twice" : plural(numbers.taps, "time", "times")}.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-4 text-sm leading-relaxed text-night-lilac">{status.detail}</p>
+      )}
 
       {events.length > 0 && (
-        <details className="group mt-5 border-t border-night-petal/10 pt-4">
+        <details className="group mt-5 border-t border-night-petal/10 pt-3">
           <summary
             className={`-mx-2 flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-2 py-2 text-[15px] font-semibold text-night-petal hover:bg-night-petal/5 [&::-webkit-details-marker]:hidden ${focusRing}`}
           >
             <span>
               <span className="group-open:hidden">Show timeline</span>
               <span className="hidden group-open:inline">Hide timeline</span>
-              <span className="font-normal text-night-lilac"> · {events.length === 1 ? "1 entry" : `${events.length} entries`}</span>
+              <span className="font-normal text-night-lilac"> · {events.length === 1 ? "1 entry" : `${formatCount(events.length)} entries`}</span>
             </span>
             <ChevronDown
               className="h-5 w-5 flex-none text-night-lilac transition-none group-open:rotate-180 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-calm"
@@ -79,7 +103,7 @@ export function TrackedGift({ gift, events, now, icon }: { gift: TrackedGiftInfo
           <ol className="mt-3 space-y-5">
             {days.map((day) => (
               <li key={day.key}>
-                <h3 className={eyebrow}>{day.label}</h3>
+                <h4 className={eyebrow}>{day.label}</h4>
                 <ol className="mt-2 border-l border-night-petal/15">
                   {day.events.map((event) => (
                     <TimelineLine key={event.id} event={event} kind={gift.kind} timeZone={timeZone} />
@@ -89,11 +113,48 @@ export function TrackedGift({ gift, events, now, icon }: { gift: TrackedGiftInfo
             ))}
           </ol>
           {events.length > shown.length && (
-            <p className="mt-4 text-sm text-night-lilac">Showing the latest {shown.length} of {events.length}.</p>
+            <p className="mt-4 text-sm text-night-lilac">Showing the latest {shown.length} of {formatCount(events.length)}.</p>
           )}
         </details>
       )}
     </article>
+  )
+}
+
+const CHIPS = {
+  opened: { label: "Opened", className: "bg-night-rose/15 text-night-petal", dot: "bg-night-rose" },
+  waiting: { label: "Not opened", className: "text-night-lilac ring-1 ring-inset ring-night-petal/15", dot: "ring-1 ring-inset ring-night-lilac/70" },
+  draft: { label: "Draft", className: "text-night-lilac ring-1 ring-inset ring-night-petal/10", dot: "bg-night-lilac/40" },
+} as const
+
+function StatusChip({ state }: { state: keyof typeof CHIPS }) {
+  const chip = CHIPS[state]
+  return (
+    <span className={`mt-1 inline-flex flex-none items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${chip.className}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${chip.dot}`} aria-hidden="true" />
+      {chip.label}
+    </span>
+  )
+}
+
+// "3 hours ago" over "Today, 05:49". When the relative time is a single word
+// ("yesterday"), the date and time alone say it without repeating it.
+function LastOpened({ at, timeZone, now }: { at: string; timeZone: string; now: Date }) {
+  const ago = timeAgo(at, now)
+  const exact = shortDateTime(at, timeZone, now)
+  const repeats = /^(today|yesterday)$/.test(ago)
+  return (
+    <Figure label="Last opened" value={<time dateTime={at}>{repeats ? exact : ago}</time>} hint={repeats ? undefined : exact} small />
+  )
+}
+
+function Figure({ label, value, hint, small = false }: { label: string; value: ReactNode; hint?: string; small?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-night-lilac">{label}</dt>
+      <dd className={`mt-1 text-night-petal ${small ? "text-[15px] font-medium leading-snug" : "text-2xl font-semibold leading-none"}`}>{value}</dd>
+      {hint && <dd className="mt-0.5 text-xs text-night-lilac">{hint}</dd>}
+    </div>
   )
 }
 
