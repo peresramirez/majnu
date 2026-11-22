@@ -6,6 +6,7 @@
 // every door has something behind it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { PageBackLink } from "@/components/app/page-back-link"
 import { usePathname, useRouter } from "next/navigation"
 import { Eye, Gift, PenLine, Plus, Sparkles } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
@@ -263,6 +264,7 @@ export function CalendarEditor({ data, autoFind }: { data: CalendarEditorData; a
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
       <header className="max-w-3xl">
+        <PageBackLink fallback="/dashboard/gifts" className="mb-3" />
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-night-lilac">
           {isAdvent ? "Advent calendar" : "Countdown"} for {name}
         </p>

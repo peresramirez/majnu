@@ -12,6 +12,55 @@ html {
   scroll-behavior: smooth;
 }
 
+/*
+ * The bottom of the screen on phones (docs/features/app-shell.md, "iPhone").
+ *
+ * Safari on iOS 26 and later floats its toolbar over the page: the expanded
+ * address bar sits about 24 CSS px above the bottom of 100dvh, and
+ * env(safe-area-inset-bottom) stays 0 under it, so a bar padded with the inset
+ * alone has its labels behind the toolbar. --toolbar-overlap is the room to
+ * keep clear: 32px (the 24px overlap and 8px of air) in an iOS browser tab on
+ * a phone held upright, 0 elsewhere.
+ * -webkit-touch-callout is only supported by WebKit on iOS; Android, desktop
+ * browsers and iPads held upright (744px and wider) keep 0. A web app opened
+ * from the home screen has no Safari toolbar, and while a text field has focus
+ * the keyboard replaces the toolbar, so both drop back to 0.
+ *
+ * --safe-bottom is what every bar or sheet pinned to the bottom pads with: the
+ * larger of the home-indicator inset and the toolbar overlap.
+ */
+:root {
+  --toolbar-overlap: 0px;
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--toolbar-overlap));
+}
+@supports (-webkit-touch-callout: none) {
+  @media (orientation: portrait) and (max-width: 600px) {
+    :root {
+      --toolbar-overlap: 32px;
+    }
+  }
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    :root {
+      --toolbar-overlap: 0px;
+    }
+  }
+  :root:has(textarea:focus, select:focus, input:not([type="checkbox"], [type="radio"], [type="button"], [type="submit"], [type="reset"], [type="range"], [type="file"], [type="color"]):focus) {
+    --toolbar-overlap: 0px;
+  }
+}
+
+/*
+ * Safari 26 and later ignore theme-color: they colour the status bar and the
+ * toolbar area from the root's background (or from a fixed element touching
+ * the edge). The body is Petal by default, which left light bars around every
+ * dark screen, so a page marks its surface and the root takes its colour.
+ * Gift pages set the template's own colour (components/letters/registry.tsx).
+ */
+html:has([data-surface="night"]),
+html:has([data-surface="night"]) body {
+  background-color: #1b1226;
+}
+
 @keyframes moon-breathe {
   0%, 100% { opacity: 0.75; }
   50% { opacity: 1; }

@@ -95,7 +95,7 @@ function WrapperDialog({
       <DialogPrimitive.Trigger asChild>{children}</DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] flex items-end justify-center bg-night-deep/80 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 sm:items-center sm:p-6">
-          <DialogPrimitive.Content className="max-h-[calc(100dvh-24px)] w-full overflow-y-auto rounded-t-[24px] bg-night-plum p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-night-petal outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom-4 sm:max-w-[480px] sm:rounded-[24px] sm:p-7 sm:shadow-2xl sm:shadow-black/40">
+          <DialogPrimitive.Content className="max-h-[calc(100dvh-24px)] w-full overflow-y-auto rounded-t-[24px] bg-night-plum p-5 pb-[max(20px,var(--safe-bottom))] text-night-petal outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom-4 sm:max-w-[480px] sm:rounded-[24px] sm:p-7 sm:shadow-2xl sm:shadow-black/40">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3 text-night-rose">
                 <MoonPhase lit={1} size={26} />

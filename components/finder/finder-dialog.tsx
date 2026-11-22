@@ -208,7 +208,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
             {(wrap.stage === "choose" || wrap.stage === "wrapping") && <WrapFooter wrap={wrap} />}
 
             {!wrapping && (
-              <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:px-5">
+              <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum px-4 pb-[max(10px,var(--safe-bottom))] pt-2.5 sm:px-5">
                 <div className="flex items-end gap-2 rounded-[22px] bg-night-velvet py-1 pl-4 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
                   <label htmlFor="finder-message" className="sr-only">
                     Message to Majnu
@@ -223,7 +223,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     enterKeyHint="send"
                     maxLength={1000}
                     placeholder="Tell Majnu more about them"
-                    className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
+                    className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
                   />
                   <VoiceButton
                     ensureSession={() => transport.ensureSession(() => checkHostRef.current)}

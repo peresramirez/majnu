@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import AuthProvider from "@/components/auth/auth-provider"
+import { TrailRecorder } from "@/lib/navigation/use-back"
 import { site } from "@/lib/site"
 import { display, sans } from "./fonts"
 
@@ -38,8 +39,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // data-scroll-behavior: Next.js keeps turning smooth scrolling off while it
+    // changes pages, so a route change lands at the top at once.
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={`${sans.variable} ${display.variable} font-sans`}>
+        {/* Remembers the pages this tab visits, for the Back links (lib/navigation/back.ts). */}
+        <TrailRecorder />
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>

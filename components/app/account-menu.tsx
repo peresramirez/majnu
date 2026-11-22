@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useTransition } from "react"
 import { Loader2, LogIn, LogOut, Mail, Receipt, UserPlus } from "lucide-react"
 import { signOut } from "@/app/auth/actions"
+import { safeNextPath, withNext } from "@/lib/billing/next-path"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,8 @@ export function AccountMenu({ user }: { user: SessionUser }) {
   const [pending, startTransition] = useTransition()
   const pathname = usePathname() ?? ""
   const onPurchases = pathname === PURCHASES || pathname.startsWith(`${PURCHASES}/`)
+  // A guest who signs up or in from here comes back to this page.
+  const here = safeNextPath(pathname)
   // Guests have no name or email yet; "G" marks the guest account.
   const initial = user.isGuest ? "G" : (user.name ?? user.email ?? "?").trim().charAt(0).toUpperCase() || "?"
 
@@ -47,13 +50,13 @@ export function AccountMenu({ user }: { user: SessionUser }) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-night-petal/10" />
             <DropdownMenuItem asChild className={item}>
-              <Link href="/signup">
+              <Link href={withNext("/signup", here)}>
                 <UserPlus aria-hidden="true" />
                 Create an account
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className={item}>
-              <Link href="/signin">
+              <Link href={withNext("/signin", here)}>
                 <LogIn aria-hidden="true" />
                 Sign in
               </Link>

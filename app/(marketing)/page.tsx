@@ -64,7 +64,7 @@ const questions = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-night-plum text-night-petal">
+    <div data-surface="night" className="min-h-screen bg-night-plum text-night-petal">
       <header className="absolute inset-x-0 top-0 z-20">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8" aria-label="Main">
           <Link href="/" className={`rounded ${focusRing}`} aria-label="Majnu home">

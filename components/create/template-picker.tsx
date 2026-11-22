@@ -28,7 +28,7 @@ export function TemplatePicker({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="dark max-h-[88dvh] overflow-y-auto rounded-t-[28px] border-night-petal/10 bg-night-plum px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6 text-night-petal sm:px-6 md:mx-auto md:max-w-3xl"
+        className="dark max-h-[88dvh] overflow-y-auto rounded-t-[28px] border-night-petal/10 bg-night-plum px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-6 text-night-petal sm:px-6 md:mx-auto md:max-w-3xl"
       >
         <SheetHeader className="pr-8 text-left">
           <SheetTitle className="font-display text-[28px] font-normal leading-tight text-night-petal">Choose a template</SheetTitle>

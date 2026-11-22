@@ -9,7 +9,7 @@ import type { LetterSummary } from "@/lib/letters/store"
 import { getTemplate } from "@/lib/letters/templates"
 import { site } from "@/lib/site"
 import { CopyLinkButton } from "./copy-link-button"
-import { plural, shortDate, timeAgo } from "./format"
+import { displayName, plural, shortDate, timeAgo } from "./format"
 import { eyebrow, smallButton } from "./styles"
 import { giftEditorPath } from "./tabs"
 
@@ -29,7 +29,8 @@ export function GiftCard({
   now: Date
 }) {
   const template = letter.templateId ? getTemplate(letter.templateId) : undefined
-  const name = letter.recipientName ? `For ${letter.recipientName}` : letter.title ?? "A gift in progress"
+  const recipient = letter.recipientName ? displayName(letter.recipientName) : null
+  const name = recipient ? `For ${recipient}` : letter.title ?? "A gift in progress"
   const { stats } = letter
   const opened = stats.totalOpens > 0 && stats.lastOpenedAt !== null
   const shareUrl = `${site.url}/l/${letter.slug}`
@@ -73,7 +74,7 @@ export function GiftCard({
       {giftList?.items.length ? <GiftListClaims list={giftList} now={now} /> : null}
 
       {letter.kind === "letter" ? (
-        <AudioNoteRecorder letterId={letter.id} initial={audioNote} recipientName={letter.recipientName} className="mt-5" />
+        <AudioNoteRecorder letterId={letter.id} initial={audioNote} recipientName={recipient} className="mt-5" />
       ) : null}
 
       <div className="mt-6 flex flex-wrap gap-2">
