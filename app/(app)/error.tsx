@@ -8,7 +8,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       error={error}
       reset={reset}
       title="This page didn't load"
-      body="Something went wrong on our side. Try again, or start a new gift."
+      body="Something went wrong on our side. Try again, or go back to where you were."
     />
   )
 }

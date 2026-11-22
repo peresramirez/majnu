@@ -1,3 +1,4 @@
+import { PageBackLink } from "@/components/app/page-back-link"
 import { eyebrow, pagePadding } from "@/components/app/styles"
 import { TemplateCard } from "@/components/letters/template-card"
 import { templateCategories, templates, type TemplateCategory } from "@/lib/letters/templates"
@@ -21,6 +22,7 @@ const blurbs: Record<TemplateCategory, string> = {
 export function TemplatesView({ guest }: { guest: boolean }) {
   return (
     <div className={`max-w-6xl ${pagePadding}`}>
+      <PageBackLink fallback="/dashboard/create" className="mb-3" />
       <p className={eyebrow}>Templates</p>
       <h1 className="mt-2 font-display text-[34px] leading-tight text-night-petal md:text-[42px]">Choose how it opens</h1>
       <p className="mt-2 max-w-[60ch] text-[15px] leading-relaxed text-night-lilac">

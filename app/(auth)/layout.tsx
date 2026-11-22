@@ -2,7 +2,9 @@ import type React from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { GiftScene } from "@/components/landing/gift-scene"
+import { APP_HOME } from "@/components/app/tabs"
 import { Wordmark } from "@/components/brand/wordmark"
+import { BackLink } from "@/lib/navigation/use-back"
 
 const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-night-rose"
@@ -11,7 +13,7 @@ const focusRing =
 // components to it) with the scene of Majnu giving Layla the moon beside the form.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dark min-h-[100svh] bg-night-plum text-night-petal md:grid md:grid-cols-[1.1fr_1fr]">
+    <div data-surface="night" className="dark min-h-[100svh] bg-night-plum text-night-petal md:grid md:grid-cols-[1.1fr_1fr]">
       <div className="relative h-64 md:sticky md:top-0 md:h-[100svh]">
         <GiftScene variant="panel" />
         <div className="pointer-events-none absolute inset-x-0 -bottom-px h-24 bg-gradient-to-t from-night-plum to-transparent md:hidden" />
@@ -26,10 +28,18 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <Link href="/" className={`rounded ${focusRing}`} aria-label="Majnu home">
             <Wordmark width={112} />
           </Link>
-          <Link href="/" className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-night-lilac hover:text-night-petal ${focusRing}`}>
+          {/* Back to the page that sent them here (a same-site `next` when the
+              tab has no earlier page), never to another sign-in page; with
+              none, a guest goes back to the app and a visitor to the landing page. */}
+          <BackLink
+            fallback="/"
+            signedInFallback={APP_HOME}
+            honourNext
+            className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm text-night-lilac hover:text-night-petal ${focusRing}`}
+          >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to home
-          </Link>
+            Back
+          </BackLink>
         </div>
 
         <main className="flex flex-1 items-center py-10 md:py-16">

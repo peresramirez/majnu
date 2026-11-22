@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, ArrowUpRight } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import { PageBackLink } from "@/components/app/page-back-link"
 import { focusRing, pagePadding, primaryButton } from "@/components/app/styles"
 import { PurchaseStatusCard } from "@/components/wrapper/purchase-status"
 import { STATUS_WORDS, isInProgress, type PurchaseView } from "@/lib/billing/view"
@@ -20,6 +21,7 @@ export function PurchasesView({ purchases, focusId, notice }: { purchases: Purch
 
   return (
     <div className={`max-w-3xl ${pagePadding}`}>
+      <PageBackLink fallback="/dashboard/gifts" className="mb-3" />
       <h1 className="font-display text-[34px] leading-tight md:text-[40px]">Purchases</h1>
       <p className="mt-1 text-[17px] leading-relaxed text-night-lilac">
         Majnu is free. The one thing you can buy is a {wrapper.name.toLowerCase()}: a design made for one gift, {wrapper.price} once.

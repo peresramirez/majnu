@@ -1,9 +1,11 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { APP_HOME } from "@/components/app/tabs"
 import { Wordmark } from "@/components/brand/wordmark"
 import { SiteFooter } from "@/components/landing/site-footer"
 import { legalUpdated, operator } from "@/lib/legal"
+import { BackLink } from "@/lib/navigation/use-back"
 
 const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-day-orchid"
@@ -24,10 +26,17 @@ export function LegalPage({ title, lead, children }: { title: string; lead?: Rea
         <Link href="/" aria-label="Majnu home" className={`rounded ${focusRing}`}>
           <Wordmark on="light" width={112} />
         </Link>
-        <Link href="/" className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-day-muted hover:text-day-ink ${focusRing}`}>
+        {/* Back to the page this tab came from on this site (an app tab, the
+            finder, a gift page, the landing page); with none, signed-in
+            visitors go to the app and everyone else to the landing page. */}
+        <BackLink
+          fallback="/"
+          signedInFallback={APP_HOME}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm text-day-muted hover:text-day-ink ${focusRing}`}
+        >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back to home
-        </Link>
+          Back
+        </BackLink>
       </header>
 
       <main className="mx-auto max-w-3xl px-5 pb-24 pt-8 sm:px-8 sm:pt-14">
