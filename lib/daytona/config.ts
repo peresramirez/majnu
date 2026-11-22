@@ -46,6 +46,14 @@ export const CLAUDE_EFFORT = "medium"
 // The sandbox destroys itself this long after it was created, whatever state
 // it is in: the backstop if the job dies before its own delete runs.
 export const SANDBOX_TTL_MINUTES = 20
+// The snapshot's size, as scripts/daytona/build-snapshot.mts builds it (one
+// vCPU, GiB of memory and disk): what a sandbox minute costs
+// (lib/providers/costs.ts, for the fallback key's cap).
+export const SANDBOX_RESOURCES = { cpu: 1, memory: 2, disk: 3 } as const
+// What one Claude Code run may cost on the fallback Anthropic key, reserved
+// against its monthly cap before the run: the budget, plus room for the last
+// turn that takes it over.
+export const CLAUDE_RUN_RESERVE_USD = MAX_BUDGET_USD * 1.5
 
 // What we accept back. The table has the same cap (0003_letter_designs.sql).
 export const MAX_DESIGN_BYTES = 500 * 1024
