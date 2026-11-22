@@ -116,7 +116,12 @@ describe("reading the files, then Majnu", () => {
     const read = vi.mocked(readMessageFiles).mock.calls[0][0]
     expect(read.files).toHaveLength(0) // let go once read
     expect(read.session).toBe(session)
-    expect(events[0]).toEqual({ type: "context", context: { ...session.context, notes: ["Spielt Saxofon", "Liebt Jazz"] } })
+    expect(events[0]).toEqual({
+      type: "context",
+      context: { ...session.context, notes: ["Spielt Saxofon", "Liebt Jazz"] },
+      // Two notes: 10 points (issue #97).
+      personalisation: { score: 10, next: { key: "profile", label: "Add their Instagram, TikTok or LinkedIn", gain: 20 } },
+    })
 
     const { state, message } = vi.mocked(runFinderTurn).mock.calls[0][0]
     expect(message).toBe("Für Mama")

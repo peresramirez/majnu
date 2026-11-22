@@ -213,3 +213,17 @@ describe("the catalogue's instant ideas (issue #97)", () => {
     expect(options.map((item) => (item as { catalogue?: boolean }).catalogue)).toEqual([true, undefined])
   })
 })
+
+describe("the personalisation meter's value (issue #97)", () => {
+  it("follows the newest context event that carries one", () => {
+    const p1 = { score: 20, next: { key: "profile" as const, label: "Add their Instagram, TikTok or LinkedIn", gain: 20 } }
+    const p2 = { score: 40, next: { key: "occasion" as const, label: "Name the occasion", gain: 10 } }
+    const state = run([
+      ev({ type: "context", context: { language: "de", relationship: "Mama" }, personalisation: p1 }),
+      ev({ type: "context", context: { language: "de", relationship: "Mama", interests: ["Jazz"] } }),
+    ])
+    expect(state.personalisation).toEqual(p1)
+    expect(run([ev({ type: "context", context: { language: "de" }, personalisation: p2 })], state).personalisation).toEqual(p2)
+    expect(initialFinderState().personalisation).toBeNull()
+  })
+})

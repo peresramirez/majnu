@@ -117,6 +117,8 @@ describe("the first message (issue #97)", () => {
     expect(events.find((e) => e.type === "context")).toEqual({
       type: "context",
       context: { country: "DE", region: "Berlin", language: "de", currency: "EUR", relationship: "Mama", occasion: "Geburtstag" },
+      // Who it is for and the occasion: 20 points, and the profile would add most.
+      personalisation: { score: 20, next: { key: "profile", label: "Add their Instagram, TikTok or LinkedIn", gain: 20 } },
     })
     expect(events.find((e) => e.type === "text")).toEqual({ type: "text", delta: "Hier sind sechs Ideen für den Anfang. Mein Favorit steht vorne." })
   })
@@ -192,6 +194,24 @@ describe("the message after the instant answer", () => {
     })
     await eventsOf(await POST(post({ sessionId: fresh.id, message: "Personalise the gift", locale })))
     expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.startedOver).toBe(true)
+  })
+
+  it("counts the visitor's own answers and the profiles read into the score on every context event", async () => {
+    const said: BetaMessageParam = { role: "user", content: [{ type: "text", text: "<context>x</context>" }, { type: "text", text: "Free time: other: chess." }] }
+    vi.mocked(getMyFinderSession).mockResolvedValue({
+      ...fresh,
+      chat: [said, assistantTurn],
+      lastOptions: shown,
+      profiles: { day: "2026-11-22", paid: 1, reads: [{ source: "instagram", readAt: "2026-11-22T10:00:00Z", key: "k", status: "read", interests: ["Jazz"] }] },
+    })
+    vi.mocked(runFinderTurn).mockImplementation(async ({ state }) => {
+      state.emit({ type: "context", context: { language: "de", relationship: "Mama" } })
+      return { appended: [userTurn, assistantTurn], outcome: "done" }
+    })
+    const events = await eventsOf(await POST(post({ sessionId: fresh.id, message: "Occasion: other: her retirement.", locale })))
+    const context = events.find((e) => e.type === "context") as Extract<FinderEvent, { type: "context" }>
+    // Relationship 10, a profile read 20, two own answers 10.
+    expect(context.personalisation?.score).toBe(40)
   })
 
   it("hears it only once: a later message has no catalogue block", async () => {

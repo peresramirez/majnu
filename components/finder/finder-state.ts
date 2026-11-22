@@ -13,6 +13,7 @@ import type {
   WrapResponse,
   WrapTemplateId,
 } from "@/lib/finder/events"
+import type { Personalisation } from "@/lib/finder/personalisation"
 import { WRAP_ORDER } from "@/lib/finder/wrap-templates"
 
 export type FinderItem =
@@ -35,6 +36,9 @@ export type FinderState = {
   steps: number
   // What Majnu assumed (country, language, relationship, age), shown as chips.
   context: FinderContext | null
+  // How well Majnu knows the person so far, from the newest context event
+  // (issue #97), shown as a meter next to the chips.
+  personalisation: Personalisation | null
   // The last message sent, so an error can offer to send it again.
   lastMessage: string | null
   nextId: number
@@ -91,6 +95,7 @@ export function initialFinderState(): FinderState {
     status: null,
     steps: 0,
     context: null,
+    personalisation: null,
     lastMessage: null,
     nextId: 0,
     answers: {},
@@ -127,7 +132,7 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
     case "status":
       return { ...state, status: event.label, steps: state.steps + 1 }
     case "context":
-      return { ...state, context: event.context }
+      return { ...state, context: event.context, personalisation: event.personalisation ?? state.personalisation }
     case "options":
       return push(state, {
         role: "options",

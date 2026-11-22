@@ -50,6 +50,7 @@ import { baseContext, canonicalLocale, localeTimezone, requestLocation } from "@
 import { FINDER_FILE_PART, FINDER_REQUEST_PART, type FinderEvent } from "@/lib/finder/events"
 import { FILE_LIMITS, checkSharedFile, displayFileName, type FileProblem } from "@/lib/finder/file-rules"
 import { canStartSession, findOpenSession, sessionMessagesResult } from "@/lib/finder/limits"
+import { countOwnAnswers, personalisationScore } from "@/lib/finder/personalisation"
 import { textsFor } from "@/lib/finder/messages"
 import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession, type StoredOptions } from "@/lib/finder/sessions"
 import { NDJSON_CONTENT_TYPE, createFinderStream } from "@/lib/finder/stream"
@@ -110,6 +111,16 @@ function fixedEvents(events: FinderEvent[]): Response {
 }
 
 type Texts = ReturnType<typeof textsFor>
+
+// The visitor's own words in the stored conversation: the text blocks of user
+// turns that are not the app's (context, catalogue and file blocks start with "<").
+function visitorTexts(chat: FinderSession["chat"]): string[] {
+  return chat.flatMap((message) =>
+    message.role === "user" && Array.isArray(message.content)
+      ? message.content.flatMap((block) => (block.type === "text" && !block.text.startsWith("<") ? [block.text] : []))
+      : [],
+  )
+}
 
 function withoutMarker(shown: StoredOptions): StoredOptions {
   if (!shown.catalogue) return shown
@@ -281,6 +292,15 @@ export async function POST(request: Request): Promise<Response> {
   const lastOptions = session.lastOptions ? withoutMarker(session.lastOptions) : null
 
   const out = createFinderStream()
+  // Every context event carries the personalisation score (issue #97): what
+  // Majnu knows, the profiles read so far, and the visitor's own answers in
+  // this conversation, this message included.
+  const ownAnswers = countOwnAnswers([...visitorTexts(instant ? [] : session.chat), body.data.message])
+  const emit = (event: FinderEvent) => {
+    if (event.type !== "context") return out.emit(event)
+    const profilesRead = state.profiles.reads.filter((read) => read.status === "read").length
+    out.emit({ ...event, personalisation: personalisationScore({ context: event.context, profilesRead, ownAnswers }) })
+  }
   const state: FinderTurnState = {
     sessionId: session.id,
     ownerId: user.id,
@@ -298,7 +318,7 @@ export async function POST(request: Request): Promise<Response> {
     // searches. After the catalogue's answer, Majnu may search at once.
     askFirst: !marker && (session.chat.length === 0 || startedOver),
     catalogueShown: marker && session.lastOptions ? catalogueShownText({ ...session.lastOptions, catalogue: marker }) : null,
-    emit: out.emit,
+    emit,
   }
 
   // The rest runs while the response streams. Waiting on the model does not
@@ -317,7 +337,7 @@ export async function POST(request: Request): Promise<Response> {
           out.emit({ type: "error", message: textsFor(instant.language).errors.saving })
           return
         }
-        out.emit({ type: "context", context: instant.context })
+        emit({ type: "context", context: instant.context })
         out.emit({ type: "text", delta: instant.line })
         const { options, recommendedId, why } = instant.options
         out.emit({ type: "options", options, recommendedId, why, source: "catalogue" })
@@ -330,7 +350,7 @@ export async function POST(request: Request): Promise<Response> {
         files.splice(0)
         if (shared.notes.length > 0) {
           state.context = { ...state.context, notes: mergeNotes(state.context.notes ?? [], shared.notes) }
-          out.emit({ type: "context", context: state.context })
+          emit({ type: "context", context: state.context })
         }
         state.sharedFiles = { text: sharedFilesText(shared.outcomes), notes: shared.notes }
         // Files alone, and none of them could be read: nothing for Majnu to answer.
