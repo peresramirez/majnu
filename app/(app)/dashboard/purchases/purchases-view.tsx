@@ -4,7 +4,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { PageBackLink } from "@/components/app/page-back-link"
 import { focusRing, pagePadding, primaryButton } from "@/components/app/styles"
 import { PurchaseStatusCard } from "@/components/wrapper/purchase-status"
-import { STATUS_WORDS, isInProgress, type PurchaseView } from "@/lib/billing/view"
+import { isInProgress, statusWords, type PurchaseView } from "@/lib/billing/view"
 import { free, wrapper } from "@/lib/plans"
 
 // Display-only message after a round trip to Stripe (?billing=processing).
@@ -79,7 +79,7 @@ export function PurchasesView({ purchases, focusId, notice }: { purchases: Purch
                       p.status === "done" ? "bg-night-orchid/15 text-night-orchid" : "bg-night-petal/10 text-night-petal"
                     }`}
                   >
-                    {STATUS_WORDS[p.status].label}
+                    {statusWords(p).label}
                   </span>
                   {p.status === "done" && p.giftUrl && (
                     <a href={p.giftUrl} target="_blank" rel="noopener" className={`inline-flex items-center gap-1 rounded text-sm font-semibold text-night-rose ${focusRing}`}>

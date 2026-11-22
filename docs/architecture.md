@@ -250,5 +250,6 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 - [Voice notes in gifts](features/audio-note.md)
 - [Advent calendars, filled door by door](features/advent-calendar.md)
 - [Provider fallback keys and their $150 cap](features/provider-fallbacks.md)
+- [Coupon codes for the personalised wrapper](features/coupons.md)
 
 The business model (free product, a paid personalised wrapper) is in [business-plan.md](business-plan.md).

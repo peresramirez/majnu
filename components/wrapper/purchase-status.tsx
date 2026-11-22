@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { ArrowUpRight } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { focusRing } from "@/components/app/styles"
-import { STATUS_WORDS, isInProgress, type PurchaseView } from "@/lib/billing/view"
+import { isInProgress, statusWords, type PurchaseView } from "@/lib/billing/view"
 
 const POLL_MS = 4000
 // A run is bounded at about seven minutes; stop asking after fifteen.
@@ -69,7 +69,7 @@ export function PurchaseStatusCard({
       router.refresh()
     }
   }, [purchase.status, refreshOnSettle, router])
-  const words = STATUS_WORDS[purchase.status]
+  const words = statusWords(purchase)
   const busy = isInProgress(purchase.status) || purchase.status === "pending"
   const done = purchase.status === "done"
 

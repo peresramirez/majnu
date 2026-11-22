@@ -124,3 +124,53 @@ describe("refundAbandonedPurchase (the dead-letter queue)", () => {
     expect(stripe.refunds.create).not.toHaveBeenCalled()
   })
 })
+
+describe("a purchase paid with a coupon code", () => {
+  const COUPON = "c0000000-0000-4000-8000-000000000001"
+
+  function redeemed(overrides: Record<string, unknown> = {}) {
+    db.coupons.set(COUPON, { id: COUPON, uses: 1, maxUses: 1 })
+    return addPurchase({ letterId: LETTER, status: "paid", couponId: COUPON, amountCents: 0, consentAt: null, consentText: null, ...overrides })
+  }
+
+  it("runs like a paid one and keeps the use when the design is made", async () => {
+    const purchase = redeemed()
+    const outcome = await runPurchaseDesign(purchase.id, { redesign: async () => ({ designId: "d1", seconds: 70 }), log })
+    expect(outcome).toEqual({ outcome: "done", designId: "d1", seconds: 70 })
+    expect(db.purchases.get(purchase.id)?.status).toBe("done")
+    expect(db.coupons.get(COUPON)?.uses).toBe(1)
+  })
+
+  it("gives the use back and marks the purchase failed when the run fails, without calling Stripe", async () => {
+    const purchase = redeemed()
+    const outcome = await runPurchaseDesign(purchase.id, {
+      redesign: async () => {
+        throw new Error("sandbox did not start")
+      },
+      log,
+    })
+    expect(outcome).toMatchObject({ outcome: "code_returned", reason: expect.stringMatching(/sandbox did not start/) })
+    expect(db.purchases.get(purchase.id)).toMatchObject({ status: "failed", refundId: null })
+    expect(db.purchases.get(purchase.id)?.failureReason).toMatch(/sandbox did not start/)
+    expect(db.coupons.get(COUPON)?.uses).toBe(0)
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+
+  it("gives the use back once when the dead-letter queue finds the run abandoned", async () => {
+    const purchase = redeemed({ status: "designing" })
+    expect(await refundAbandonedPurchase(purchase.id, { log })).toMatchObject({ outcome: "code_returned" })
+    expect(db.coupons.get(COUPON)?.uses).toBe(0)
+    // A second delivery finds it failed and changes nothing.
+    expect(await refundAbandonedPurchase(purchase.id, { log })).toMatchObject({ outcome: "skipped" })
+    expect(db.coupons.get(COUPON)?.uses).toBe(0)
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+
+  it("never reaches Stripe even when the gift was deleted before its design", async () => {
+    const purchase = redeemed({ letterId: null })
+    const redesign = vi.fn()
+    expect(await runPurchaseDesign(purchase.id, { redesign, log })).toMatchObject({ outcome: "code_returned" })
+    expect(redesign).not.toHaveBeenCalled()
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+  })
+})
