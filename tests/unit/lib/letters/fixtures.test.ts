@@ -11,6 +11,19 @@ describe("letter fixtures", () => {
   it("gives invitations an event", () => {
     expect(letterFixtures["wedding-invite"].event).toBeDefined()
     expect(letterFixtures["party-invite"].event).toBeDefined()
+    expect(letterFixtures["wedding-envelope-3d"].event).toBeDefined()
+  })
+
+  it("gives the 3D wedding envelope a real date, a gift list and no gift codes", () => {
+    const f = letterFixtures["wedding-envelope-3d"]
+    // Saturday 13 February 2027, 18:00 in Lahore.
+    expect(new Date(f.event!.startsAt).toISOString()).toBe("2027-02-13T13:00:00.000Z")
+    expect(new Date(f.event!.startsAt).getUTCDay()).toBe(6)
+    const ids = (f.wishlist ?? []).map((item) => item.id)
+    expect(ids.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
+    expect(f.gifts.every((g) => !g.code)).toBe(true)
   })
 })
 
