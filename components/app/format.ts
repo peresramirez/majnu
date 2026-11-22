@@ -35,3 +35,14 @@ export function shortDate(iso: string, now: Date): string {
 export function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`
 }
+
+// A recipient's name as the sender's own lists show it (My gifts, the
+// Tracker). A single word typed all in lower case gets a capital, so
+// "patricia" reads "Patricia"; the stored name is unchanged. Anything longer
+// stays as typed: "our friends", "van der Berg" or "Mia & Leo" are right as
+// they are, and only the sender knows.
+export function displayName(name: string): string {
+  const clean = name.trim()
+  if (!/^\p{Ll}[\p{Ll}'’-]*$/u.test(clean)) return clean
+  return clean.charAt(0).toLocaleUpperCase() + clean.slice(1)
+}
