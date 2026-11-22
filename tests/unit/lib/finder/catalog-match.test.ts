@@ -293,3 +293,20 @@ describe("typos and budgets (developer's request, 22 November)", () => {
     expect(detectGroup("she loves cooking").group).toBe("general")
   })
 })
+
+describe("pet gifts", () => {
+  const gift = (id: string, groups: string[], price = 15): CatalogueGift =>
+    ({ id, title: `Gift ${id}`, url: `https://shop.example/${id}`, groups, price_eur: price, occasions: [], interests: [] }) as unknown as CatalogueGift
+  const rows = [gift("p1", ["partner"]), gift("c1", ["cat"]), gift("c2", ["cat", "dog"]), gift("g1", ["general"])]
+
+  it("never fill up a person's six", () => {
+    const ids = pickCatalogueGifts(rows, { group: "partner", seed: "s" }).map(({ gift }) => gift.id)
+    expect(ids).toEqual(expect.arrayContaining(["p1", "g1"]))
+    expect(ids).not.toContain("c1")
+    expect(ids).not.toContain("c2")
+  })
+
+  it("are offered for a pet", () => {
+    expect(pickCatalogueGifts(rows, { group: "cat", seed: "s" })[0].gift.id).toMatch(/^c/)
+  })
+})
