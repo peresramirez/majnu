@@ -95,6 +95,7 @@ export function useBack({ fallback, signedInFallback = fallback, honourNext = fa
   const pathname = usePathname()
   const { user, isLoading } = useAuth()
   const signedIn = !isLoading && user !== null
+  const member = signedIn && user?.is_anonymous !== true
   const fallbackNow = signedIn ? signedInFallback : fallback
   const [resolved, setResolved] = useState<{ href: string; intent: BackIntent | null }>({ href: fallback, intent: null })
 
@@ -107,13 +108,14 @@ export function useBack({ fallback, signedInFallback = fallback, honourNext = fa
       intent: readIntent(),
       current,
       signedIn,
+      member,
       next,
       referrer: document.referrer,
       origin: window.location.origin,
       fallback: fallbackNow,
     })
     setResolved({ href: result.href, intent: result.intent })
-  }, [pathname, signedIn, fallbackNow, honourNext])
+  }, [pathname, signedIn, member, fallbackNow, honourNext])
 
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
     // A new tab or window keeps this tab where it is.

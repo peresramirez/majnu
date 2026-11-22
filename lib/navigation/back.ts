@@ -63,13 +63,17 @@ export function trailPath(pathname: string, search = ""): string | null {
 }
 
 // A same-site path a Back link may lead to, or null.
-export function backDestination(path: unknown, { signedIn }: { signedIn: boolean }): string | null {
-  // A signed-out visitor who opened the terms or the privacy policy from the
-  // sign-in or sign-up page goes back to it. A member never does: the
-  // middleware would only bounce them on to the app.
+export function backDestination(
+  path: unknown,
+  { signedIn, member = signedIn }: { signedIn: boolean; member?: boolean },
+): string | null {
+  // A visitor or a guest who opened the terms or the privacy policy from the
+  // sign-in or sign-up page goes back to it (a guest uses those pages to keep
+  // their gifts). A member never does: the middleware would only bounce them
+  // on to the app.
   const sameSite = sameSitePath(path)
   const signInPage = sameSite !== null && SIGN_IN_PAGES.includes(pathnameOf(sameSite))
-  const safe = signInPage && !signedIn ? sameSite : safeNextPath(path)
+  const safe = signInPage && !member ? sameSite : safeNextPath(path)
   if (!safe) return null
   const pathname = pathnameOf(safe)
   if (NOT_RECORDED.some((prefix) => under(pathname, prefix))) return null
@@ -152,6 +156,9 @@ export type BackInput = {
   // The current page, as trailPath() gives it.
   current: string
   signedIn: boolean
+  // A real account rather than a guest; defaults to signedIn. Guests may go
+  // back to the sign-in pages, members never.
+  member?: boolean
   // The page that sent a visitor to sign in (`?next=`), on sign-in and sign-up.
   next?: string | null
   // document.referrer, used only before the trail has anything else.
@@ -172,11 +179,12 @@ export type BackResolution = {
 // trail holds only this page, then the fallback.
 export function resolveBack(input: BackInput): BackResolution {
   const { trail, current, signedIn, fallback } = input
+  const member = input.member ?? signedIn
   // From one sign-in page, Back skips the other: sign-up never bounces back to
   // sign-in, so the visitor returns to the page that sent them to either.
   const onSignInPage = SIGN_IN_PAGES.includes(pathnameOf(current))
   const allowed = (path: string) => {
-    const destination = backDestination(path, { signedIn })
+    const destination = backDestination(path, { signedIn, member })
     if (destination && onSignInPage && SIGN_IN_PAGES.includes(pathnameOf(destination))) return null
     return destination
   }

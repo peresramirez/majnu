@@ -80,6 +80,17 @@ describe("backDestination", () => {
     expect(backDestination("//evil.example/signin", visitor)).toBeNull()
   })
 
+  it("sends a guest back to the sign-in page too, since guests use it to keep their gifts", () => {
+    const guest = { signedIn: true, member: false }
+    expect(backDestination("/signin", guest)).toBe("/signin")
+    expect(backDestination("/signup?next=%2Fdashboard%2Fgifts", guest)).toBe("/signup?next=%2Fdashboard%2Fgifts")
+    // Guests have an account, so app pages stay open to them.
+    expect(backDestination("/dashboard/gifts", guest)).toBe("/dashboard/gifts")
+    const trail = visit("/dashboard/find", "/signin", "/terms")
+    expect(resolveBack({ trail, current: "/terms", signedIn: true, member: false, fallback: "/dashboard/find" }).href).toBe("/signin")
+    expect(resolveBack({ trail, current: "/terms", signedIn: true, fallback: "/dashboard/find" }).href).toBe("/dashboard/find")
+  })
+
   it("keeps app pages for people who are signed in", () => {
     expect(backDestination("/dashboard/gifts", member)).toBe("/dashboard/gifts")
     expect(backDestination("/create/123", member)).toBe("/create/123")
