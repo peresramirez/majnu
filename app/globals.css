@@ -66,6 +66,12 @@ html:has([data-surface="night"]) body {
   50% { opacity: 1; }
 }
 
+/* The finder's "Majnu is working" dots (components/finder/conversation.tsx). */
+@keyframes finder-dot {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
 /* Scroll-in for landing sections; see components/landing/reveal.tsx. */
 [data-reveal] .reveal-item {
   transition:
