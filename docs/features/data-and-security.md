@@ -116,7 +116,7 @@ The details of each are in [letters-chat.md](letters-chat.md#limits-and-costs).
 |---|---|---|
 | `.env.local` | Every key, for local development | By hand, from a teammate over a private channel; gitignored |
 | `.env.production` (committed) | Public values only: site URL, Supabase URL and publishable key, tip link, Stripe publishable key, Turnstile site key | They ship in the browser bundle anyway |
-| Cloudflare Worker secrets | `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `DAYTONA_ANTHROPIC_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`, `OPENAI_API_KEY` | `npm run cf:secrets` copies the filled-in ones from `.env.local` with `wrangler secret bulk` |
+| Cloudflare Worker secrets | `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET`, `DAYTONA_API_KEY`, `DAYTONA_ANTHROPIC_API_KEY`, `OPEN_HASH_SECRET`, `TAVILY_API_KEY`, `OPENAI_API_KEY`, `APIFY_API_TOKEN`, `BRIGHTDATA_API_KEY` | `npm run cf:secrets` copies the filled-in ones from `.env.local` with `wrangler secret bulk` |
 | GitHub Actions secrets | `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `DAYTONA_API_KEY` | `npm run ci:secrets`, only the keys the checks use |
 
 - `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY` and `DAYTONA_API_KEY` are server only. Every module that touches one starts with `import "server-only"`, so importing it into client code fails the build. Only `NEXT_PUBLIC_` variables reach the browser.

@@ -35,15 +35,20 @@ export const TIKTOK_VIDEOS = 10
 // the $5 of Apify credit on top of APIFY_DAILY_CAP.
 export const MAX_CHARGE_USD = 0.05
 
-const MAX_POSTS = 12
-const MAX_BIO = 500
-const MAX_CAPTION = 300
+// Shared with lib/social/brightdata.ts, so every source is cut down the same way.
+export const MAX_POSTS = 12
+export const MAX_BIO = 500
+export const MAX_CAPTION = 300
 const MAX_HASHTAGS = 30
 
 // What a profile says about its owner, ready for the interest step.
 export type ProfileText = {
+  // A LinkedIn headline ("Product designer, trail runner").
+  headline?: string
   bio?: string
   category?: string
+  // LinkedIn: roles, companies and schools, one per line.
+  background?: string[]
   posts: string[]
   hashtags: string[]
 }
@@ -104,20 +109,20 @@ export function scrub(text: string | null | undefined, max: number): string {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
 }
 
-function hashtag(tag: string | null | undefined): string | undefined {
+export function hashtag(tag: string | null | undefined): string | undefined {
   const name = tag?.replace(/^#/, "").trim()
   return name && /^[\p{L}\p{N}_]{2,40}$/u.test(name) ? name.toLowerCase() : undefined
 }
 
 // The most used hashtags first.
-function topHashtags(tags: (string | undefined)[]): string[] {
+export function topHashtags(tags: (string | undefined)[]): string[] {
   const counts = new Map<string, number>()
   for (const tag of tags) if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1)
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_HASHTAGS).map(([tag]) => tag)
 }
 
-function hasContent(text: ProfileText): boolean {
-  return Boolean(text.bio || text.category || text.posts.length || text.hashtags.length)
+export function hasContent(text: ProfileText): boolean {
+  return Boolean(text.headline || text.bio || text.category || text.background?.length || text.posts.length || text.hashtags.length)
 }
 
 export function instagramText(items: unknown[]): ProfileText {
@@ -179,7 +184,9 @@ function failureFor(status: number): ReadFailure {
   return "failed"
 }
 
-async function runActor(actor: string, input: Record<string, unknown>, fields: string, token: string): Promise<unknown[]> {
+// `deadline` (epoch ms) is the end of the whole profile read (lib/social/read.ts):
+// the request gives up at REQUEST_TIMEOUT_MS or then, whichever comes first.
+async function runActor(actor: string, input: Record<string, unknown>, fields: string, token: string, deadline?: number): Promise<unknown[]> {
   const params = new URLSearchParams({
     timeout: String(RUN_TIMEOUT_SECS),
     maxTotalChargeUsd: String(MAX_CHARGE_USD),
@@ -187,8 +194,10 @@ async function runActor(actor: string, input: Record<string, unknown>, fields: s
     clean: "true",
     fields,
   })
+  const timeout = deadline === undefined ? REQUEST_TIMEOUT_MS : Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now())
+  if (timeout <= 0) throw new ProfileReadError("timeout")
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeout)
   try {
     let response: Response
     try {
@@ -215,12 +224,12 @@ async function runActor(actor: string, input: Record<string, unknown>, fields: s
   }
 }
 
-export async function readInstagramProfile(username: string, token: string): Promise<ProfileText> {
-  const items = await runActor(APIFY_ACTORS.instagram, { usernames: [username] }, INSTAGRAM_FIELDS, token)
+export async function readInstagramProfile(username: string, token: string, deadline?: number): Promise<ProfileText> {
+  const items = await runActor(APIFY_ACTORS.instagram, { usernames: [username] }, INSTAGRAM_FIELDS, token, deadline)
   return instagramText(items)
 }
 
-export async function readTikTokProfile(username: string, token: string): Promise<ProfileText> {
+export async function readTikTokProfile(username: string, token: string, deadline?: number): Promise<ProfileText> {
   const items = await runActor(
     APIFY_ACTORS.tiktok,
     {
@@ -240,6 +249,7 @@ export async function readTikTokProfile(username: string, token: string): Promis
     },
     TIKTOK_FIELDS,
     token,
+    deadline,
   )
   return tiktokText(items)
 }

@@ -241,7 +241,7 @@ const READ_PROFILE_TOOL: BetaTool = {
           "The link or handle exactly as the visitor wrote it, e.g. 'https://www.instagram.com/natgeo/', '@natgeo', 'https://www.linkedin.com/in/name' or 'https://example.com/about'",
       },
       platform: nullable(
-        { type: "string", enum: ["instagram", "tiktok"] },
+        { type: "string", enum: ["instagram", "tiktok", "linkedin"] },
         "For a bare handle, the platform the visitor named. Null for a full link, or if they did not say.",
       ),
       language: { type: "string", description: "The ISO 639-1 code of the language the visitor writes in, e.g. 'de'" },
@@ -363,7 +363,7 @@ export function parseFillWrap(input: unknown): WrapFill | null {
 
 const ReadProfileInput = z.object({
   link: z.string().trim().min(1).max(300),
-  platform: z.enum(["instagram", "tiktok"]).optional().catch(undefined),
+  platform: z.enum(["instagram", "tiktok", "linkedin"]).optional().catch(undefined),
   language: z.string().optional().catch(undefined),
   status: shortText(100).optional().catch(undefined),
 })
@@ -682,7 +682,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
 // next, so the search goes on without the profile.
 const LINK_PROBLEMS: Record<LinkProblem, string> = {
   not_a_profile:
-    "Nothing was read: that link is a post, a short link or a page on Instagram or TikTok that is not a profile. In one short sentence, say you can read a profile link such as instagram.com/name or tiktok.com/@name, and search with what you know.",
+    "Nothing was read: that link is a post, a short link, a company page or another page on Instagram, TikTok or LinkedIn that is not a person's profile. In one short sentence, say you can read a profile link such as instagram.com/name, tiktok.com/@name or linkedin.com/in/name, and search with what you know.",
   needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram or TikTok.",
   unsupported:
     "Nothing was read: that is not a link to a public profile or page that can be read. Say so in one short sentence and search with what you know.",

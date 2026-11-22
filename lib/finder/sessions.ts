@@ -86,7 +86,7 @@ const StoredOptionsSchema = z.object({
 })
 
 const StoredProfile = z.object({
-  source: z.enum(["instagram", "tiktok", "web"]),
+  source: z.enum(["instagram", "tiktok", "linkedin", "web"]),
   readAt: z.string(),
   interests: z
     .array(z.string())
