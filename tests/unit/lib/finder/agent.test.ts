@@ -952,3 +952,32 @@ describe("files the visitor shared (issue #77)", () => {
     expect(FINDER_SYSTEM_PROMPT).toContain("Never say who is in a photo or guess a name from it.")
   })
 })
+
+describe("contextFor: the place the visitor named", () => {
+  const base = { country: "DE", region: "Berlin", language: "es", currency: "EUR" }
+  const input = (extra: Record<string, unknown>) => FindGiftsInput.parse({ ...MOTHER, ...extra })
+
+  it("searches in the city the visitor named instead of the connection's", () => {
+    const context = contextFor(base, input({ place: "Nürnberg" }))
+    expect(context).toMatchObject({ country: "DE", region: "Nürnberg", place: "Nürnberg", currency: "EUR" })
+  })
+
+  it("keeps that city for a later search that leaves it out (the budget question)", () => {
+    const first = contextFor(base, input({ place: "Nürnberg" }))
+    const second = contextFor(base, input({ place: null, budget: "unter 50 €" }), [], [], first)
+    expect(second.region).toBe("Nürnberg")
+    expect(second.place).toBe("Nürnberg")
+  })
+
+  it("lets the visitor name another place, and drops it for another country", () => {
+    const first = contextFor(base, input({ place: "Nürnberg" }))
+    expect(contextFor(base, input({ place: "München" }), [], [], first).region).toBe("München")
+    const abroad = contextFor(base, input({ place: null, country: "ES" }), [], [], first)
+    expect(abroad.country).toBe("ES")
+    expect(abroad.place).toBeUndefined()
+  })
+
+  it("searches where the connection is when no place was ever named", () => {
+    expect(contextFor(base, input({ place: null })).region).toBe("Berlin")
+  })
+})

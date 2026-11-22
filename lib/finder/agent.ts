@@ -121,7 +121,7 @@ Where the gift goes
 
 Finding gifts
 - relationship is who the person is to the visitor, in the visitor's own words. kind is the closest of the listed kinds.
-- Fill in every field the visitor has told you about, in this message or an earlier one: age, name, occasion, budget, interests, senderAge for their own age, and country. The chips show only these fields, so a fact you put only in about is one the visitor can't see or correct. "She turns 62" is age 62 to 62; "around 50 euros" is the budget.
+- Fill in every field the visitor has told you about, in this message or an earlier one: age, name, occasion, budget, interests, senderAge for their own age, country, and place (a city or region they named, such as Nuremberg; keep it in every later search until they name another). The chips show only these fields, so a fact you put only in about is one the visitor can't see or correct. "She turns 62" is age 62 to 62; "around 50 euros" is the budget.
 - Use null (for interests, an empty list) when the visitor hasn't said it, and never invent anything. Without an age, the app assumes a range from the relationship.
 - about carries everything you know about the person and the occasion, including what is already in the other fields, for the researcher, who sees nothing else.
 - status is a few words in the visitor's language for the line the app shows while you search, such as "Looking for gaming gifts…".
@@ -216,6 +216,10 @@ const FIND_GIFTS_TOOL: BetaTool = {
         { type: "string" },
         "Only when the visitor said the gift should be delivered or used in another country than the one in the context block: its ISO 3166-1 alpha-2 code, e.g. 'VE'. Otherwise null, to search where the visitor is.",
       ),
+      place: nullable(
+        { type: "string" },
+        "The city or region the visitor said the gift should be delivered or used in, in this message or an earlier one, e.g. 'Nürnberg'. Keep it in every later search until they name another. Otherwise null, to search where the visitor's connection is.",
+      ),
       status: {
         type: "string",
         description: "A few words in the visitor's language for the line shown while searching, e.g. 'Ich suche nach Gaming-Geschenken…'",
@@ -234,7 +238,7 @@ const FIND_GIFTS_TOOL: BetaTool = {
         "One short question that would most improve the next search, shown under the options, or null when you already know enough",
       ),
     },
-    required: ["relationship", "kind", "name", "age", "senderAge", "occasion", "budget", "interests", "about", "notes", "language", "country", "status", "followUp"],
+    required: ["relationship", "kind", "name", "age", "senderAge", "occasion", "budget", "interests", "about", "notes", "language", "country", "place", "status", "followUp"],
     additionalProperties: false,
   },
 }
@@ -349,6 +353,13 @@ export const FindGiftsInput = z.object({
     .trim()
     .toUpperCase()
     .regex(/^[A-Z]{2}$/)
+    .optional()
+    .catch(undefined),
+  place: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
     .optional()
     .catch(undefined),
   status: shortText(100).optional().catch(undefined),
@@ -519,11 +530,13 @@ export function mergeInterests(given: readonly string[], fromProfile: readonly s
 // Where to search: where the visitor is, unless they said the gift goes to
 // another country ("she lives in Venezuela"). Then that country and its
 // currency, and no region: the visitor's region says nothing about it.
-function searchPlace(base: BaseContext, country: string | undefined): Pick<FinderContext, "country" | "region" | "currency"> {
+// A place the visitor named (a city or region) replaces the connection's region.
+function searchPlace(base: BaseContext, country: string | undefined, place?: string): Pick<FinderContext, "country" | "region" | "currency" | "place"> {
   const { country: here, region, currency } = base
-  if (!country || country === here) return { ...(here ? { country: here } : {}), ...(region ? { region } : {}), ...(currency ? { currency } : {}) }
+  const named = place ? { region: place, place } : {}
+  if (!country || country === here) return { ...(here ? { country: here } : {}), ...(region ? { region } : {}), ...(currency ? { currency } : {}), ...named }
   const there = currencyFor(country)
-  return { country, ...(there ? { currency: there } : {}) }
+  return { country, ...(there ? { currency: there } : {}), ...named }
 }
 
 // `fileNotes` are those of files read in this turn, merged in the same way:
@@ -534,12 +547,17 @@ export function contextFor(
   input: FindGiftsInput,
   profileInterests: readonly string[] = [],
   fileNotes: readonly string[] = [],
+  previous?: Pick<FinderContext, "place" | "country">,
 ): FinderContext {
+  // The place the visitor named stays until they name another; a new country
+  // without a place drops it (a city in the old country would be wrong there).
+  const keptPlace = previous?.place && (!input.country || input.country === previous.country) ? previous.place : undefined
+  const place = input.place ?? keptPlace
   const ageRange = cleanAgeRange(input.age) ?? defaultAgeRange(input.kind, input.senderAge)
   const interests = mergeInterests(input.interests ?? [], profileInterests)
   const notes = mergeNotes(input.notes ?? [], fileNotes)
   return {
-    ...searchPlace(base, input.country),
+    ...searchPlace(base, input.country, place),
     language: baseLanguage(input.language) ?? base.language,
     relationship: input.relationship,
     // For the wrap step, which prefills "Their name" with it.
@@ -682,7 +700,7 @@ async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: 
   if (!parsed.success) return { result: result(call, `Invalid input: ${z.prettifyError(parsed.error)}`, true), terminal: false }
   flags.searched = true
   const input = parsed.data
-  const context = contextFor(state.base, input, flags.profileInterests, state.sharedFiles?.notes)
+  const context = contextFor(state.base, input, flags.profileInterests, state.sharedFiles?.notes, state.context)
   const personalised = state.lastOptions !== null
 
   const claim = await claimSearch({
