@@ -4,13 +4,15 @@ import { useState } from "react"
 import { ArrowUpRight, Gift } from "lucide-react"
 import type { GiftOption } from "@/lib/finder/events"
 import { quietLink, smallButton, smallPrimary } from "./styles"
-import { productImageSrc, shopHref, shopName } from "./urls"
+import { defaultGiftImage, productImageSrc, shopHref, shopName } from "./urls"
 
 // A product photo from the shop, loaded only when it scrolls near. The box has
-// a fixed shape, so nothing moves when it arrives, and a missing or broken
-// image leaves a quiet placeholder instead of a broken-image icon.
-export function ProductImage({ src, className = "" }: { src?: string; className?: string }) {
+// a fixed shape, so nothing moves when it arrives. A missing or broken photo
+// shows one of Majnu's own gift pictures (public/finder, made with FLUX),
+// chosen by `seed` so a gift keeps the same one and a row of cards varies.
+export function ProductImage({ src, seed, className = "" }: { src?: string; seed?: string; className?: string }) {
   const safe = productImageSrc(src)
+  const fallback = defaultGiftImage(seed ?? src ?? "")
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   return (
@@ -28,7 +30,11 @@ export function ProductImage({ src, className = "" }: { src?: string; className?
           className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-calm ${loaded ? "opacity-100" : "opacity-0"}`}
         />
       ) : null}
-      {(!safe || failed || !loaded) && (
+      {(!safe || failed) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={fallback} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+      )}
+      {safe && !failed && !loaded && (
         <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <Gift className="h-7 w-7 text-night-lilac/40" strokeWidth={1.5} />
         </span>
@@ -59,7 +65,7 @@ export function GiftOptionCard({ option, recommended, onChoose, disabled }: Prop
       }`}
     >
       <span className="relative block w-full shrink-0">
-        <ProductImage src={option.imageUrl} className="aspect-[4/3] rounded-t-[20px]" />
+        <ProductImage src={option.imageUrl} seed={option.title} className="aspect-[4/3] rounded-t-[20px]" />
         {recommended && (
           <span className="absolute left-2.5 top-2.5 inline-block rounded-full bg-night-orchid px-2 py-0.5 text-[11px] font-semibold tracking-wide text-night-plum">
             Recommended
