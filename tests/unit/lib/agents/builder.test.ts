@@ -84,8 +84,8 @@ describe("checkContent", () => {
   })
 
   it("names every template that needs an event or a gift in the builder prompt", () => {
-    expect(EVENT_TEMPLATES).toEqual(["wedding-invite", "party-invite", "wedding-envelope-3d"])
-    expect(GIFT_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d"])
+    expect(EVENT_TEMPLATES).toEqual(["wedding-invite", "party-invite", "wedding-envelope-3d", "wedding-invite-3d", "party-invite-3d"])
+    expect(GIFT_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d", "gift-3d"])
     expect(BUILDER_SYSTEM_PROMPT).toContain(`Invitations (${EVENT_TEMPLATES.join(", ")})`)
     expect(BUILDER_SYSTEM_PROMPT).toContain(`(${GIFT_TEMPLATES.join(", ")}) needs at least one gift`)
     expect(BUILDER_SYSTEM_PROMPT).toContain("A party pop box (party-box) needs one when the brief gives a gift.")
