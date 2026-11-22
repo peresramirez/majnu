@@ -1,0 +1,1231 @@
+/*
+ * The pitch deck at /pitch (issue #76), in the Night Post brand (docs/brand.md).
+ *
+ * Every slide is drawn on a 1920 × 1080 canvas. Each is a size container,
+ * and --u is one canvas pixel in container units (100cqw / 1920), so every
+ * size below scales with the slide: letterboxed on a projector, full width on
+ * a phone, 1920 px wide in print.
+ *
+ * Three layouts:
+ *   - presenting (landscape screens, or any screen wider than 900 px): one
+ *     slide at a time, cross-fading, its pieces arriving in a short sequence;
+ *   - a phone held upright: every slide in a scrolling column, all visible;
+ *   - print: one slide per landscape page, for "Save as PDF".
+ * Nothing here holds deck text: the CSS file is public before the password.
+ */
+
+body:has(.pd-root),
+body:has(.pd-gate) {
+  background: #100a17;
+  color-scheme: dark;
+}
+
+.pd-root,
+.pd-gate {
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  color: #f5eaf1;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.pd-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- The password screen ---------- */
+
+.pd-gate {
+  min-height: 100svh;
+  box-sizing: border-box;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 48px;
+  padding: 32px 16px;
+  background: radial-gradient(120% 100% at 72% 30%, #3e2759 0%, #1b1226 58%, #100a17 100%);
+}
+
+.pd-gate-mark {
+  width: 200px;
+  height: auto;
+}
+
+.pd-gate-form {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 10px;
+}
+
+.pd-gate-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #bca8c4;
+}
+
+.pd-gate-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pd-gate-input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 234, 241, 0.24);
+  background: #2a1c3a;
+  color: #f5eaf1;
+  padding: 0 20px;
+  font: inherit;
+  font-size: 17px;
+}
+
+.pd-gate-input[aria-invalid="true"] {
+  border-color: #cd8dbd;
+}
+
+.pd-gate-button {
+  height: 48px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  background: #eab394;
+  color: #1b1226;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 200ms var(--ease),
+    transform 150ms var(--ease);
+}
+
+.pd-gate-button:hover {
+  background: #f0c3a9;
+}
+
+.pd-gate-button:active {
+  transform: scale(0.97);
+}
+
+.pd-gate-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.pd-gate-input:focus-visible,
+.pd-gate-button:focus-visible {
+  outline: 2px solid #eab394;
+  outline-offset: 2px;
+}
+
+.pd-gate-error {
+  min-height: 1.5em;
+  margin: 2px 0 0 20px;
+  font-size: 15px;
+}
+
+/* ---------- Structure shared by every layout ---------- */
+
+.pd-hint {
+  display: none;
+}
+
+.pd-slide {
+  --u: calc(100cqw / 1920);
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+  overflow: hidden;
+  background: #1b1226;
+}
+
+.pd-canvas {
+  position: absolute;
+  inset: 0;
+  font-size: calc(32 * var(--u));
+  line-height: 1.4;
+}
+
+.pd-canvas :where(h1, h2, h3, p, ul, ol) {
+  margin: 0;
+}
+
+.pd-sky {
+  background: radial-gradient(120% 100% at 72% 30%, #3e2759 0%, #1b1226 58%, #100a17 100%);
+}
+
+/* The safe area: every slide's content stays inside it, the same on every
+   slide, 100 canvas pixels from the top and bottom and 160 from the sides. */
+.pd-pad {
+  position: absolute;
+  inset: calc(100 * var(--u)) calc(160 * var(--u));
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-title {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: calc(88 * var(--u));
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.pd-title--small {
+  font-size: calc(64 * var(--u));
+}
+
+.pd-eyebrow {
+  font-size: calc(24 * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #bca8c4;
+}
+
+.pd-rose {
+  color: #eab394;
+}
+
+/* A coloured phrase in a heading keeps the heading's line box, so it never
+   reaches above the safe area with the typeface's ascent. */
+.pd-title .pd-rose {
+  display: inline-block;
+}
+
+.pd-aside {
+  font-size: calc(34 * var(--u));
+  color: #bca8c4;
+}
+
+.pd-phase {
+  position: absolute;
+  top: calc(126 * var(--u));
+  right: calc(160 * var(--u));
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  color: #eab394;
+}
+
+.pd-phase svg,
+.pd-q-moon svg,
+.pd-step-num svg,
+.pd-door-moon svg,
+.pd-card-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Slide 1: the cover */
+
+.pd-cover-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pd-cover-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(16, 10, 23, 0.8) 0%, rgba(16, 10, 23, 0.5) 32%, rgba(16, 10, 23, 0) 56%),
+    linear-gradient(0deg, rgba(16, 10, 23, 0.6) 0%, rgba(16, 10, 23, 0) 32%);
+}
+
+.pd-cover-pad {
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+}
+
+.pd-cover-text {
+  grid-row: 2;
+}
+
+.pd-cover-wordmark {
+  display: block;
+  width: calc(600 * var(--u));
+  height: auto;
+}
+
+.pd-cover-promise {
+  margin-top: calc(64 * var(--u)) !important;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(60 * var(--u));
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+}
+
+.pd-cover-url {
+  grid-row: 3;
+  align-self: end;
+  font-size: calc(28 * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #bca8c4;
+}
+
+/* Slide 2: three questions */
+
+.pd-wonder {
+  justify-content: center;
+}
+
+.pd-kicker {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: calc(56 * var(--u));
+  color: #bca8c4;
+  margin-bottom: calc(56 * var(--u)) !important;
+}
+
+.pd-questions {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: calc(36 * var(--u));
+}
+
+.pd-questions li,
+.pd-wonder-line {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(36 * var(--u));
+  max-width: calc(1480 * var(--u));
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(60 * var(--u));
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+}
+
+.pd-q-moon {
+  flex: none;
+  width: calc(48 * var(--u));
+  height: calc(48 * var(--u));
+  margin-top: calc(10 * var(--u));
+  color: #eab394;
+}
+
+.pd-wonder-line {
+  margin-top: calc(64 * var(--u)) !important;
+  padding-top: calc(56 * var(--u));
+  border-top: 1px solid rgba(245, 234, 241, 0.14);
+}
+
+/* Slide 3: three cards */
+
+.pd-problem {
+  justify-content: space-between;
+}
+
+.pd-trio {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(40 * var(--u));
+}
+
+.pd-card,
+.pd-panel,
+.pd-plan {
+  border-radius: calc(36 * var(--u));
+  background: rgba(42, 28, 58, 0.72);
+  border: 1px solid rgba(245, 234, 241, 0.1);
+}
+
+.pd-card {
+  padding: calc(56 * var(--u)) calc(52 * var(--u)) calc(60 * var(--u));
+}
+
+.pd-card-icon {
+  display: block;
+  width: calc(84 * var(--u));
+  height: calc(84 * var(--u));
+  margin-bottom: calc(48 * var(--u));
+  color: #eab394;
+}
+
+.pd-card h3 {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: calc(56 * var(--u));
+  line-height: 1.1;
+  margin-bottom: calc(16 * var(--u)) !important;
+}
+
+.pd-card p {
+  font-size: calc(36 * var(--u));
+  line-height: 1.3;
+  color: #bca8c4;
+}
+
+/* Slide 4: four steps on four phones */
+
+.pd-majnu {
+  gap: calc(56 * var(--u));
+}
+
+.pd-steps {
+  flex: 1;
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: calc(56 * var(--u));
+}
+
+.pd-step {
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(18 * var(--u));
+}
+
+.pd-step-num {
+  flex: none;
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  margin-top: calc(2 * var(--u));
+  color: #eab394;
+}
+
+.pd-step h3 {
+  font-size: calc(34 * var(--u));
+  font-weight: 600;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.pd-step-detail {
+  margin-top: calc(10 * var(--u)) !important;
+  font-size: calc(27 * var(--u));
+  line-height: 1.35;
+  color: #bca8c4;
+  text-wrap: pretty;
+}
+
+.pd-phone {
+  box-sizing: border-box;
+  margin-top: auto;
+  height: calc(530 * var(--u));
+  width: calc(510 * var(--u) * 390 / 844 + 20 * var(--u));
+  padding: calc(10 * var(--u));
+  border-radius: calc(46 * var(--u));
+  background: #0c0712;
+  border: 1px solid rgba(245, 234, 241, 0.16);
+  box-shadow: 0 calc(30 * var(--u)) calc(80 * var(--u)) rgba(0, 0, 0, 0.45);
+}
+
+.pd-phone img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  border-radius: calc(36 * var(--u));
+}
+
+/* Slide 5: two panels */
+
+.pd-more {
+  gap: calc(56 * var(--u));
+}
+
+.pd-more-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(40 * var(--u));
+}
+
+.pd-panel {
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: calc(48 * var(--u)) calc(56 * var(--u));
+}
+
+.pd-tag {
+  align-self: flex-start;
+  padding: calc(8 * var(--u)) calc(20 * var(--u));
+  border-radius: 999px;
+  border: 1px solid rgba(245, 234, 241, 0.3);
+  font-size: calc(22 * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #bca8c4;
+}
+
+.pd-tag--next {
+  border-color: rgba(234, 179, 148, 0.6);
+  color: #eab394;
+}
+
+.pd-panel h3 {
+  margin-top: calc(28 * var(--u)) !important;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: calc(60 * var(--u));
+  line-height: 1.08;
+}
+
+.pd-panel-lead {
+  margin-top: calc(10 * var(--u)) !important;
+  font-size: calc(34 * var(--u));
+  color: #f5eaf1;
+}
+
+.pd-doors {
+  list-style: none;
+  padding: 0;
+  margin: auto 0 !important;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: calc(12 * var(--u));
+}
+
+.pd-door {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: calc(14 * var(--u));
+  border: 1px solid rgba(245, 234, 241, 0.14);
+  background: rgba(16, 10, 23, 0.35);
+}
+
+.pd-door-day {
+  position: absolute;
+  top: calc(6 * var(--u));
+  left: calc(10 * var(--u));
+  font-size: calc(18 * var(--u));
+  font-weight: 600;
+  color: #bca8c4;
+}
+
+.pd-door-moon {
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+  margin-top: calc(14 * var(--u));
+  color: #eab394;
+}
+
+.pd-door--filled {
+  border-color: rgba(234, 179, 148, 0.3);
+  background: rgba(234, 179, 148, 0.08);
+}
+
+.pd-door--today {
+  border-color: #cd8dbd;
+  box-shadow: inset 0 0 0 1px #cd8dbd;
+}
+
+.pd-panel-note {
+  padding-top: calc(28 * var(--u));
+  font-size: calc(30 * var(--u));
+  color: #bca8c4;
+  text-wrap: pretty;
+}
+
+.pd-panel--travel {
+  padding: 0;
+  background: #1b1226;
+}
+
+.pd-travel-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 0% 100%;
+  transform: scale(1.4);
+  transform-origin: 0% 100%;
+}
+
+.pd-travel-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(16, 10, 23, 0.86) 0%, rgba(16, 10, 23, 0.6) 48%, rgba(16, 10, 23, 0.05) 100%);
+}
+
+.pd-travel-body {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: calc(48 * var(--u)) calc(56 * var(--u));
+}
+
+.pd-chips {
+  list-style: none;
+  padding: 0;
+  margin-top: calc(40 * var(--u)) !important;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(14 * var(--u));
+}
+
+.pd-chips li {
+  padding: calc(12 * var(--u)) calc(26 * var(--u));
+  border-radius: 999px;
+  border: 1px solid rgba(245, 234, 241, 0.22);
+  background: rgba(27, 18, 38, 0.6);
+  font-size: calc(30 * var(--u));
+}
+
+.pd-panel--travel .pd-panel-note {
+  margin-top: calc(8 * var(--u)) !important;
+}
+
+/* Slide 6 and the appendix: the diagrams */
+
+.pd-inside {
+  gap: calc(56 * var(--u));
+}
+
+.pd-diagram-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.pd-diagram {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dg-box {
+  fill: #2a1c3a;
+  stroke: rgba(245, 234, 241, 0.16);
+  stroke-width: 2;
+}
+
+.dg-box--lit {
+  fill: #33224a;
+  stroke: rgba(234, 179, 148, 0.5);
+}
+
+.dg-box--dashed {
+  fill: rgba(42, 28, 58, 0.45);
+  stroke-dasharray: 10 8;
+}
+
+.dg-title,
+.dg-text,
+.dg-sub,
+.dg-label {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.dg-title {
+  fill: #f5eaf1;
+  font-weight: 600;
+}
+
+.dg-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 500;
+  fill: #eab394;
+}
+
+.dg-text {
+  fill: #f5eaf1;
+}
+
+.dg-sub {
+  fill: #bca8c4;
+}
+
+.dg-label {
+  fill: #bca8c4;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+}
+
+.dg-dot {
+  fill: #eab394;
+}
+
+.dg-icon {
+  fill: none;
+  stroke: #eab394;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.dg-line {
+  fill: none;
+  stroke: rgba(234, 179, 148, 0.75);
+  stroke-width: 3;
+}
+
+.dg-line--dashed {
+  stroke-dasharray: 8 8;
+}
+
+.pd-appendix .pd-title {
+  margin-top: calc(10 * var(--u)) !important;
+}
+
+.pd-appendix .pd-diagram-wrap {
+  margin-top: calc(40 * var(--u));
+}
+
+/* Slide 7: three plans and a closing line */
+
+.pd-model {
+  gap: calc(56 * var(--u));
+}
+
+.pd-plans {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(32 * var(--u));
+}
+
+.pd-plan {
+  padding: calc(44 * var(--u)) calc(48 * var(--u)) calc(48 * var(--u));
+}
+
+.pd-plan--paid {
+  border-color: rgba(234, 179, 148, 0.55);
+  background: linear-gradient(160deg, rgba(234, 179, 148, 0.12) 0%, rgba(42, 28, 58, 0.72) 62%);
+}
+
+.pd-plan-price {
+  margin-bottom: calc(20 * var(--u)) !important;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(68 * var(--u));
+  line-height: 1;
+}
+
+.pd-plan--paid .pd-plan-price {
+  color: #eab394;
+}
+
+.pd-plan h3 {
+  margin-bottom: calc(10 * var(--u)) !important;
+  font-size: calc(34 * var(--u));
+  font-weight: 600;
+}
+
+.pd-plan p:not(.pd-plan-price) {
+  font-size: calc(29 * var(--u));
+  line-height: 1.35;
+  color: #bca8c4;
+  text-wrap: balance;
+}
+
+.pd-plan h3 + p + p {
+  margin-top: calc(14 * var(--u)) !important;
+}
+
+.pd-vision {
+  margin-top: auto;
+}
+
+.pd-vision-line {
+  margin-top: calc(18 * var(--u)) !important;
+  max-width: calc(1500 * var(--u));
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(88 * var(--u));
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Slide 8: the painting, the moon passing between the two figures' hands
+   (moon-passage.tsx), text on the left. The text block is anchored to the top
+   of the safe area; the QR code and the closing line share its bottom line. */
+
+.pd-scene {
+  background: #100a17;
+}
+
+.pd-scene-art,
+.pd-passage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pd-scene-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(16, 10, 23, 0.9) 0%, rgba(16, 10, 23, 0.68) 34%, rgba(16, 10, 23, 0) 60%),
+    linear-gradient(0deg, rgba(16, 10, 23, 0.78) 0%, rgba(16, 10, 23, 0) 34%);
+}
+
+.pd-name {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 1fr auto;
+}
+
+.pd-name-text {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+}
+
+.pd-names {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: calc(150 * var(--u));
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.pd-plus {
+  display: inline-block;
+  margin: 0 0.04em;
+  font-size: 0.5em;
+  vertical-align: 0.42em;
+  color: #bca8c4;
+}
+
+.pd-name-story {
+  margin: calc(48 * var(--u)) 0 calc(32 * var(--u)) !important;
+  font-size: calc(34 * var(--u));
+  color: #bca8c4;
+}
+
+.pd-name-line {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(62 * var(--u));
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+}
+
+.pd-try {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: calc(40 * var(--u));
+}
+
+.pd-qr {
+  flex: none;
+  display: block;
+  width: calc(232 * var(--u));
+  border-radius: calc(24 * var(--u));
+  overflow: hidden;
+  box-shadow: 0 calc(24 * var(--u)) calc(64 * var(--u)) rgba(0, 0, 0, 0.5);
+}
+
+.pd-qr:focus-visible {
+  outline: 3px solid #eab394;
+  outline-offset: 6px;
+}
+
+.pd-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pd-try-label {
+  font-size: calc(38 * var(--u));
+  font-weight: 600;
+}
+
+.pd-try-url {
+  margin-top: calc(6 * var(--u)) !important;
+  font-size: calc(30 * var(--u));
+  letter-spacing: 0.08em;
+  color: #bca8c4;
+}
+
+.pd-thanks {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: calc(72 * var(--u));
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Controls and the presenter's notes ---------- */
+
+.pd-controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--notes-h, 0px) + 14px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 16px;
+  pointer-events: none;
+  transition: opacity 400ms var(--ease);
+}
+
+.pd-controls > * {
+  pointer-events: auto;
+}
+
+.pd-root[data-idle] .pd-controls:not(:focus-within):not(:hover) {
+  opacity: 0;
+}
+
+.pd-marks {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(16, 10, 23, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.pd-mark-item--appendix {
+  margin-left: 8px;
+}
+
+.pd-mark {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #eab394;
+  cursor: pointer;
+}
+
+.pd-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(245, 234, 241, 0.35);
+  transition: background-color 200ms var(--ease);
+}
+
+.pd-mark:hover .pd-dot {
+  background: rgba(245, 234, 241, 0.8);
+}
+
+.pd-counter {
+  min-width: 7ch;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(16, 10, 23, 0.6);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: #bca8c4;
+}
+
+.pd-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 234, 241, 0.16);
+  background: rgba(16, 10, 23, 0.6);
+  color: #f5eaf1;
+  cursor: pointer;
+  transition:
+    background-color 200ms var(--ease),
+    transform 150ms var(--ease);
+}
+
+.pd-btn:hover {
+  background: rgba(42, 28, 58, 0.9);
+}
+
+.pd-btn:active {
+  transform: scale(0.94);
+}
+
+.pd-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.pd-btn[aria-pressed="true"] {
+  border-color: #eab394;
+  color: #eab394;
+}
+
+.pd-mark:focus-visible,
+.pd-btn:focus-visible,
+.pd-clock:focus-visible {
+  outline: 2px solid #eab394;
+  outline-offset: 2px;
+}
+
+.pd-notes {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  box-sizing: border-box;
+  height: var(--notes-h);
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  padding: 20px clamp(16px, 4vw, 56px);
+  background: #1b1226;
+  border-top: 1px solid rgba(245, 234, 241, 0.12);
+}
+
+.pd-notes-text p {
+  margin: 0;
+  max-width: 68ch;
+  font-size: clamp(17px, 2.6svh, 28px);
+  line-height: 1.5;
+}
+
+.pd-notes-text .pd-notes-meta {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #bca8c4;
+}
+
+.pd-notes-side {
+  display: grid;
+  align-content: start;
+  justify-items: end;
+  gap: 6px;
+}
+
+.pd-clock {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 44px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #eab394;
+  cursor: pointer;
+}
+
+.pd-notes-next {
+  max-width: 26ch;
+  margin: 0;
+  font-size: 14px;
+  text-align: right;
+  color: #bca8c4;
+}
+
+/* ---------- Presenting: one slide at a time ---------- */
+
+@media screen and (orientation: landscape), screen and (min-width: 901px) {
+  .pd-root {
+    --notes-h: 0px;
+  }
+
+  .pd-root[data-notes] {
+    --notes-h: clamp(170px, 30svh, 320px);
+  }
+
+  .pd-stage {
+    position: fixed;
+    inset: 0 0 var(--notes-h) 0;
+    container-type: size;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #100a17;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pd-frame {
+    position: relative;
+    width: min(100cqw, 100cqh * 16 / 9);
+    aspect-ratio: 16 / 9;
+  }
+
+  .pd-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 800ms var(--ease),
+      visibility 0s linear 800ms;
+  }
+
+  .pd-slide[data-active] {
+    z-index: 1;
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity 800ms var(--ease),
+      visibility 0s;
+  }
+
+  /* Until the deck has read the address's slide, show none. */
+  .pd-root:not([data-ready]) .pd-slide {
+    visibility: hidden;
+    transition: none;
+  }
+
+  /* A slide's pieces arrive in order, 160 ms apart, or after their own delay. */
+  .pd-in {
+    opacity: 0;
+    transform: translate3d(0, calc(24 * var(--u)), 0);
+    transition:
+      opacity 900ms var(--ease),
+      transform 1100ms var(--ease);
+    transition-delay: var(--d, calc(250ms + var(--i, 0) * 160ms));
+  }
+
+  .pd-in--fade {
+    transform: none;
+  }
+
+  .pd-slide[data-active] .pd-in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Leaving: the pieces reset only once the slide has faded out. */
+  .pd-slide:not([data-active]) .pd-in {
+    transition-duration: 0s;
+    transition-delay: 800ms;
+  }
+}
+
+/* ---------- A phone held upright: every slide in a column ---------- */
+
+@media screen and (orientation: portrait) and (max-width: 900px) {
+  .pd-root {
+    padding: 14px 0 40px;
+  }
+
+  .pd-hint {
+    display: block;
+    margin: 0 16px 14px;
+    font-size: 13px;
+    text-align: center;
+    color: #bca8c4;
+  }
+
+  .pd-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pd-controls,
+  .pd-notes {
+    display: none;
+  }
+}
+
+/* ---------- Without motion: every slide still, nothing moving ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-slide,
+  .pd-in,
+  .pd-controls {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .pd-in {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ---------- Print: one slide per landscape page ---------- */
+
+@media print {
+  @page {
+    size: 1920px 1080px;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #100a17 !important;
+  }
+
+  .pd-root,
+  .pd-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .pd-frame {
+    width: 1920px;
+  }
+
+  .pd-slide {
+    width: 1920px;
+    height: 1080px;
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  .pd-slide:last-child {
+    break-after: auto;
+  }
+
+  .pd-controls,
+  .pd-notes,
+  .pd-hint,
+  .pd-sr {
+    display: none !important;
+  }
+}
