@@ -5,8 +5,13 @@
 // saving, re-recording and removing.
 //
 //   loading ──loaded──▶ empty | saved        (a calendar: unavailable, shown as nothing)
-//   empty | saved ──recorded──▶ draft ──save──▶ saving ──saved──▶ saved
-//                                 │ discard ▶ back        └─save_failed▶ draft
+//   empty | saved ──recorded──▶ saving ──saved──▶ saved      (saved as soon as it stops)
+//                                   └─save_failed──▶ draft ──save (try again)──▶ saving
+//                                                      │ discard ▶ back
+//
+// A recording used to wait as a draft for "Save voice note"; senders shared
+// the link first and the note never reached the gift (developer's report,
+// 22 November). A draft is now only what a failed save leaves behind.
 //   saved ──remove──▶ confirm ──confirm──▶ removing ──removed──▶ empty
 //                       └─keep──▶ saved                 └─remove_failed▶ saved
 import { NOTE_EXTENSIONS, OFFLINE_MESSAGE, noteOutcome, noteType, type AudioNoteSummary, type NoteOutcome } from "@/lib/audio/rules"
@@ -22,7 +27,7 @@ export type NoteState =
   | { view: "saved"; note: AudioNoteSummary; notice: NoteNotice | null }
   | { view: "confirm_remove"; note: AudioNoteSummary }
   | { view: "removing"; note: AudioNoteSummary }
-  // A new recording, not saved yet. `saved` is the note it would replace.
+  // A recording whose save failed, kept so nothing is lost. `saved` is the note it would replace.
   | { view: "draft"; recording: Recording; saved: AudioNoteSummary | null; notice: NoteNotice | null }
   | { view: "saving"; recording: Recording; saved: AudioNoteSummary | null }
 
@@ -66,6 +71,12 @@ export function savedNote(state: NoteState): AudioNoteSummary | null {
   }
 }
 
+// Whether a recording that just stopped is saved: not during another save, a
+// removal, the first load or for a gift that cannot have a note.
+export function canSaveRecording(state: NoteState): boolean {
+  return !(state.view === "saving" || state.view === "removing" || state.view === "loading" || state.view === "unavailable")
+}
+
 export function noteReducer(state: NoteState, event: NoteEvent): NoteState {
   switch (event.type) {
     case "loaded":
@@ -75,9 +86,10 @@ export function noteReducer(state: NoteState, event: NoteEvent): NoteState {
     case "not_available":
       return state.view === "loading" ? { view: "unavailable" } : state
     case "recorded":
-      // A new recording replaces any draft; it never replaces a save in flight.
-      if (state.view === "saving" || state.view === "removing" || state.view === "loading" || state.view === "unavailable") return state
-      return { view: "draft", recording: event.recording, saved: savedNote(state), notice: null }
+      // A new recording is saved straight away, replacing any draft; it never
+      // replaces a save in flight. canSaveRecording() says the same to the component.
+      if (!canSaveRecording(state)) return state
+      return { view: "saving", recording: event.recording, saved: savedNote(state) }
     case "discard":
       return state.view === "draft" ? settled(state.saved, { kind: "discarded" }) : state
     case "save":
