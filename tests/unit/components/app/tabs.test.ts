@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { APP_HOME, LETTERS_CHAT, activeTab, appTabs } from "@/components/app/tabs"
+import { APP_HOME, LETTERS_CHAT, activeTab, appTabs, giftEditorPath } from "@/components/app/tabs"
 
 describe("appTabs", () => {
   it("leads with Find a gift, then My gifts, Create and Tracker", () => {
@@ -52,6 +52,9 @@ describe("activeTab", () => {
     ["/create/0b6f2a4c-1d3e-4f5a-8b9c-0d1e2f3a4b5c", "create"],
     ["/dashboard/templates", "create"],
     ["/dashboard/templates/gift-box-3d", "create"],
+    // The advent calendar filled door by door (issue #48).
+    ["/dashboard/calendars/new", "create"],
+    ["/dashboard/calendars/0b6f2a4c-1d3e-4f5a-8b9c-0d1e2f3a4b5c", "create"],
     // Purchases is in the account menu, and the old Plan tab redirects there.
     ["/dashboard/purchases", null],
     ["/dashboard/plan", null],
@@ -59,9 +62,18 @@ describe("activeTab", () => {
     ["/dashboard/templatesx", null],
     ["/dashboard/findings", null],
     ["/dashboard/creators", null],
+    ["/dashboard/calendarsx", null],
     ["/creative", null],
     ["/", null],
   ] as const)("%s → %s", (path, tab) => {
     expect(activeTab(path)).toBe(tab)
+  })
+})
+
+describe("giftEditorPath", () => {
+  it("opens a calendar in its door-by-door editor and every other gift in the letters chat", () => {
+    const id = "0b6f2a4c-1d3e-4f5a-8b9c-0d1e2f3a4b5c"
+    expect(giftEditorPath({ id, kind: "calendar" })).toBe(`/dashboard/calendars/${id}`)
+    expect(giftEditorPath({ id, kind: "letter" })).toBe(`/create/${id}`)
   })
 })

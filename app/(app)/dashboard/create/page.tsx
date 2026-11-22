@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic"
 
 // The Create tab (issue #47): the optional extras beside the gift finder.
 // Letters and invitations open the letters chat at /dashboard, with a template
-// attached where one fits (create-chat.tsx reads ?template=); advent calendars
-// need a real account, so a guest is asked to create one and comes back here.
-// Issue #48 will turn calendars into picking a gift for each door.
+// attached where one fits (create-chat.tsx reads ?template=). Advent calendars
+// are filled door by door at /dashboard/calendars/new (issue #48); they need a
+// real account, so a guest is asked to create one and lands in that flow.
+const NEW_CALENDAR = "/dashboard/calendars/new"
 const chatWith = (id: TemplateId) => `${LETTERS_CHAT}?template=${encodeURIComponent(id)}`
 
 function Option({
@@ -89,11 +90,11 @@ export default async function CreatePage() {
           thumbnail={thumb("advent-classic")}
           actions={
             guest ? (
-              <Link href={`/signup?next=${encodeURIComponent("/dashboard/create")}`} className={smallButton}>
+              <Link href={`/signup?next=${encodeURIComponent(NEW_CALENDAR)}`} className={smallButton}>
                 Create an account
               </Link>
             ) : (
-              <Link href={chatWith("advent-classic")} className={smallButton}>
+              <Link href={NEW_CALENDAR} className={smallButton}>
                 Make a calendar
               </Link>
             )
@@ -101,7 +102,7 @@ export default async function CreatePage() {
         >
           {guest
             ? "Twenty-four doors to open in December. Calendars need a free account; what you made as a guest comes with you."
-            : "Twenty-four doors, one to open each day in December."}
+            : "Twenty-four doors, one to open each day in December. Majnu finds small gifts for them, and you pick one for each door."}
         </Option>
 
         <Option
