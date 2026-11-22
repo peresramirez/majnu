@@ -13,7 +13,7 @@ export const steps = [
   {
     lit: 0.55,
     title: "Choose from six gifts",
-    line: "Tap through a few questions. Real shops, real prices, Majnu's pick.",
+    line: "Tap through a few questions. Real shops, real prices, Majnu’s pick.",
   },
   {
     lit: 1,

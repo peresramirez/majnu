@@ -395,7 +395,7 @@ function LaunchFilm() {
             />
             <div className="pd-launch-caption">
               <p className="pd-launch-lead">The app, in 36 seconds.</p>
-              <p>Cut for social, 16:9. Plays muted; press play.</p>
+              <p>Cut for social, 16:9. Starts muted.</p>
             </div>
           </div>
         </div>
