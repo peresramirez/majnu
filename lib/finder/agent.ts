@@ -1,26 +1,35 @@
 // The gift finder agent (issue #31, docs/plan.md "Gift finder"). The visitor
-// says who the gift is for; Majnu assumes the rest (relationship, an age range,
-// the place and currency from the network), shows those assumptions, searches,
-// and shows three options with one recommended. Asked to personalise, it asks
-// up to three questions with tappable answers and searches again.
+// says who the gift is for. Majnu searches at once when it knows enough (or
+// the visitor wants ideas now), assuming the rest (relationship, an age range,
+// the place and currency from the network) and showing those assumptions; or
+// it asks one to three questions first when what is missing would change the
+// gifts a lot (issue #70). It shows three options with one recommended, and
+// may add one follow-up question under them. Asked to personalise, it asks up
+// to three questions with tappable answers and searches again.
 //
 // A short loop of its own on client.beta.messages.stream(), like the main agent
-// (lib/agents/main.ts), with three tools:
+// (lib/agents/main.ts), with four tools:
 // - find_gifts: the model's assumptions come in as the tool input; the server
 //   fills in default age ranges, checks the limits, and runs the research
-//   sub-agent (lib/agents/research.ts) in the visitor's language and country;
-// - ask_questions: the personalising questions;
-// - read_profile (issue #34): a public Instagram or TikTok profile, or another
-//   public page, that the visitor pasted, read once per session and turned
-//   into a few interests (lib/social/). Only the interests reach the
-//   conversation; they are merged into the next search's context.
-// find_gifts and ask_questions end the turn: the visitor's next move is to look
-// at the options or tap an answer, so no closing request is spent on a
-// sentence they would skip. read_profile does not: find_gifts follows it.
+//   sub-agent (lib/agents/research.ts) in the visitor's language and country
+//   (or the country the gift goes to, when the visitor named another);
+// - ask_questions: questions before a first search, or to personalise;
+// - read_profile (issue #34): a public Instagram, TikTok or LinkedIn profile,
+//   or another public page, that the visitor pasted, read once per session and
+//   turned into a few interests (lib/social/). Only the interests reach the
+//   conversation; they are merged into the next search's context;
+// - fill_wrap (issue #70): on the wrap step, the names, note and gift code the
+//   visitor told Majnu, filled into the wrap form for them to check. The app
+//   never wraps by itself.
+// find_gifts, ask_questions and fill_wrap end the turn: the visitor's next
+// move is to look at the options, tap an answer or check the form, so no
+// closing request is spent on a sentence they would skip. read_profile does
+// not: find_gifts follows it.
 //
 // The conversation is stored exactly as the API returned it and replayed
 // append-only (lib/finder/sessions.ts); the system prompt and the tools are
-// byte-stable, and per-request facts go in a <context> block in each user turn.
+// byte-stable, and per-request facts go in a <context> block in each user
+// turn, including the gift and design chosen on the wrap step.
 import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
 import type {
@@ -39,16 +48,18 @@ import { ResearchRefusal, researchGiftReport, type ResearchReport } from "@/lib/
 import { parseProfileLink, type LinkProblem } from "@/lib/social/links"
 import { canReadSource, readProfileInterests } from "@/lib/social/read"
 import type { ReadFailure } from "@/lib/social/apify"
+import { getTemplate } from "@/lib/letters/templates"
 import {
   baseLanguage,
   cleanAgeRange,
+  currencyFor,
   defaultAgeRange,
   placeName,
   RELATIONSHIP_KINDS,
   type BaseContext,
   type RelationshipKind,
 } from "./context"
-import type { FinderContext, FinderEvent, GiftOption } from "./events"
+import type { FinderContext, FinderEvent, GiftOption, WrapFill, WrapTemplateId } from "./events"
 import { canSearch, claimProfileRead, claimSearch, releaseSearch } from "./limits"
 import { textsFor } from "./messages"
 import type { ProfileRead, StoredOptions } from "./sessions"
@@ -70,36 +81,53 @@ How you talk
 - Reply in the language the visitor writes in. If you can't tell, use their browser language from the context block. In languages with a formal and an informal you, use the informal one (in German du, never Sie).
 
 The context block
-- Each visitor message starts with a <context> block from the app: today's date, the visitor's browser language, the country and region their connection comes from, and the local currency. The visitor did not write it and does not see it. Use it, but don't mention it unless they ask how you know where they are.
+- Each visitor message starts with a <context> block from the app: today's date, the visitor's browser language, the country and region their connection comes from, the local currency, and on the wrap step the gift and design they chose. The visitor did not write it and does not see it. Use it, but don't mention it unless they ask how you know where they are.
+- The connection shows where the visitor is, not where the person lives.
+
+Search now or ask first
+- Search at once with find_gifts when you know who the gift is for and nothing that is missing would change the gifts much, or when the visitor wants ideas straight away. "Find a gift for my mother" is enough: assume the rest. The app shows your assumptions as small chips the visitor can correct.
+- Ask first with ask_questions when a missing fact would change the gifts a lot, or when the visitor asks you to research the person or get to know them first. Ask one to three short questions, the one that matters most first, each with two to four short answers to tap. Then wait for the answers.
+- Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you.
+- Once the visitor has answered, search with what you know. Don't ask again before you have shown options.
+- Your questions can invite the visitor to tell you more in their own words: what the person loves, what they talk about, what they do all day.
+- When you want to know more about the person, one of your questions may ask for a public Instagram, TikTok or LinkedIn profile, or any public page about them, such as "Do they have a public Instagram, TikTok or LinkedIn? Paste the link if you like.", with "No public profile" as one of the answers. Ask it once in a conversation at most, and never insist.
+
+Where the gift goes
+- If the visitor hints that the person lives or comes from somewhere else ("my friend is from Venezuela", "my sister in Madrid"), don't assume either place: ask where the gift should be delivered or used, with the places as answers to tap. When they name another country than the one in the context block, put it in find_gifts' country.
 
 Finding gifts
-- As soon as you know who the gift is for, call find_gifts. Don't ask questions first: assume what you need and let the visitor correct you. The app shows your assumptions as small chips they can correct.
 - relationship is who the person is to the visitor, in the visitor's own words. kind is the closest of the listed kinds.
-- Fill in every field the visitor has told you about, in this message or an earlier one: age, name, occasion, budget, interests, and senderAge for their own age. The chips show only these fields, so a fact you put only in about is one the visitor can't see or correct. "She turns 62" is age 62 to 62; "around 50 euros" is the budget.
+- Fill in every field the visitor has told you about, in this message or an earlier one: age, name, occasion, budget, interests, senderAge for their own age, and country. The chips show only these fields, so a fact you put only in about is one the visitor can't see or correct. "She turns 62" is age 62 to 62; "around 50 euros" is the budget.
 - Use null (for interests, an empty list) when the visitor hasn't said it, and never invent anything. Without an age, the app assumes a range from the relationship.
 - about carries everything you know about the person and the occasion, including what is already in the other fields, for the researcher, who sees nothing else.
-- status is a few words in the visitor's language for the line the app shows while you search, such as "Looking at gifts in Berlin…".
+- status is a few words in the visitor's language for the line the app shows while you search, such as "Looking for gaming gifts…".
+- followUp is one short question that would most improve the next search, with two to four answers to tap, such as what they do in their free time when you know little about them. The app shows it under the options. Use null when you already know enough to choose well.
 - The visitor then sees three options and the one you recommend, with why. Don't list or repeat them.
 - If the visitor corrects an assumption ("she's 60, not 45") or adds something that changes the choice, call find_gifts again with everything you now know.
 
 Personalising
-- When the visitor asks to personalise the gift, or says none of the options fit, call ask_questions with one to three short questions that would change the choice most, such as their name or exact age, what they love or do in their free time, or their job. Give each question two to four short answers the visitor can tap. Then wait for the answers.
+- When the visitor asks to personalise the gift, or says none of the options fit, call ask_questions with one to three short questions that would change the choice most, such as their name or exact age, what they love or do in their free time, or their job. Then wait for the answers.
 - The app's personalise button sends the message "Personalise the gift" in English, whatever language the visitor uses. Treat it as the visitor asking to personalise, and keep to the language of their own messages.
 - When the visitor answers, call find_gifts again with everything you now know.
-- Once in a conversation, while personalising, you may offer to look at the person's public Instagram or TikTok profile, or any public page about them: make it one of your questions, such as "Do they have a public Instagram or TikTok? Paste the link if you like.", with answers such as "No public profile". Never insist, and don't offer it again.
 
 Public profiles
-- When the visitor's message has a link to a public Instagram or TikTok profile, a handle they say is on Instagram or TikTok, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
+- When the visitor's message has a link to a public Instagram, TikTok or LinkedIn profile, a handle they say is on Instagram or TikTok, or a link to a public page about the person, call read_profile with it, then find_gifts. Only for a link or handle the visitor gave: never guess one or look someone up.
 - read_profile gives back a few of the person's interests. Put them in find_gifts' interests next to what the visitor said. Don't list them in your reply: the app shows them as chips.
 - If the profile could not be read, say so kindly in one short sentence (it may be private) and search with what you know.
 - One profile per conversation. Never describe or quote what is on someone's profile.
+- You read only links and handles the visitor gives you. You can't look anyone up by name or email address: if the visitor gives an email address, say in one sentence that you can't look people up that way, and ask for a link to a public profile or what they know about the person.
 
 After the options
 - When the visitor likes an option, tell them in a sentence that they can choose it to wrap it in a gift page and send it as a link.
-- If a tool result says a daily limit was reached, the visitor has already seen a note about it. Help them with the options they have instead of searching again.
+- If a tool result says a limit was reached, the visitor has already seen a note about it. Help them with the options they have instead of searching again: they can still choose one and wrap it.
+
+On the wrap step
+- When the context block says the visitor chose a gift and a design and is filling in the page, they have made their choice. Answer about that gift and that page, and don't search again unless they ask for other gifts.
+- When they tell you who the page is for or who it is from, what they want to say, or a voucher code, gift-card code or order details, say in one short sentence what you filled in, then call fill_wrap with what they told you and null for the rest. The app fills in the form for them to check, and they wrap it themselves: never say it is wrapped or sent.
+- If they ask about the code: they buy the gift in the shop first, then paste the voucher code, gift-card code or order details into the form, and it stays hidden inside the gift until it is opened.
 
 Rules
-- Never invent products, prices, shops or links: only find_gifts finds them.
+- Never invent products, prices, shops or links: only find_gifts finds them. Never invent a name or a code for fill_wrap.
 - Help only with finding a gift. For anything else, say in one sentence that you help find gifts, and ask who it is for.`
 
 // ---------- Tools ----------
@@ -146,12 +174,28 @@ const FIND_GIFTS_TOOL: BetaTool = {
         description: "Everything you know about the person and the occasion, in one or two sentences, for the gift researcher",
       },
       language: { type: "string", description: "The ISO 639-1 code of the language the visitor writes in, e.g. 'de'" },
+      country: nullable(
+        { type: "string" },
+        "Only when the visitor said the gift should be delivered or used in another country than the one in the context block: its ISO 3166-1 alpha-2 code, e.g. 'VE'. Otherwise null, to search where the visitor is.",
+      ),
       status: {
         type: "string",
-        description: "A few words in the visitor's language for the line shown while searching, e.g. 'Ich schaue nach Geschenken in Berlin…'",
+        description: "A few words in the visitor's language for the line shown while searching, e.g. 'Ich suche nach Gaming-Geschenken…'",
       },
+      followUp: nullable(
+        {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "The question, short, in the visitor's language" },
+            suggestions: { type: "array", items: { type: "string" }, description: "Two to four short answers to tap" },
+          },
+          required: ["text", "suggestions"],
+          additionalProperties: false,
+        },
+        "One short question that would most improve the next search, shown under the options, or null when you already know enough",
+      ),
     },
-    required: ["relationship", "kind", "name", "age", "senderAge", "occasion", "budget", "interests", "about", "language", "status"],
+    required: ["relationship", "kind", "name", "age", "senderAge", "occasion", "budget", "interests", "about", "language", "country", "status", "followUp"],
     additionalProperties: false,
   },
 }
@@ -159,7 +203,7 @@ const FIND_GIFTS_TOOL: BetaTool = {
 const ASK_QUESTIONS_TOOL: BetaTool = {
   name: "ask_questions",
   description:
-    "Ask the visitor one to three short questions to personalise the gift. Each has two to four short answers the visitor can tap. After this, wait for the answers.",
+    "Ask the visitor one to three short questions, before a first search when a missing fact would change the gifts a lot, or to personalise the gift. Each has two to four short answers the visitor can tap. After this, wait for the answers.",
   strict: true,
   input_schema: {
     type: "object",
@@ -186,17 +230,18 @@ const ASK_QUESTIONS_TOOL: BetaTool = {
 const READ_PROFILE_TOOL: BetaTool = {
   name: "read_profile",
   description:
-    "Read a public Instagram or TikTok profile, or another public web page about the person, that the visitor shared, and get back a few of the person's interests. Only for a link or handle the visitor gave. One per conversation; call find_gifts afterwards.",
+    "Read a public Instagram, TikTok or LinkedIn profile, or another public web page about the person, that the visitor shared, and get back a few of the person's interests. Only for a link or handle the visitor gave. One per conversation; call find_gifts afterwards.",
   strict: true,
   input_schema: {
     type: "object",
     properties: {
       link: {
         type: "string",
-        description: "The link or handle exactly as the visitor wrote it, e.g. 'https://www.instagram.com/natgeo/', '@natgeo' or 'https://example.com/about'",
+        description:
+          "The link or handle exactly as the visitor wrote it, e.g. 'https://www.instagram.com/natgeo/', '@natgeo', 'https://www.linkedin.com/in/name' or 'https://example.com/about'",
       },
       platform: nullable(
-        { type: "string", enum: ["instagram", "tiktok"] },
+        { type: "string", enum: ["instagram", "tiktok", "linkedin"] },
         "For a bare handle, the platform the visitor named. Null for a full link, or if they did not say.",
       ),
       language: { type: "string", description: "The ISO 639-1 code of the language the visitor writes in, e.g. 'de'" },
@@ -210,8 +255,31 @@ const READ_PROFILE_TOOL: BetaTool = {
   },
 }
 
+// On the wrap step (issue #70): what the visitor told Majnu for the page. The
+// app fills the wrap form with it; the visitor checks it and wraps it.
+const FILL_WRAP_TOOL: BetaTool = {
+  name: "fill_wrap",
+  description:
+    "On the wrap step only: fill in the gift page's form with what the visitor told you. The visitor sees the form filled in, checks it and wraps the gift themselves. Use null for anything they didn't say.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      recipientName: nullable({ type: "string" }, "The name of the person the gift is for, as the visitor wrote it, otherwise null"),
+      senderName: nullable({ type: "string" }, "The visitor's own name or how they sign, as they wrote it, otherwise null"),
+      note: nullable({ type: "string" }, "What the visitor wants to say to the person on the page, in their words, otherwise null"),
+      giftCode: nullable(
+        { type: "string" },
+        "A voucher code, gift-card code or order details the visitor gave, exactly as they wrote it, otherwise null",
+      ),
+    },
+    required: ["recipientName", "senderName", "note", "giftCode"],
+    additionalProperties: false,
+  },
+}
+
 // The order and wording never change between requests.
-export const FINDER_TOOLS: BetaTool[] = [FIND_GIFTS_TOOL, ASK_QUESTIONS_TOOL, READ_PROFILE_TOOL]
+export const FINDER_TOOLS: BetaTool[] = [FIND_GIFTS_TOOL, ASK_QUESTIONS_TOOL, READ_PROFILE_TOOL, FILL_WRAP_TOOL]
 export const FINDER_TOOL_CHOICE = { type: "auto", disable_parallel_tool_use: true } as const
 
 const shortText = (max: number) => z.string().trim().min(1).transform((s) => s.slice(0, max))
@@ -231,7 +299,24 @@ export const FindGiftsInput = z.object({
     .catch(undefined),
   about: shortText(1000),
   language: z.string().optional().catch(undefined),
+  country: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/)
+    .optional()
+    .catch(undefined),
   status: shortText(100).optional().catch(undefined),
+  followUp: z
+    .object({
+      text: shortText(200),
+      suggestions: z
+        .array(z.string())
+        .transform((items) => items.map((item) => item.trim().slice(0, 60)).filter(Boolean).slice(0, MAX_SUGGESTIONS))
+        .catch([]),
+    })
+    .optional()
+    .catch(undefined),
 })
 export type FindGiftsInput = z.infer<typeof FindGiftsInput>
 
@@ -256,9 +341,29 @@ const AskQuestionsInput = z.object({
     .transform((questions) => questions.slice(0, MAX_QUESTIONS)),
 })
 
+// The wrap form's limits (components/finder/wrap-view.tsx and POST
+// /api/finder/wrap): names 60 characters, the note 600, the code 200.
+export const WRAP_FIELD_LIMITS = { recipientName: 60, senderName: 60, note: 600, giftCode: 200 } as const
+
+const FillWrapInput = z.object({
+  recipientName: shortText(WRAP_FIELD_LIMITS.recipientName).optional().catch(undefined),
+  senderName: shortText(WRAP_FIELD_LIMITS.senderName).optional().catch(undefined),
+  note: shortText(WRAP_FIELD_LIMITS.note).optional().catch(undefined),
+  giftCode: shortText(WRAP_FIELD_LIMITS.giftCode).optional().catch(undefined),
+})
+
+// What fill_wrap asked to fill in, trimmed and cut to the form's limits, with
+// nothing for a field that was null or empty. Null when nothing is left.
+export function parseFillWrap(input: unknown): WrapFill | null {
+  const parsed = FillWrapInput.safeParse(withoutNulls(input) ?? {})
+  if (!parsed.success) return null
+  const fields = Object.fromEntries(Object.entries(parsed.data).filter(([, value]) => value !== undefined)) as WrapFill
+  return Object.keys(fields).length > 0 ? fields : null
+}
+
 const ReadProfileInput = z.object({
   link: z.string().trim().min(1).max(300),
-  platform: z.enum(["instagram", "tiktok"]).optional().catch(undefined),
+  platform: z.enum(["instagram", "tiktok", "linkedin"]).optional().catch(undefined),
   language: z.string().optional().catch(undefined),
   status: shortText(100).optional().catch(undefined),
 })
@@ -282,8 +387,16 @@ export type FinderTurnState = {
   // The public profile read in this session, if any (one per session). Set
   // by read_profile and saved with the session.
   profile: ProfileRead | null
+  // Set while the visitor is on the wrap step (issue #70): the option, already
+  // checked against lastOptions by the route, and the design they chose.
+  wrap?: WrapFrame | null
+  // This message continues today's open session after a reload or a new
+  // search (issue #70): the visitor no longer sees anything said before it.
+  startedOver?: boolean
   emit: (event: FinderEvent) => void
 }
+
+export type WrapFrame = { option: GiftOption; templateId: WrapTemplateId }
 
 export type FinderTurnResult = {
   // Messages to append to the stored conversation, exactly as sent to and
@@ -294,13 +407,28 @@ export type FinderTurnResult = {
 
 // ---------- Context ----------
 
-export function contextBlockText(state: Pick<FinderTurnState, "now" | "timezone" | "base" | "browserLanguage">): string {
+// The wrap step's line: which gift and design the visitor chose. The title came
+// from a shop page, so angle brackets are taken out: it cannot close the block.
+export function wrapFrameLine(wrap: WrapFrame): string {
+  const title = wrap.option.title.replace(/[<>]/g, "").trim()
+  const design = getTemplate(wrap.templateId)?.name ?? wrap.templateId
+  return `The visitor chose "${title}" and the ${design} design and is filling in the page.`
+}
+
+export const STARTED_OVER_LINE =
+  "The visitor opened the finder again and sees nothing said before this message. Start from what they say now, and ask or assume afresh about who the gift is for."
+
+export function contextBlockText(
+  state: Pick<FinderTurnState, "now" | "timezone" | "base" | "browserLanguage" | "wrap" | "startedOver">,
+): string {
   const place = placeName(state.base)
   return [
     `${CONTEXT_TAG}${describeToday(state.timezone, state.now)}`,
     `Browser language: ${state.browserLanguage}.`,
     `Connection from: ${place ? `${place} (${state.base.country})` : "unknown"}.`,
     state.base.currency ? `Local currency: ${state.base.currency}.` : "",
+    state.startedOver ? STARTED_OVER_LINE : "",
+    state.wrap ? wrapFrameLine(state.wrap) : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -328,13 +456,25 @@ export function mergeInterests(given: readonly string[], fromProfile: readonly s
 // the search right after a read always uses them, even if the model left them
 // out. Later searches rely on the model, which sees them in the conversation,
 // so a visitor who says "she's not into that any more" is listened to.
+// Where to search: where the visitor is, unless they said the gift goes to
+// another country ("she lives in Venezuela"). Then that country and its
+// currency, and no region: the visitor's region says nothing about it.
+function searchPlace(base: BaseContext, country: string | undefined): Pick<FinderContext, "country" | "region" | "currency"> {
+  const { country: here, region, currency } = base
+  if (!country || country === here) return { ...(here ? { country: here } : {}), ...(region ? { region } : {}), ...(currency ? { currency } : {}) }
+  const there = currencyFor(country)
+  return { country, ...(there ? { currency: there } : {}) }
+}
+
 export function contextFor(base: BaseContext, input: FindGiftsInput, profileInterests: readonly string[] = []): FinderContext {
   const ageRange = cleanAgeRange(input.age) ?? defaultAgeRange(input.kind, input.senderAge)
   const interests = mergeInterests(input.interests ?? [], profileInterests)
   return {
-    ...base,
+    ...searchPlace(base, input.country),
     language: baseLanguage(input.language) ?? base.language,
     relationship: input.relationship,
+    // For the wrap step, which prefills "Their name" with it.
+    ...(input.name ? { name: input.name } : {}),
     ...(ageRange ? { ageRange } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
     ...(interests.length > 0 ? { interests } : {}),
@@ -397,11 +537,11 @@ export function toOptions(report: ResearchReport, makeId: () => string = randomI
 
 // What the finder model sees of a search: enough to talk about the options
 // later ("the second one"), not the search results.
-function optionsSummary(shown: StoredOptions): string {
+function optionsSummary(shown: StoredOptions, followUpShown: boolean): string {
   return JSON.stringify({
     shown: shown.options.map(({ id, title, price, shop }) => ({ id, title, ...(price ? { price } : {}), ...(shop ? { shop } : {}) })),
     recommendedId: shown.recommendedId,
-    note: "The visitor sees these options as cards, with your recommendation and why. Don't list them again.",
+    note: `The visitor sees these options as cards, with your recommendation and why${followUpShown ? ", and your follow-up question under them" : ""}. Don't list them again.`,
   })
 }
 
@@ -498,7 +638,24 @@ async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: 
   }
   state.lastOptions = shown
   state.emit({ type: "options", options: shown.options, recommendedId: shown.recommendedId, why: shown.why })
-  return { result: result(call, optionsSummary(shown)), terminal: true }
+  const followUpShown = await askFollowUp(input.followUp, state, context.language)
+  return { result: result(call, optionsSummary(shown, followUpShown)), terminal: true }
+}
+
+// The one question under the options, if the model had one (issue #70). Its
+// answer leads to a personalised search, so it is asked only while one is
+// still allowed today; a failed check just leaves it out.
+async function askFollowUp(followUp: FindGiftsInput["followUp"], state: FinderTurnState, language: string): Promise<boolean> {
+  if (!followUp) return false
+  try {
+    const allowed = await canSearch(state.ownerId, state.sessionId, state.now, language)
+    if (!allowed.ok) return false
+  } catch (error) {
+    console.error("[finder] could not check the follow-up question", describeError(error))
+    return false
+  }
+  state.emit({ type: "question", text: followUp.text, ...(followUp.suggestions.length ? { suggestions: followUp.suggestions } : {}) })
+  return true
 }
 
 async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Promise<CallOutcome> {
@@ -507,7 +664,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
 
   // The answers lead to another search: don't ask if it would be refused.
   const language = languageOf(state)
-  const allowed = await canSearch(state.ownerId, state.lastOptions !== null, state.now, language)
+  const allowed = await canSearch(state.ownerId, state.sessionId, state.now, language)
   if (!allowed.ok) {
     state.emit({ type: "limit", reason: allowed.reason, message: allowed.message })
     return {
@@ -525,7 +682,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
 // next, so the search goes on without the profile.
 const LINK_PROBLEMS: Record<LinkProblem, string> = {
   not_a_profile:
-    "Nothing was read: that link is a post, a short link or a page on Instagram or TikTok that is not a profile. In one short sentence, say you can read a profile link such as instagram.com/name or tiktok.com/@name, and search with what you know.",
+    "Nothing was read: that link is a post, a short link, a company page or another page on Instagram, TikTok or LinkedIn that is not a person's profile. In one short sentence, say you can read a profile link such as instagram.com/name, tiktok.com/@name or linkedin.com/in/name, and search with what you know.",
   needs_platform: "Nothing was read: the visitor gave a handle without saying where. Ask them in one short sentence whether it is on Instagram or TikTok.",
   unsupported:
     "Nothing was read: that is not a link to a public profile or page that can be read. Say so in one short sentence and search with what you know.",
@@ -569,7 +726,7 @@ async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags
 
   // The interests are for the next search: don't spend a read on a search that would be refused.
   const language = baseLanguage(input.language) ?? languageOf(state)
-  const allowed = await canSearch(state.ownerId, state.lastOptions !== null, state.now, language)
+  const allowed = await canSearch(state.ownerId, state.sessionId, state.now, language)
   if (!allowed.ok) {
     state.emit({ type: "limit", reason: allowed.reason, message: allowed.message })
     return {
@@ -607,8 +764,26 @@ async function readProfile(call: BetaToolUseBlock, state: FinderTurnState, flags
   return { result: result(call, profileSummary(read.interests)), terminal: false }
 }
 
+// fill_wrap ends the turn: the visitor's next move is to check the form.
+function fillWrap(call: BetaToolUseBlock, state: FinderTurnState): CallOutcome {
+  if (!state.wrap) {
+    return {
+      result: result(call, "Not filled: the visitor is not on the wrap step, so there is no form. Answer in words.", true),
+      terminal: false,
+    }
+  }
+  const fields = parseFillWrap(call.input)
+  if (!fields) return { result: result(call, "Nothing was filled: every field was empty. Answer in words.", true), terminal: false }
+  state.emit({ type: "fill", fields })
+  return {
+    result: result(call, "The form now shows what you filled in. The visitor checks it and wraps the gift themselves; it is not wrapped yet."),
+    terminal: true,
+  }
+}
+
 async function runCall(call: BetaToolUseBlock, state: FinderTurnState, flags: TurnFlags): Promise<CallOutcome> {
   try {
+    if (call.name === FILL_WRAP_TOOL.name) return fillWrap(call, state)
     if (call.name === FIND_GIFTS_TOOL.name) return await findGifts(call, state, flags)
     if (call.name === ASK_QUESTIONS_TOOL.name) return await askQuestions(call, state)
     if (call.name === READ_PROFILE_TOOL.name) return await readProfile(call, state, flags)

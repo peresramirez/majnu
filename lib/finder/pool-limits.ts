@@ -1,15 +1,16 @@
 // Limits for the finder's calendar mode (issue #48), on top of the finder's own
-// (lib/finder/limits.ts), which stay exactly as they are:
+// (lib/finder/limits.ts). Changed 22 November with the finder's limits (issue
+// #70), so both count the same way, by session:
 //
-// - A pool of ideas for a calendar is one finder search: it is claimed with
-//   claimSearch() as a plain search, so it counts against the 3 searches a day
-//   and the site-wide MAJNU_DAILY_SEARCH_CAP like any other.
-// - On top of that, at most POOLS_PER_DAY pools a day per user. A pool is a
-//   plain search made in a calendar's finder session (one whose context has a
-//   `calendar` marker, see lib/calendars/sessions.ts), so no new table is needed.
-// - "More like this" is a later search in the same session, so, by the
-//   finder's rule for later searches, it is claimed as a personalised one
-//   (2 a day, within the 3).
+// - A calendar has its own finder session (one whose context has a `calendar`
+//   marker, see lib/calendars/sessions.ts). Calendar sessions are not among
+//   the finder's daily sessions: making a calendar never uses up a gift search.
+// - A pool of ideas is a search in that session: at most POOLS_PER_DAY pools a
+//   day per user, the calendar's counterpart of the finder's daily sessions.
+// - "More like this" is a later search in the same session. Like every
+//   session, a calendar's allows FINDER_LIMITS.searchesPerSession searches,
+//   its pools included. There is no personalised cap any more.
+// - Every search counts against the site-wide MAJNU_DAILY_SEARCH_CAP.
 //
 // Claims are made as the finder makes them: the row goes in first and is
 // counted second, so two requests at the same moment can both be refused but
@@ -17,6 +18,7 @@
 import "server-only"
 import { startOfUtcDay } from "@/lib/limits"
 import { createAdminClient } from "@/lib/supabase/admin"
+import type { FinderLimitReason } from "./events"
 import { claimSearch, releaseSearch, type FinderLimit, type SearchClaim } from "./limits"
 
 export const POOLS_PER_DAY = 2
@@ -59,9 +61,20 @@ export async function countPoolsToday(ownerId: string, now: Date): Promise<numbe
   return ((data ?? []) as { session_id: string | null }[]).filter((row) => row.session_id && calendarIds.has(row.session_id)).length
 }
 
-// Claims a pool for a calendar's session: a plain finder search, then the pool cap.
-export async function claimPool(input: { ownerId: string; sessionId: string; now: Date; language: string }): Promise<SearchClaim> {
-  const claim = await claimSearch({ ...input, personalised: false })
+// What a calendar search answers: the calendar's own reasons, never the
+// finder's "start a new search" (a calendar has one session).
+export type CalendarSearchClaim =
+  | { ok: true; claimId: number }
+  | { ok: false; reason: Exclude<FinderLimitReason, "session_full">; message: string }
+
+function forCalendar(claim: SearchClaim): CalendarSearchClaim {
+  if (claim.ok) return claim
+  return { ok: false, reason: claim.reason === "session_full" ? "finder_daily" : claim.reason, message: claim.message }
+}
+
+// Claims a pool for a calendar's session: a search there, then the pool cap.
+export async function claimPool(input: { ownerId: string; sessionId: string; now: Date; language: string }): Promise<CalendarSearchClaim> {
+  const claim = forCalendar(await claimSearch({ ...input, personalised: false, calendar: true }))
   if (!claim.ok) return claim
   let result: FinderLimit
   try {
@@ -73,14 +86,14 @@ export async function claimPool(input: { ownerId: string; sessionId: string; now
   }
   if (!result.ok) {
     await releaseSearch(claim.claimId)
-    return result
+    return forCalendar(result as SearchClaim)
   }
   return claim
 }
 
-// "More like this": a personalised finder search in the calendar's session.
-export function claimMoreLikeThis(input: { ownerId: string; sessionId: string; now: Date; language: string }): Promise<SearchClaim> {
-  return claimSearch({ ...input, personalised: true })
+// "More like this": a later search in the calendar's session.
+export async function claimMoreLikeThis(input: { ownerId: string; sessionId: string; now: Date; language: string }): Promise<CalendarSearchClaim> {
+  return forCalendar(await claimSearch({ ...input, personalised: true, calendar: true }))
 }
 
 export { releaseSearch }

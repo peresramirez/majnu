@@ -13,6 +13,8 @@ import { WRAP_TEMPLATES } from "@/components/finder/finder-state"
 import { WRAP_TEMPLATE_IDS, giftFromOption, withChosenGift, wrapBrief, wrapOption } from "@/lib/finder/wrap"
 import { letterFixtures } from "@/lib/letters/fixtures"
 import { createLetter, saveLetterContent } from "@/lib/letters/store"
+import { toPublicView } from "@/lib/letters/public-view"
+import { letterMetadata } from "@/components/letters/page-meta"
 
 const OPTION: GiftOption = {
   id: "o2",
@@ -92,6 +94,19 @@ describe("the gift on the page", () => {
     })
     expect(withChosenGift(BUILT, OPTION).gifts).toEqual([giftFromOption(OPTION)])
   })
+
+  it("carries the sender's gift code, trimmed and at most 200 characters, and nothing for a blank one (issue #71)", () => {
+    expect(giftFromOption(OPTION, "  GC-42  ").code).toBe("GC-42")
+    expect(giftFromOption(OPTION, "c".repeat(300)).code).toHaveLength(200)
+    expect(giftFromOption(OPTION, "   ")).not.toHaveProperty("code")
+    expect(giftFromOption(OPTION)).not.toHaveProperty("code")
+  })
+
+  it("uses the names exactly as the sender typed them", () => {
+    const content = withChosenGift(BUILT, OPTION, { recipientName: " Ana ", senderName: "Javi" })
+    expect(content).toMatchObject({ recipientName: "Ana", senderName: "Javi" })
+    expect(withChosenGift(BUILT, OPTION, { recipientName: "  " }).recipientName).toBe("Mama")
+  })
 })
 
 describe("wrapOption", () => {
@@ -125,6 +140,42 @@ describe("wrapOption", () => {
       // The party fixture has an event; the finder never knows one.
       expect(saved.content).not.toHaveProperty("event")
     }
+  })
+
+  it("puts the gift code in the page's gift after the build, never in the brief or the title (issue #71)", async () => {
+    await wrapOption({
+      option: OPTION,
+      context: CONTEXT,
+      templateId: "gift-box-3d",
+      recipientName: "Ana",
+      giftCode: "SECRET-CODE-123",
+      now: new Date("2026-11-21T15:00:00Z"),
+      timezone: "Europe/Berlin",
+    })
+    const brief = (vi.mocked(buildContent).mock.calls[0][0] as { brief: string }).brief
+    expect(brief).not.toContain("SECRET-CODE-123")
+    expect(brief).toContain("put a voucher or gift code in the gift")
+    expect(brief).toContain("Recipient's name: Ana. Use exactly this as recipientName.")
+    const [, saved] = vi.mocked(saveLetterContent).mock.calls[0]
+    expect(saved.content).toMatchObject({ recipientName: "Ana", gifts: [{ ...giftFromOption(OPTION), code: "SECRET-CODE-123" }] })
+    expect(saved.title).toBe("A gift for Ana")
+    expect(saved.title).not.toContain("SECRET")
+  })
+
+  it("keeps the code out of the page's title and link preview, while the page's gift carries it", () => {
+    const content = withChosenGift({ ...BUILT, recipientName: "Ana" }, OPTION, { giftCode: "SECRET-CODE-123" })
+    const letter = toPublicView(
+      { id: "l1", slug: "AbCdEfGh34", ownerId: "u1", kind: "letter", templateId: "gift-box-3d", title: "A gift for Ana", content, createdAt: "", updatedAt: "" },
+      new Date(),
+      { ownerPreview: false },
+    )
+    expect(letter?.kind === "letter" && letter.content.gifts[0].code).toBe("SECRET-CODE-123")
+    expect(JSON.stringify(letterMetadata(letter))).not.toContain("SECRET")
+  })
+
+  it("says nothing about a code when the sender gave none", async () => {
+    await wrapOption({ option: OPTION, context: CONTEXT, templateId: "gift-reveal", now: new Date(), timezone: "Europe/Berlin" })
+    expect((vi.mocked(buildContent).mock.calls[0][0] as { brief: string }).brief).not.toContain("gift code")
   })
 
   it("creates no letter when the build fails", async () => {

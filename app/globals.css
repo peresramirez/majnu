@@ -110,6 +110,153 @@ html:has([data-surface="night"]) body {
   }
 }
 
+/*
+ * How it works, told one step at a time (components/landing/how-it-works.tsx).
+ *
+ * Story mode needs motion allowed and scripts running; otherwise the section
+ * keeps the plain list its classes describe. `--u` is how far the visitor has
+ * scrolled through the pinned section, in steps of scroll
+ * (how-it-works-steps.ts); each step's `--enter` and `--leave` say where its
+ * entrance and exit begin, and each letter's `--c` its place in the wave. Only
+ * transform, opacity and filter change while scrolling. The values are
+ * registered as numbers so the browser works each one out once per element
+ * instead of re-reading long formulas.
+ */
+@property --u { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --glyph-x { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glyph-e { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --glyph-out { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glyph-in { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --mark-on { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+/* The moon breathes while the visitor reads (components/landing/gift-scene.tsx). */
+@keyframes moon-glow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+/* The phone scene fades into the page above and below it. */
+.story-scene-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 76%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) and (scripting: enabled) {
+  /* One screen to pin in, plus one step of scroll per step. Rules below are
+     scoped to .story so they outrank Tailwind's responsive classes, which
+     Tailwind appends after this file. */
+  .story {
+    height: calc(100svh + var(--steps) * var(--seg));
+  }
+  /* svh: the small viewport, so Safari's toolbar showing and hiding never
+     resizes the pinned screen. On phones the scene fills the middle and the
+     step sits at the bottom, clear of the floating toolbar (--safe-bottom). */
+  .story .story-screen {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(28px, calc(var(--safe-bottom) + 16px));
+  }
+  .story .story-heading {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #bca8c4;
+  }
+  .story .story-intro {
+    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .story .story-scene {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    margin-top: 0;
+  }
+
+  /* Each mark lights up while its step enters and dims while it leaves. */
+  .story .story-marks {
+    display: flex;
+  }
+  .story .story-mark {
+    --mark-on: clamp(0, min((var(--u) - var(--enter)) / var(--span), 1 - (var(--u) - var(--leave)) / var(--span)), 1);
+    transform: scale(calc(1 + var(--mark-on) * 0.2));
+  }
+  .story .story-mark-on {
+    opacity: var(--mark-on);
+  }
+
+  /* All three steps share one place; only the current one is visible. */
+  .story .story-steps {
+    display: grid;
+    margin-top: 0;
+  }
+  .story .story-step {
+    grid-area: 1 / 1;
+    align-self: end;
+  }
+  /* The real text: hidden from sight, still read by screen readers. */
+  .story .story-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  .story .story-visual {
+    display: block;
+  }
+  .story .story-word {
+    display: inline-block;
+    white-space: nowrap;
+  }
+  /*
+   * A letter (or, in the line, a word). `--glyph-e` runs 0 to 1 as it arrives
+   * and `--glyph-x` 0 to 1 as it leaves, each over --glyph of scroll, later the
+   * further along the wave it is. Arriving eases out: it rises a little and
+   * comes into focus. Leaving eases in, like mist in moonlight: it drifts up and
+   * a little to one side, turns, grows, blurs and fades.
+   */
+  .story .story-glyph {
+    --glyph-x: clamp(0, (var(--u) - var(--leave) - var(--c) * (var(--span) - var(--glyph))) / var(--glyph), 1);
+    --glyph-e: clamp(0, (var(--u) - var(--enter) - var(--c) * (var(--span) - var(--glyph))) / var(--glyph), 1);
+    --glyph-out: calc(var(--glyph-x) * var(--glyph-x));
+    --glyph-in: calc(1 - (1 - var(--glyph-e)) * (1 - var(--glyph-e)));
+    display: inline-block;
+    opacity: calc(var(--glyph-in) - var(--glyph-out) * 1.4);
+    transform: translate3d(calc(var(--glyph-out) * var(--r) * 0.3em), calc((1 - var(--glyph-in)) * 0.5em - var(--glyph-out) * 0.9em), 0)
+      rotate(calc(var(--glyph-out) * var(--r) * 10deg)) scale(calc(1 + var(--glyph-out) * 0.15));
+    filter: blur(calc((1 - var(--glyph-in)) * 0.12em + var(--glyph-out) * 0.2em));
+  }
+
+  /* From md up the scene is the backdrop; the column sits in the middle of the
+     screen on its left, its steps lined up at the top. */
+  @media (min-width: 768px) {
+    .story .story-screen {
+      justify-content: center;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .story .story-steps {
+      margin-top: 44px;
+    }
+    .story .story-step {
+      align-self: start;
+    }
+  }
+}
+
 @layer base {
   :root {
     --background: 326 33.3% 95.9%;

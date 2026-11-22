@@ -5,6 +5,7 @@ import { ArrowUp, LayoutTemplate, X } from "lucide-react"
 import { focusRing } from "@/components/app/styles"
 import { VoiceButton } from "@/components/voice/voice-button"
 import type { TemplateMeta } from "@/lib/letters/templates"
+import { canSendMessage, sendsOnEnter, withVoiceText } from "./chat-state"
 import { TemplateIcon } from "./template-bits"
 
 const MAX_HEIGHT = 168 // about six lines, then the field scrolls
@@ -29,7 +30,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
 ) {
   const field = useRef<HTMLTextAreaElement>(null)
   useImperativeHandle(ref, () => field.current as HTMLTextAreaElement)
-  const canSend = !busy && (value.trim() !== "" || template !== null)
+  const canSend = canSendMessage(busy, value, template?.name ?? null)
 
   // Grow with the text up to MAX_HEIGHT.
   useLayoutEffect(() => {
@@ -40,7 +41,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   }, [value])
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return
+    if (!sendsOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) return
     e.preventDefault()
     if (canSend) onSend()
   }
@@ -103,7 +104,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           <VoiceButton
             onText={(text) => {
               // Added to what is already there, for the sender to check and send.
-              onChange(value.trim() ? `${value.trimEnd()} ${text}` : text)
+              onChange(withVoiceText(value, text))
               requestAnimationFrame(() => {
                 const el = field.current
                 if (!el) return

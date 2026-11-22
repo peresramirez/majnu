@@ -16,6 +16,7 @@ import "server-only"
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta"
 import * as z from "zod/v4"
 import { resolveTimezone } from "@/lib/agents/context"
+import { startOfUtcDay } from "@/lib/limits"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import type { ProfileSource } from "@/lib/social/links"
@@ -64,6 +65,7 @@ const StoredContext = z.object({
   budget: z.string().optional().catch(undefined),
   interests: z.array(z.string()).optional().catch(undefined),
   occasion: z.string().optional().catch(undefined),
+  name: z.string().optional().catch(undefined),
 })
 
 const StoredOption = z.object({
@@ -84,7 +86,7 @@ const StoredOptionsSchema = z.object({
 })
 
 const StoredProfile = z.object({
-  source: z.enum(["instagram", "tiktok", "web"]),
+  source: z.enum(["instagram", "tiktok", "linkedin", "web"]),
   readAt: z.string(),
   interests: z
     .array(z.string())
@@ -149,6 +151,24 @@ export async function getMyFinderSession(id: string): Promise<FinderSession | nu
   const { data, error } = await supabase.from("finder_sessions").select(COLUMNS).eq("id", id).maybeSingle<SessionRow>()
   if (error) throw new Error(`Could not load the finder session: ${error.message}`)
   return data ? toSession(data) : null
+}
+
+// The signed-in user's finder sessions started today (UTC), newest first, for
+// continuing an open one (findOpenSession in limits.ts). Calendar sessions
+// (lib/calendars/sessions.ts) are left out: they belong to their calendar.
+export async function listTodaysFinderSessions(ownerId: string, now: Date, max = 3): Promise<FinderSession[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("finder_sessions")
+    .select(COLUMNS)
+    .eq("owner_id", ownerId)
+    .gte("created_at", startOfUtcDay(now).toISOString())
+    .is("context->calendar", null)
+    .order("created_at", { ascending: false })
+    .limit(max)
+    .returns<SessionRow[]>()
+  if (error) throw new Error(`Could not load today's finder sessions: ${error.message}`)
+  return (data ?? []).map(toSession)
 }
 
 // Saves a turn. `chat` must be what was loaded with this turn's messages

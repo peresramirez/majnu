@@ -18,7 +18,9 @@ const icons: Record<TabId, LucideIcon> = { find: Search, gifts: Gift, create: Pe
 // (docs/features/app-shell.md). The shell is exactly one screen tall and <main>
 // scrolls, so the finder and the letters chat can pin their message box above
 // the tab bar. While a message box has focus on a phone, the tab bar steps
-// aside to give the keyboard the room. The gift finder's state lives here
+// aside to give the keyboard the room, and it does the same while the gift
+// finder's wrap step is open (data-wrap-step, issue #71), so its details fit
+// above the wrap buttons on a small phone. The gift finder's state lives here
 // (FinderProvider), so a conversation in Find a gift survives the other tabs.
 //
 // On iPhones the tab bar pads its bottom with --safe-bottom (app/globals.css):
@@ -79,7 +81,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
       <nav
         aria-label="Main"
-        className="flex-none border-t border-night-petal/10 bg-night-plum pb-[var(--safe-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
+        className="flex-none border-t border-night-petal/10 bg-night-plum pb-[var(--safe-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden group-has-[form[data-wrap-step]]/shell:hidden"
       >
         <ul className="grid" style={{ gridTemplateColumns: `repeat(${appTabs.length}, minmax(0, 1fr))` }}>
           {appTabs.map((tab) => {

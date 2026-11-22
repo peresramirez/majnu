@@ -9,13 +9,16 @@
 // 404 session or option not found, 429 the daily letter limit, 403 if the
 // new-gift gate refuses (it never does today: new gifts are free, see
 // lib/limits.ts), 422 the builder declined, 500 anything else.
+//
+// giftCode (issue #71, optional, at most 200 characters after trimming) is put
+// in the page's gift after the build (lib/finder/wrap.ts) and never logged.
 import * as z from "zod/v4"
 import { BuilderRefusal } from "@/lib/agents/builder"
 import { describeError } from "@/lib/agents/errors"
 import type { WrapResponse } from "@/lib/finder/events"
 import { textsFor } from "@/lib/finder/messages"
 import { getMyFinderSession } from "@/lib/finder/sessions"
-import { WRAP_TEMPLATE_IDS, wrapOption } from "@/lib/finder/wrap"
+import { MAX_GIFT_CODE, WRAP_TEMPLATE_IDS, wrapOption } from "@/lib/finder/wrap"
 import { canCreateLetter, canUseFeature } from "@/lib/limits"
 import { createClient } from "@/lib/supabase/server"
 
@@ -28,6 +31,8 @@ const WrapRequestBody = z.object({
   recipientName: z.string().trim().max(60).optional(),
   senderName: z.string().trim().max(60).optional(),
   note: z.string().trim().max(1000).optional(),
+  // Issue #71: what the sender bought, revealed once the gift is opened.
+  giftCode: z.string().trim().max(MAX_GIFT_CODE).optional(),
 })
 
 function respond(status: number, body: WrapResponse): Response {
@@ -71,6 +76,7 @@ export async function POST(request: Request): Promise<Response> {
         recipientName: body.data.recipientName || undefined,
         senderName: body.data.senderName || undefined,
         note: body.data.note || undefined,
+        giftCode: body.data.giftCode || undefined,
         now: new Date(),
         timezone: session.timezone,
       })

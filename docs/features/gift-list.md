@@ -106,7 +106,7 @@ The owner's preview (`/create/<id>/preview`) shows the list with taken gifts but
 
 - At most **12 gifts** on a list and **3 claims per visitor** per invitation.
 - Claim bodies up to 1,024 characters; names up to 40 characters.
-- Adding gifts is one tool call inside the existing chat limits (6 model requests per message, 40 turns per letter). Researching ideas is the existing `research_gifts` (4 searches, 4 requests).
+- Adding gifts is one tool call inside the existing chat limits (6 model requests per message, 200 turns per letter). Researching ideas is the existing `research_gifts` (4 searches, 4 requests).
 - A claim costs about four small database queries (letter, insert, count, list) and no model call. The page's claimed-ids read is two queries.
 
 ## How it was checked

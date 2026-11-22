@@ -1,11 +1,14 @@
 // GET /api/purchases?letterId=<uuid>: what the "Make it unique" button needs
 // for one of the sender's letters: whether they must create an account first,
 // whether the letter can have a wrapper, and its newest purchase (to show the
-// status instead of the button while a design is on its way, or done).
+// status instead of the button while a design is on its way, or done), plus
+// a coupon code this browser remembered from a poster's short link, so the
+// dialog can open with it filled in (lib/billing/coupon-cookie.ts).
 //
 // 200 WrapperState (lib/billing/view.ts); 400 for a bad id; 401 without a
 // session; 404 for a letter that is not the sender's. Read through row-level
 // security, so nobody sees another sender's letters or purchases.
+import { rememberedCouponCode } from "@/lib/billing/coupon-cookie"
 import { jsonError } from "@/lib/billing/http"
 import { getMyLatestPurchaseForLetter, getMyLetterForWrapper } from "@/lib/billing/my-purchases"
 import { toPurchaseView, type WrapperState } from "@/lib/billing/view"
@@ -32,6 +35,7 @@ export async function GET(request: Request): Promise<Response> {
       account: user.is_anonymous === true ? "guest" : "member",
       unavailable: letter.kind !== "letter" ? "not_a_letter" : letter.built ? null : "not_built",
       purchase: purchase ? toPurchaseView(purchase) : null,
+      rememberedCode: rememberedCouponCode(request),
     }
     return Response.json(state, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {

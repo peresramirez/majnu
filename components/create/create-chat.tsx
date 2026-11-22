@@ -161,6 +161,18 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
     [send],
   )
 
+  // A starter tapped in an empty chat carries the attached template too, as a
+  // typed message does: a template chosen with the Template button or from
+  // the Templates tab (/dashboard?template=<id>) is never dropped (issue #70).
+  const sendStarter = useCallback(
+    (text: string) => {
+      const sent = sendFromChat(composeMessage(template?.name ?? null, text))
+      if (sent) setTemplate(null)
+      return sent
+    },
+    [sendFromChat, template],
+  )
+
   function sendDraft() {
     if (send(composeMessage(template?.name ?? null, draft))) {
       setDraft("")
@@ -234,9 +246,9 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
         >
           <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
             {frame.opening === "built" ? (
-              <BuiltGiftOpening recipientName={recipientName} onPick={sendFromChat} disabled={streaming} />
+              <BuiltGiftOpening recipientName={recipientName} onPick={sendStarter} disabled={streaming} />
             ) : frame.opening === "new" ? (
-              <EmptyState onPick={sendFromChat} disabled={streaming} />
+              <EmptyState onPick={sendStarter} disabled={streaming} />
             ) : (
               <ChatMessages items={items} streaming={streaming} status={status} onSend={sendFromChat} />
             )}

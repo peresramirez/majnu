@@ -10,6 +10,13 @@
 //   is asked to create a free account first (the account is upgraded in
 //   place, so the gift comes along), and a member writes a short design
 //   request and ticks the required consent box before going to Checkout.
+// * "Have a code?" (docs/features/coupons.md), a quiet link in both steps,
+//   reveals a coupon code field. With a code nothing is paid: guests skip the
+//   account step, there is no consent box, and the dialog posts to
+//   POST /api/coupons/redeem, then closes on the design's status card, the
+//   same card the paid return shows. The paid path is unchanged. A code the
+//   browser brought from a poster's short link (/c/<code>) comes back from
+//   GET /api/purchases, and the dialog then opens with it filled in.
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
@@ -17,7 +24,8 @@ import { Sparkles, X } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { focusRing, primaryButton, secondaryButton } from "@/components/app/styles"
 import { WRAPPER_CONSENT_TEXT, WRAPPER_REQUEST_MAX_CHARS, wrapper } from "@/lib/plans"
-import type { WrapperState } from "@/lib/billing/view"
+import { normaliseCouponCode } from "@/lib/billing/coupon-code"
+import type { PurchaseView, WrapperState } from "@/lib/billing/view"
 import { PurchaseStatusCard } from "./purchase-status"
 
 type Props = {
@@ -34,6 +42,8 @@ const EXAMPLES = ["A 1950s cinema ticket by the sea", "Pressed flowers on old pa
 export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }: Props) {
   const [state, setState] = useState<WrapperState | null>(null)
   const [open, setOpen] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
+  const focusCard = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -50,21 +60,52 @@ export function MakeItUnique({ letterId, returnTo, refreshKey, className = "" }:
     }
   }, [letterId, refreshKey])
 
+  // After a code was redeemed the dialog has closed and its trigger is gone:
+  // move focus to the status card that replaced it. Radix returns focus on a
+  // timer when the dialog unmounts, so this runs on one scheduled after it.
+  const purchase = state?.purchase ?? null
+  useEffect(() => {
+    if (!focusCard.current || !purchase) return
+    focusCard.current = false
+    const timer = setTimeout(() => card.current?.focus(), 0)
+    return () => clearTimeout(timer)
+  }, [purchase])
+
   if (!state || state.unavailable) return null
 
-  const purchase = state.purchase
   if (purchase && (purchase.status === "paid" || purchase.status === "designing" || purchase.status === "done")) {
-    return <PurchaseStatusCard key={purchase.id} purchase={purchase} className={className} />
+    return (
+      <div ref={card} tabIndex={-1} className={`outline-none ${className}`}>
+        <PurchaseStatusCard key={purchase.id} purchase={purchase} />
+      </div>
+    )
+  }
+
+  function redeemed(next: PurchaseView) {
+    focusCard.current = true
+    setOpen(false)
+    // The server forgot a remembered code once it was redeemed.
+    setState((current) => (current ? { ...current, purchase: next, rememberedCode: null } : current))
   }
 
   return (
     <div className={className}>
       {purchase && (purchase.status === "refunded" || purchase.status === "failed") && (
         <p className="mb-2.5 text-[13px] leading-relaxed text-night-lilac">
-          Your last design could not be made{purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.
+          {purchase.freeWithCode
+            ? "Your last design could not be made. Your code works again, so you can try once more."
+            : `Your last design could not be made${purchase.status === "refunded" ? ", so we refunded you in full" : ""}. You can try again.`}
         </p>
       )}
-      <WrapperDialog open={open} onOpenChange={setOpen} letterId={letterId} account={state.account} returnTo={returnTo}>
+      <WrapperDialog
+        open={open}
+        onOpenChange={setOpen}
+        letterId={letterId}
+        account={state.account}
+        rememberedCode={state.rememberedCode ?? null}
+        returnTo={returnTo}
+        onRedeemed={redeemed}
+      >
         {/* A Dialog.Trigger, so focus comes back to it when the dialog closes. */}
         <button type="button" className={`w-full ${secondaryButton} ring-night-rose/50 hover:ring-night-rose`}>
           <Sparkles className="h-4 w-4 text-night-rose" aria-hidden="true" />
@@ -80,14 +121,18 @@ function WrapperDialog({
   onOpenChange,
   letterId,
   account,
+  rememberedCode,
   returnTo,
+  onRedeemed,
   children,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   letterId: string
   account: WrapperState["account"]
+  rememberedCode: string | null
   returnTo?: string
+  onRedeemed: (purchase: PurchaseView) => void
   children: ReactNode
 }) {
   return (
@@ -96,21 +141,7 @@ function WrapperDialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] flex items-end justify-center bg-night-deep/80 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 sm:items-center sm:p-6">
           <DialogPrimitive.Content className="max-h-[calc(100dvh-24px)] w-full overflow-y-auto rounded-t-[24px] bg-night-plum p-5 pb-[max(20px,var(--safe-bottom))] text-night-petal outline-none ring-1 ring-inset ring-night-petal/10 motion-safe:duration-300 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom-4 sm:max-w-[480px] sm:rounded-[24px] sm:p-7 sm:shadow-2xl sm:shadow-black/40">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 text-night-rose">
-                <MoonPhase lit={1} size={26} />
-                <DialogPrimitive.Title className="font-display text-[26px] leading-tight text-night-petal">
-                  {account === "guest" ? "Create a free account first" : "Make it unique"}
-                </DialogPrimitive.Title>
-              </div>
-              <DialogPrimitive.Close
-                className={`-mr-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-night-lilac transition-colors duration-200 hover:bg-night-petal/10 hover:text-night-petal ${focusRing}`}
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </DialogPrimitive.Close>
-            </div>
-            {account === "guest" ? <GuestStep letterId={letterId} /> : <RequestStep letterId={letterId} returnTo={returnTo} />}
+            <DialogBody letterId={letterId} account={account} rememberedCode={rememberedCode} returnTo={returnTo} onRedeemed={onRedeemed} />
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
@@ -118,10 +149,63 @@ function WrapperDialog({
   )
 }
 
+// Lives inside the dialog's content, so "Have a code?" starts closed each time
+// the dialog opens, or open with the remembered code.
+function DialogBody({
+  letterId,
+  account,
+  rememberedCode,
+  returnTo,
+  onRedeemed,
+}: {
+  letterId: string
+  account: WrapperState["account"]
+  rememberedCode: string | null
+  returnTo?: string
+  onRedeemed: (purchase: PurchaseView) => void
+}) {
+  const [withCode, setWithCode] = useState(rememberedCode !== null)
+  const accountStep = account === "guest" && !withCode
+  return (
+    <>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3 text-night-rose">
+          <MoonPhase lit={1} size={26} />
+          <DialogPrimitive.Title className="font-display text-[26px] leading-tight text-night-petal">
+            {accountStep ? "Create a free account first" : "Make it unique"}
+          </DialogPrimitive.Title>
+        </div>
+        <DialogPrimitive.Close
+          className={`-mr-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-night-lilac transition-colors duration-200 hover:bg-night-petal/10 hover:text-night-petal ${focusRing}`}
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+        </DialogPrimitive.Close>
+      </div>
+      {accountStep ? (
+        <GuestStep letterId={letterId} onHaveCode={() => setWithCode(true)} />
+      ) : (
+        <RequestStep
+          letterId={letterId}
+          returnTo={returnTo}
+          withCode={withCode}
+          initialCode={rememberedCode ?? ""}
+          onWithCodeChange={setWithCode}
+          noCodeLabel={account === "guest" ? "I don't have a code" : "Pay instead"}
+          onRedeemed={onRedeemed}
+        />
+      )}
+    </>
+  )
+}
+
+// A quiet text button: "Have a code?" and its way back. 44 px tall for touch.
+const quietLink = `inline-flex min-h-[44px] items-center rounded px-2 text-[13px] font-medium text-night-lilac underline decoration-night-lilac/40 underline-offset-4 transition-colors duration-200 hover:text-night-petal hover:decoration-night-petal/60 ${focusRing}`
+
 // Guests come back to this gift in the app after signing up, where the same
 // button is waiting. Signing up links the new identity to the guest account,
 // so the gift is theirs already (docs/features/guest-accounts.md).
-function GuestStep({ letterId }: { letterId: string }) {
+function GuestStep({ letterId, onHaveCode }: { letterId: string; onHaveCode: () => void }) {
   const next = encodeURIComponent(`/create/${letterId}`)
   return (
     <>
@@ -137,22 +221,76 @@ function GuestStep({ letterId }: { letterId: string }) {
           I have an account
         </Link>
       </div>
+      <p className="mt-3 text-center">
+        <button type="button" onClick={onHaveCode} className={quietLink}>
+          Have a code?
+        </button>
+      </p>
     </>
   )
 }
 
-function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: string }) {
+type Refusal = { error?: string; reason?: string }
+
+function RequestStep({
+  letterId,
+  returnTo,
+  withCode,
+  initialCode,
+  onWithCodeChange,
+  noCodeLabel,
+  onRedeemed,
+}: {
+  letterId: string
+  returnTo?: string
+  withCode: boolean
+  initialCode: string
+  onWithCodeChange: (withCode: boolean) => void
+  noCodeLabel: string
+  onRedeemed: (purchase: PurchaseView) => void
+}) {
   const [request, setRequest] = useState("")
   const [consent, setConsent] = useState(false)
+  const [code, setCode] = useState(initialCode)
+  const [codeWrong, setCodeWrong] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Bumped to move focus to the code field once it is enabled again after a refusal.
+  const [refocusCode, setRefocusCode] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const requestId = useId()
   const hintId = useId()
   const consentId = useId()
+  const codeId = useId()
+  const codeHintId = useId()
+  const errorId = useId()
   const textarea = useRef<HTMLTextAreaElement>(null)
+  const codeInput = useRef<HTMLInputElement>(null)
+  const haveCode = useRef<HTMLButtonElement>(null)
+  const hadCode = useRef(withCode)
+  // Opened with a remembered code: the request is what is left to fill in.
+  const prefilled = useRef(initialCode !== "")
+
+  // Follow the switch: into the code field when it appears (also when a guest
+  // arrives here with a code), back to "Have a code?" when it goes.
+  useEffect(() => {
+    if (withCode) (prefilled.current ? textarea : codeInput).current?.focus()
+    else if (hadCode.current) haveCode.current?.focus()
+    hadCode.current = withCode
+  }, [withCode])
+
+  useEffect(() => {
+    if (refocusCode > 0) codeInput.current?.focus()
+  }, [refocusCode])
 
   const trimmed = request.trim()
-  const ready = trimmed.length >= 3 && consent && !busy
+  const ready = trimmed.length >= 3 && (withCode ? code.trim().length > 0 : consent) && !busy
+
+  function toggleCode(next: boolean) {
+    prefilled.current = false
+    setError(null)
+    setCodeWrong(false)
+    onWithCodeChange(next)
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -162,6 +300,7 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
       textarea.current?.focus()
       return
     }
+    if (withCode) return redeem()
     if (!consent) {
       setError("Tick the box to agree that we start your design straight away.")
       return
@@ -191,11 +330,50 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
     setBusy(false)
   }
 
+  // With a code nothing is paid: no Checkout and no consent, straight to the design.
+  async function redeem() {
+    if (!code.trim()) {
+      setCodeWrong(true)
+      setError("Type your code.")
+      codeInput.current?.focus()
+      return
+    }
+    if (!normaliseCouponCode(code)) {
+      setCodeWrong(true)
+      setError("That code doesn't work. Check it and try again.")
+      codeInput.current?.focus()
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setCodeWrong(false)
+    try {
+      const response = await fetch("/api/coupons/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ letterId, request: trimmed, coupon: code }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { purchase?: PurchaseView } & Refusal
+      if (response.ok && body.purchase) {
+        onRedeemed(body.purchase)
+        return
+      }
+      const aboutCode = typeof body.reason === "string" && body.reason.startsWith("code_")
+      setCodeWrong(aboutCode)
+      setError(body.error ?? "Something went wrong starting your design. Try again.")
+      // The field is disabled while busy; focus it after it is enabled again.
+      if (aboutCode) setRefocusCode((n) => n + 1)
+    } catch {
+      setError("We couldn't reach Majnu just now. Check your connection and try again.")
+    }
+    setBusy(false)
+  }
+
   return (
     <form onSubmit={submit} noValidate aria-busy={busy}>
       <DialogPrimitive.Description className="mt-3 text-[15px] leading-relaxed text-night-lilac">
         Instead of one of our designs, Majnu makes a page for this gift alone, around the person and what you want to say. It is ready in
-        about two minutes. {wrapper.price} once, VAT included.
+        about two minutes. {withCode ? "Free with your code." : `${wrapper.price} once, VAT included.`}
       </DialogPrimitive.Description>
 
       <label htmlFor={requestId} className="mt-5 block text-sm font-semibold text-night-petal">
@@ -237,23 +415,59 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
         ))}
       </div>
 
-      <div className="mt-5 flex gap-3 rounded-2xl bg-night-velvet p-3.5 ring-1 ring-inset ring-night-petal/10">
-        <input
-          id={consentId}
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          aria-required="true"
-          disabled={busy}
-          className={`mt-0.5 h-5 w-5 flex-none cursor-pointer rounded accent-night-rose ${focusRing}`}
-        />
-        <label htmlFor={consentId} className="cursor-pointer text-[14px] leading-relaxed text-night-petal">
-          {WRAPPER_CONSENT_TEXT}
-        </label>
-      </div>
+      {withCode ? (
+        <div className="mt-5">
+          <div className="flex items-end justify-between gap-3">
+            <label htmlFor={codeId} className="block text-sm font-semibold text-night-petal">
+              Your code
+            </label>
+            <button type="button" onClick={() => toggleCode(false)} disabled={busy} className={`-mb-3 -mr-2 ${quietLink}`}>
+              {noCodeLabel}
+            </button>
+          </div>
+          <input
+            id={codeId}
+            ref={codeInput}
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value)
+              if (codeWrong) setCodeWrong(false)
+            }}
+            maxLength={40}
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            aria-required="true"
+            aria-invalid={codeWrong || undefined}
+            aria-describedby={codeWrong && error ? `${codeHintId} ${errorId}` : codeHintId}
+            disabled={busy}
+            className="mt-1.5 block h-12 w-full rounded-2xl bg-night-velvet px-4 font-mono text-[16px] uppercase tracking-[0.08em] text-night-petal ring-1 ring-inset ring-night-petal/15 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-night-rose aria-[invalid=true]:ring-night-rose/70 disabled:opacity-60"
+          />
+          <p id={codeHintId} className="mt-1.5 text-[13px] leading-snug text-night-lilac">
+            Capitals, spaces and dashes don&rsquo;t matter.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 flex gap-3 rounded-2xl bg-night-velvet p-3.5 ring-1 ring-inset ring-night-petal/10">
+          <input
+            id={consentId}
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            aria-required="true"
+            disabled={busy}
+            className={`mt-0.5 h-5 w-5 flex-none cursor-pointer rounded accent-night-rose ${focusRing}`}
+          />
+          <label htmlFor={consentId} className="cursor-pointer text-[14px] leading-relaxed text-night-petal">
+            {WRAPPER_CONSENT_TEXT}
+          </label>
+        </div>
+      )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm leading-relaxed text-night-petal">
+        <p id={errorId} role="alert" className="mt-3 text-sm leading-relaxed text-night-petal">
           {error}
         </p>
       )}
@@ -262,18 +476,27 @@ function RequestStep({ letterId, returnTo }: { letterId: string; returnTo?: stri
         {busy ? (
           <>
             <MoonPhase lit={0.5} size={18} className="motion-safe:animate-[moon-breathe_2.4s_ease-in-out_infinite]" />
-            Opening the payment page…
+            {withCode ? "Starting your design…" : "Opening the payment page…"}
           </>
+        ) : withCode ? (
+          "Make my design"
         ) : (
           `Pay ${wrapper.price}`
         )}
       </button>
       <p className="mt-3 text-center text-[12px] leading-relaxed text-night-lilac/80">
-        Paid securely through Stripe. If the design cannot be made, you get every cent back.{" "}
+        {withCode ? "Nothing to pay. If the design cannot be made, your code works again." : "Paid securely through Stripe. If the design cannot be made, you get every cent back."}{" "}
         <Link href="/terms#wrapper" className={`rounded underline underline-offset-4 ${focusRing}`} target="_blank">
           Terms
         </Link>
       </p>
+      {!withCode && (
+        <p className="mt-1 text-center">
+          <button ref={haveCode} type="button" onClick={() => toggleCode(true)} disabled={busy} className={quietLink}>
+            Have a code?
+          </button>
+        </p>
+      )}
     </form>
   )
 }
