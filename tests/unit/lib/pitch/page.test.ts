@@ -20,7 +20,7 @@ import { DECK_LABELS, pitchSlides } from "@/components/pitch/slides"
 import { FINDER_LIMITS } from "@/lib/finder/limits"
 import { pitchCookieValue } from "@/lib/pitch/gate"
 import { wrapper } from "@/lib/plans"
-import { PITCH_NOTES, PITCH_SLIDE_IDS } from "@/lib/pitch/notes"
+import { PITCH_APPENDIX_IDS, PITCH_NOTES, PITCH_SLIDE_IDS } from "@/lib/pitch/notes"
 
 async function render(search: Record<string, string> = {}): Promise<string> {
   return renderToStaticMarkup(await PitchPage({ searchParams: Promise.resolve(search) }))
@@ -61,8 +61,8 @@ beforeEach(async () => {
 })
 
 describe("/pitch with the cookie", () => {
-  it("renders all nine slides with their words, and hands the deck their notes", () => {
-    expect(unlocked.match(/class="pd-slide"/g)).toHaveLength(9)
+  it("renders all eleven slides with their words, and hands the deck their notes", () => {
+    expect(unlocked.match(/class="pd-slide"/g)).toHaveLength(11)
     for (const text of [
       "Have you ever wondered…?",
       "Finding the perfect gift isn’t easy.",
@@ -73,6 +73,8 @@ describe("/pitch with the cookie", () => {
       "Make thoughtful, personal gifts easy for everyone.",
       "Layla plans the journey.",
       "The agents and the data",
+      "The launch film",
+      "The poster and the posts",
     ]) {
       expect(decode(unlocked), text).toContain(text)
     }
@@ -84,6 +86,16 @@ describe("/pitch with the cookie", () => {
   it("shows the real price and the finder's real limits", () => {
     expect(unlocked).toContain(`${wrapper.price} once`)
     expect(unlocked).toContain(`${FINDER_LIMITS.sessionsPerDay} sessions a day, ${FINDER_LIMITS.searchesPerSession} searches each.`)
+  })
+
+  it("plays the launch film with controls, muted and inline, over its poster, after the main slides", () => {
+    const film = unlocked.match(/<video[^>]*>/)?.[0] ?? ""
+    expect(film).toContain('src="/pitch/social/03-app.mp4"')
+    expect(film).toContain('poster="/pitch/social/03-app-cover.webp"')
+    for (const attr of ["controls", "muted", "playsInline"]) expect(film.toLowerCase()).toContain(attr.toLowerCase())
+    const ids = pitchSlides().map((slide) => slide.id)
+    expect(ids.slice(-3)).toEqual([...PITCH_APPENDIX_IDS])
+    expect(pitchSlides().filter((slide) => slide.appendix).map((slide) => slide.id)).toEqual([...PITCH_APPENDIX_IDS])
   })
 })
 
@@ -103,7 +115,7 @@ describe("/pitch without the cookie", () => {
     const leaked = deck.filter((text) => text !== "Majnu" && locked.includes(text))
     expect(leaked).toEqual([])
     for (const id of PITCH_SLIDE_IDS) expect(locked).not.toContain(PITCH_NOTES[id].slice(0, 40))
-    for (const asset of ["/pitch/step-", "majnu-layla", "pd-passage", "qr"]) expect(locked).not.toContain(asset)
+    for (const asset of ["/pitch/step-", "/pitch/social/", "majnu-layla", "pd-passage", "qr", "<video"]) expect(locked).not.toContain(asset)
   })
 
   it("says only \"That's not it\" after a wrong password", async () => {
@@ -175,8 +187,8 @@ describe("the spoken script", () => {
     for (const id of PITCH_SLIDE_IDS) expect(script, id).toContain(PITCH_NOTES[id])
   })
 
-  it("is about 260 words for the eight main slides, two minutes at a calm pace", () => {
-    const words = PITCH_SLIDE_IDS.filter((id) => id !== "appendix")
+  it("is about 270 words for the eight main slides, two minutes at a calm pace", () => {
+    const words = PITCH_SLIDE_IDS.filter((id) => !PITCH_APPENDIX_IDS.includes(id))
       .map((id) => PITCH_NOTES[id].split(/\s+/).length)
       .reduce((a, b) => a + b, 0)
     expect(words).toBeGreaterThanOrEqual(240)

@@ -138,15 +138,15 @@ function Majnu() {
   const steps = [
     {
       title: "Tell Majnu about them",
-      detail: "Words, voice, Instagram or LinkedIn, a photo",
+      detail: "Words, socials, photos: Majnu builds a profile",
       src: "/pitch/step-1-tell.webp",
       alt: "Majnu's message box on a phone: a birthday gift for my sister Lena, who climbs every weekend and loves old films",
     },
     {
-      title: "Three real gifts",
-      detail: "From real shops, one recommended",
+      title: "Six real gifts",
+      detail: "A few taps, then real shops, one picked",
       src: "/pitch/step-2-gifts.webp",
-      alt: "Three gift ideas with photos, shops and prices; a bouldering card is recommended",
+      alt: "Gift ideas with photos, shops and prices; a bouldering card is recommended",
     },
     {
       title: "Wrapped for them",
@@ -368,6 +368,86 @@ function Appendix() {
   )
 }
 
+// Appendix, after the questions slide: what we post at launch (issue: launch
+// content). The files are the team's own, in public/pitch/social/; like every
+// picture of the deck they are named only here, behind the password.
+function LaunchFilm() {
+  return (
+    <div className="pd-canvas pd-sky">
+      <div className="pd-pad pd-launch">
+        <p className="pd-eyebrow pd-in" style={at(0)}>
+          Appendix · Launch content
+        </p>
+        <h2 className="pd-title pd-title--small pd-in" style={at(0)}>
+          The launch film
+        </h2>
+        <div className="pd-launch-stage pd-in" style={at(1)}>
+          <div className="pd-launch-film">
+            <video
+              className="pd-launch-video"
+              src="/pitch/social/03-app.mp4"
+              poster="/pitch/social/03-app-cover.webp"
+              controls
+              muted
+              playsInline
+              preload="none"
+              aria-label="The launch film: Majnu finding gifts for someone's mother and wrapping one"
+            />
+            <div className="pd-launch-caption">
+              <p className="pd-launch-lead">The app, in 36 seconds.</p>
+              <p>Cut for social, 16:9. Plays muted; press play.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LaunchPrint() {
+  const pieces = [
+    {
+      src: "/pitch/social/poster.webp",
+      caption: "The printed poster",
+      alt: "Poster: Who is the gift for? Majnu giving Layla the moon, the code LAYLA100 for a free personalised wrapper for the first 100 people, and a QR code to majnu.app",
+      shape: "pd-launch-piece--poster",
+    },
+    {
+      src: "/pitch/social/01-who-is-it-for.webp",
+      caption: "Post, 4:5",
+      alt: "Social post: Who is the gift for? Tell Majnu, it finds six real gifts from real shops and wraps the one you choose",
+      shape: "pd-launch-piece--post",
+    },
+    {
+      src: "/pitch/social/02-three-steps.webp",
+      caption: "Post, 16:9",
+      alt: "Social post: three steps, one person in mind. Say who it is for, choose from six real gifts, send it as a link",
+      shape: "pd-launch-piece--wide",
+    },
+  ]
+  return (
+    <div className="pd-canvas pd-sky">
+      <div className="pd-pad pd-launch">
+        <p className="pd-eyebrow pd-in" style={at(0)}>
+          Appendix · Launch content
+        </p>
+        <h2 className="pd-title pd-title--small pd-in" style={at(0)}>
+          The poster and the posts
+        </h2>
+        <ul className="pd-launch-pieces">
+          {pieces.map((piece, i) => (
+            <li key={piece.src} className={`pd-launch-piece ${piece.shape} pd-in`} style={at(i + 1)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={piece.src} alt={piece.alt} loading="lazy" />
+              <p>{piece.caption}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
 // The deck controls' words. They live here, on the server, because the
 // controller's bundle also loads with the password screen.
 export const DECK_LABELS: DeckLabels = {
@@ -397,5 +477,7 @@ export function pitchSlides(): DeckSlide[] {
     { id: "model", label: "The model and the vision", content: <Model /> },
     { id: "name", label: "Majnu + Layla", content: <TheName /> },
     { id: "appendix", label: "Appendix: the agents and the data", content: <Appendix />, appendix: true },
+    { id: "launch-film", label: "Appendix: the launch film", content: <LaunchFilm />, appendix: true },
+    { id: "launch-print", label: "Appendix: the poster and the posts", content: <LaunchPrint />, appendix: true },
   ].map((slide) => ({ ...slide, notes: PITCH_NOTES[slide.id as keyof typeof PITCH_NOTES] }))
 }

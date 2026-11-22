@@ -137,8 +137,8 @@ export function Deck({ slides, labels: t }: { slides: DeckSlide[]; labels: DeckL
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return
       const target = e.target instanceof HTMLElement ? e.target : null
       if (target?.closest("input, textarea, select, [contenteditable]")) return
-      // Space and Enter on a focused button or link press it, nothing more.
-      if (target?.closest("button, a") && (e.key === " " || e.key === "Enter")) return
+      // Space and Enter on a focused button, link or video press it, nothing more.
+      if (target?.closest("button, a, video") && (e.key === " " || e.key === "Enter")) return
       if (inColumn()) return
       const action = keyAction(e.key, e.shiftKey)
       if (!action) return
@@ -183,7 +183,7 @@ export function Deck({ slides, labels: t }: { slides: DeckSlide[]; labels: DeckL
 
   const onStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (inColumn() || Date.now() - swipedAt.current < 500) return
-    if (e.target instanceof Element && e.target.closest("a, button")) return
+    if (e.target instanceof Element && e.target.closest("a, button, video")) return
     const rect = e.currentTarget.getBoundingClientRect()
     run(clickAction(e.clientX - rect.left, rect.width))
   }
