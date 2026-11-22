@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }),
 }))
 vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: () => ({ cf: { country: "DE", region: "Berlin", city: "Berlin", latitude: "52.5" }, env: {}, ctx: { waitUntil: () => {} } }),
+  getCloudflareContext: () => ({ cf: { country: "DE", region: "Berlin", city: "Berlin", latitude: "52.51234" }, env: {}, ctx: { waitUntil: () => {} } }),
 }))
 vi.mock("@/lib/finder/sessions", () => ({
   createFinderSession: vi.fn(),
@@ -192,7 +192,8 @@ describe("POST /api/finder", () => {
     expect(state.base).toEqual({ country: "DE", region: "Berlin", language: "de", currency: "EUR" })
     expect(state.browserLanguage).toBe("de-DE")
     expect(state.timezone).toBe("Europe/Berlin")
-    expect(JSON.stringify(state)).not.toMatch(/52\.5|latitude|city/)
+    // A distinctive latitude, so a timestamp's seconds ("…:52.5…") can never match by chance.
+    expect(JSON.stringify(state)).not.toMatch(/52\.51234|latitude|"city"/)
   })
 
   it("saves the turn append-only with the context and options it ended with", async () => {
