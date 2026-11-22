@@ -50,6 +50,18 @@ export const windows = steps.map((_, k) => ({
   leave: k < CHANGES.length ? CHANGES[k] - HALF : null,
 }))
 
+// The position one step (or its progress mark) needs to look right at story
+// position `u`. Outside its entrance and exit nothing about it changes, so the
+// value stops changing too, and how-it-works.tsx skips the style write: only a
+// step that is moving costs the browser any work.
+export function stepPosition(u: number, k: number) {
+  const { enter, leave } = windows[k]
+  if (u <= enter) return enter
+  if (u < enter + SPAN) return u
+  if (leave === null || u <= leave) return enter + SPAN
+  return Math.min(u, leave + SPAN)
+}
+
 // Where the moon is on its way from Majnu's hands (0) to Layla's palm (1), at
 // points of the timeline. The scene reads them from marks the section places in
 // the page (data-moon). It starts as the section comes into view from below,

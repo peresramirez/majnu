@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, type CSSProperties, type RefObject } from "react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { GiftScene } from "@/components/landing/gift-scene"
-import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, steps, windows } from "@/components/landing/how-it-works-steps"
+import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, stepPosition, steps, windows } from "@/components/landing/how-it-works-steps"
 
 // The landing page's "How it works", told one step at a time.
 //
@@ -13,6 +13,8 @@ import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, steps, windows } from "@/comp
 // how-it-works-steps.ts), and app/globals.css moves every letter from it: the
 // step on screen lifts and blurs away like mist in moonlight, and the next one
 // settles in. After the last step the track ends and the page scrolls on.
+// `--u` is written on each step and progress mark, held still while that step
+// rests, so a frame restyles only the letters that are moving.
 //
 // Story mode is pure CSS, under `(prefers-reduced-motion: no-preference) and
 // (scripting: enabled)`. Otherwise (reduced motion, no JavaScript, older
@@ -64,6 +66,7 @@ const NEVER = 99
 const timing = (k: number) =>
   ({ "--enter": windows[k].enter.toFixed(3), "--leave": (windows[k].leave ?? NEVER).toFixed(3) }) as CSSProperties
 
+// Until the script runs, every step reads `--u: 0`: the first step is on screen.
 const track = {
   "--u": 0,
   "--seg": `${SCREENS_PER_STEP * 100}svh`,
@@ -72,9 +75,11 @@ const track = {
   "--glyph": GLYPH,
 } as CSSProperties
 
-// Reads the scroll position on `scroll` (passive) at most once a frame, eases
-// towards it and writes `--u`. The section's place in the page is measured on
-// resize, never while scrolling, so a frame reads only `scrollY`.
+// Reads the scroll position on `scroll` (passive), then at most once a frame
+// eases towards it and writes `--u` where it changed. scrollY is read in the
+// scroll event, not in the frame: reading it after a style write makes Chrome
+// recalculate styles early. The section's place in the page is measured on
+// resize, never while scrolling.
 function useStoryScroll(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const section = ref.current
@@ -82,18 +87,34 @@ function useStoryScroll(ref: RefObject<HTMLElement | null>) {
     if (!section || !screen) return
 
     let live = false
+    let y = window.scrollY
     let top = 0
     let seg = 1
     let current = 0
     let raf = 0
     let last = 0
 
-    const goal = () => Math.min(steps.length + 1, Math.max(-2, (window.scrollY - top) / seg))
-    const write = (u: number) => section.style.setProperty("--u", u.toFixed(4))
+    const goal = () => Math.min(steps.length + 1, Math.max(-2, (y - top) / seg))
+    // Each step and its mark, with the value last written to it.
+    const targets = Array.from(section.querySelectorAll<HTMLElement>("[data-step]"), (node) => ({
+      node,
+      k: Number(node.dataset.step),
+      last: "",
+    }))
+    const write = (u: number) => {
+      for (const target of targets) {
+        const value = stepPosition(u, target.k).toFixed(4)
+        if (value !== target.last) {
+          target.node.style.setProperty("--u", value)
+          target.last = value
+        }
+      }
+    }
     const measure = () => {
       // Story mode is decided in CSS; the screen is only sticky there.
       live = getComputedStyle(screen).position === "sticky"
-      top = section.getBoundingClientRect().top + window.scrollY
+      y = window.scrollY
+      top = section.getBoundingClientRect().top + y
       seg = (section.offsetHeight - screen.offsetHeight) / steps.length || 1
     }
     const tick = (now: number) => {
@@ -113,6 +134,10 @@ function useStoryScroll(ref: RefObject<HTMLElement | null>) {
     const wake = () => {
       if (live && !raf) raf = requestAnimationFrame(tick)
     }
+    const onScroll = () => {
+      y = window.scrollY
+      wake()
+    }
     const remeasure = () => {
       measure()
       wake()
@@ -129,12 +154,12 @@ function useStoryScroll(ref: RefObject<HTMLElement | null>) {
     resize.observe(section)
     resize.observe(document.body)
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)")
-    window.addEventListener("scroll", wake, { passive: true })
+    window.addEventListener("scroll", onScroll, { passive: true })
     motion.addEventListener("change", remeasure)
     return () => {
       cancelAnimationFrame(raf)
       resize.disconnect()
-      window.removeEventListener("scroll", wake)
+      window.removeEventListener("scroll", onScroll)
       motion.removeEventListener("change", remeasure)
     }
   }, [ref])
@@ -169,7 +194,7 @@ export function HowItWorks() {
             {/* Three moons, one per step: the current one lit in rose gold. */}
             <div aria-hidden="true" className="story-marks hidden items-center gap-2.5">
               {steps.map((step, k) => (
-                <span key={step.title} className="story-mark relative block h-4 w-4" style={timing(k)}>
+                <span key={step.title} data-step={k} className="story-mark relative block h-4 w-4" style={timing(k)}>
                   <MoonPhase lit={step.lit} size={16} className="absolute inset-0 text-night-lilac/60" />
                   <MoonPhase lit={step.lit} size={16} className="story-mark-on absolute inset-0 text-night-rose" />
                 </span>
@@ -189,7 +214,7 @@ export function HowItWorks() {
 
         <ol className="story-steps mt-8 flex flex-col gap-6 md:max-w-md xl:max-w-xl">
           {steps.map((step, k) => (
-            <li key={step.title} className="story-step" style={timing(k)}>
+            <li key={step.title} data-step={k} className="story-step" style={timing(k)}>
               <div className="story-text flex gap-3.5">
                 <MoonPhase lit={step.lit} size={26} className="mt-0.5 flex-none text-night-rose" />
                 <div>

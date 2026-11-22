@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, steps, windows } from "@/components/landing/how-it-works-steps"
+import { GLYPH, SCREENS_PER_STEP, SPAN, moonMarks, stepPosition, steps, windows } from "@/components/landing/how-it-works-steps"
 
 const words = (s: string) => s.trim().split(/\s+/).length
 
@@ -87,5 +87,29 @@ describe("How it works timeline", () => {
     // At the top of its arc while the middle step is on screen.
     const peak = moonMarks.find((m) => m.t === 0.5)
     expect(peak?.at).toBeCloseTo(settled(1))
+  })
+})
+
+// how-it-works.tsx writes each step's position only when it changes, so a
+// step at rest costs no style work. That only holds if the position stands
+// still exactly where the step's letters stand still.
+describe("stepPosition", () => {
+  it("follows the scroll while the step arrives or leaves", () => {
+    for (let k = 0; k < steps.length; k++) {
+      const { enter, leave } = windows[k]
+      expect(stepPosition(enter + SPAN / 2, k)).toBeCloseTo(enter + SPAN / 2)
+      if (leave !== null) expect(stepPosition(leave + SPAN / 2, k)).toBeCloseTo(leave + SPAN / 2)
+    }
+  })
+
+  it("stands still before, between and after", () => {
+    for (let k = 0; k < steps.length; k++) {
+      const { enter, leave } = windows[k]
+      expect(stepPosition(enter - 1, k)).toBe(stepPosition(enter, k))
+      const rest = leave ?? enter + SPAN + 2
+      expect(stepPosition(enter + SPAN, k)).toBe(stepPosition(rest, k))
+      expect(stepPosition((enter + SPAN + rest) / 2, k)).toBe(enter + SPAN)
+      if (leave !== null) expect(stepPosition(leave + SPAN + 1, k)).toBe(leave + SPAN)
+    }
   })
 })

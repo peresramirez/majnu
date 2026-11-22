@@ -126,14 +126,18 @@ export function GiftScene({ variant }: { variant: "backdrop" | "story" | "panel"
       lit.current?.setAttribute("d", litPath(r, 0.18 + 0.82 * ease(t)))
     }
 
-    // The marks' places in the page, measured on resize, so scrolling reads
-    // only scrollY.
+    // The marks' places in the page are measured on resize; while scrolling,
+    // only scrollY is read, in the scroll event rather than in the frame
+    // (reading it after How it works has written its variable would make
+    // Chrome recalculate styles early).
     const scope = el.closest<HTMLElement>("[data-gift-track]")
     let marks: Mark[] = []
+    let y = window.scrollY
     const measureMarks = () => {
       if (!scope) return
+      y = window.scrollY
       marks = Array.from(scope.querySelectorAll<HTMLElement>("[data-moon]"), (m) => ({
-        y: m.getBoundingClientRect().top + window.scrollY,
+        y: m.getBoundingClientRect().top + y,
         t: Number(m.dataset.moon),
       })).sort((a, b) => a.y - b.y)
     }
@@ -151,11 +155,11 @@ export function GiftScene({ variant }: { variant: "backdrop" | "story" | "panel"
       return () => sized.disconnect()
     }
 
-    let current = journey(marks, window.scrollY)
+    let current = journey(marks, y)
     let raf = 0
     draw(current)
     const tick = () => {
-      const goal = journey(marks, window.scrollY)
+      const goal = journey(marks, y)
       current += (goal - current) * 0.12
       if (Math.abs(goal - current) <= 0.0005) current = goal
       draw(current)
@@ -170,12 +174,16 @@ export function GiftScene({ variant }: { variant: "backdrop" | "story" | "panel"
       wake()
     })
     if (scope) moved.observe(scope)
-    window.addEventListener("scroll", wake, { passive: true })
+    const onScroll = () => {
+      y = window.scrollY
+      wake()
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
     return () => {
       cancelAnimationFrame(raf)
       sized.disconnect()
       moved.disconnect()
-      window.removeEventListener("scroll", wake)
+      window.removeEventListener("scroll", onScroll)
     }
   }, [variant])
 
