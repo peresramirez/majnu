@@ -22,7 +22,7 @@
 // never a sign-in or sign-up page (they would only send a signed-in visitor on,
 // or start the sign-in again), never a route that is not a page, and never an
 // app page for a visitor who is signed out (it would send them to sign in).
-import { safeNextPath } from "@/lib/billing/next-path"
+import { safeNextPath, sameSitePath } from "@/lib/billing/next-path"
 
 export type Trail = { entries: string[]; index: number }
 
@@ -40,6 +40,9 @@ const NOT_RECORDED = ["/auth", "/api", "/billing", "/dev"]
 
 // Pages that need an account (guests included); lib/supabase/middleware.ts.
 const NEEDS_ACCOUNT = ["/dashboard", "/create"]
+
+// The sign-in pages a signed-out visitor may be sent back to.
+const SIGN_IN_PAGES = ["/signin", "/signup"]
 
 function under(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -61,7 +64,12 @@ export function trailPath(pathname: string, search = ""): string | null {
 
 // A same-site path a Back link may lead to, or null.
 export function backDestination(path: unknown, { signedIn }: { signedIn: boolean }): string | null {
-  const safe = safeNextPath(path)
+  // A signed-out visitor who opened the terms or the privacy policy from the
+  // sign-in or sign-up page goes back to it. A member never does: the
+  // middleware would only bounce them on to the app.
+  const sameSite = sameSitePath(path)
+  const signInPage = sameSite !== null && SIGN_IN_PAGES.includes(pathnameOf(sameSite))
+  const safe = signInPage && !signedIn ? sameSite : safeNextPath(path)
   if (!safe) return null
   const pathname = pathnameOf(safe)
   if (NOT_RECORDED.some((prefix) => under(pathname, prefix))) return null
@@ -164,7 +172,14 @@ export type BackResolution = {
 // trail holds only this page, then the fallback.
 export function resolveBack(input: BackInput): BackResolution {
   const { trail, current, signedIn, fallback } = input
-  const allowed = (path: string) => backDestination(path, { signedIn })
+  // From one sign-in page, Back skips the other: sign-up never bounces back to
+  // sign-in, so the visitor returns to the page that sent them to either.
+  const onSignInPage = SIGN_IN_PAGES.includes(pathnameOf(current))
+  const allowed = (path: string) => {
+    const destination = backDestination(path, { signedIn })
+    if (destination && onSignInPage && SIGN_IN_PAGES.includes(pathnameOf(destination))) return null
+    return destination
+  }
   // The position the current page has, or will have once it is recorded.
   const here = recordVisit(trail, current, input.intent ?? null)
   const replaceHere = (href: string, from: BackResolution["from"]): BackResolution => ({

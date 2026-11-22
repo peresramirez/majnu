@@ -22,6 +22,17 @@ const NOT_A_DESTINATION = ["/signin", "/signup", "/auth"]
 // control characters (the URL parser strips tabs and newlines, which can turn
 // "/\t/host" into "//host"), and anything that resolves to another origin.
 export function safeNextPath(value: unknown): string | null {
+  const path = sameSitePath(value)
+  if (!path) return null
+  const pathname = new URL(path, "https://majnu.invalid").pathname
+  if (NOT_A_DESTINATION.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return null
+  return path
+}
+
+// The same-site check on its own, without the sign-in exclusion: for links back
+// to a page the visitor already saw (lib/navigation/back.ts), where a signed-out
+// visitor may well want to return to the sign-in page they came from.
+export function sameSitePath(value: unknown): string | null {
   if (typeof value !== "string" || value.length === 0 || value.length > MAX_LENGTH) return null
   if (!value.startsWith("/") || value.startsWith("//")) return null
   if (/[\\\u0000- \u007f]/.test(value)) return null
@@ -35,9 +46,7 @@ export function safeNextPath(value: unknown): string | null {
   }
   if (url.origin !== base) return null
 
-  const path = `${url.pathname}${url.search}${url.hash}`
-  if (NOT_A_DESTINATION.some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) return null
-  return path
+  return `${url.pathname}${url.search}${url.hash}`
 }
 
 type SearchLike = { get(name: string): string | null }

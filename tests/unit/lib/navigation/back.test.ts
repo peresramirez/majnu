@@ -65,11 +65,19 @@ describe("backDestination", () => {
     }
   })
 
-  it("never goes back to a sign-in page or a route that is not a page", () => {
-    for (const path of ["/signin", "/signin?next=%2Fdashboard", "/signup", "/auth/callback", "/api/open", "/billing/return"]) {
+  it("never goes back to a route that is not a page", () => {
+    for (const path of ["/auth/callback", "/api/open", "/billing/return"]) {
       expect(backDestination(path, visitor)).toBeNull()
       expect(backDestination(path, member)).toBeNull()
     }
+  })
+
+  it("sends a signed-out visitor back to the sign-in page they came from, and a member never", () => {
+    for (const path of ["/signin", "/signin?next=%2Fdashboard%2Fcreate", "/signup"]) {
+      expect(backDestination(path, visitor)).toBe(path)
+      expect(backDestination(path, member)).toBeNull()
+    }
+    expect(backDestination("//evil.example/signin", visitor)).toBeNull()
   })
 
   it("keeps app pages for people who are signed in", () => {
@@ -148,7 +156,7 @@ describe("parseTrail and parseIntent", () => {
 describe("trailTarget", () => {
   it("skips entries that are not allowed and copies of the current page", () => {
     const trail = visit("/", "/terms", "/signin", "/privacy")
-    const target = trailTarget(trail, "/privacy", (p) => backDestination(p, visitor))
+    const target = trailTarget(trail, "/privacy", (p) => backDestination(p, member))
     expect(target).toEqual({ path: "/terms", index: 1 })
   })
 })
@@ -196,9 +204,11 @@ describe("resolveBack", () => {
   })
 
   it("never sends a signed-out visitor to an app page, which would ask them to sign in", () => {
-    // Signed out from the app, then opened the terms from the sign-in page.
+    // Signed out from the app, then opened the terms from the sign-in page:
+    // back to the sign-in page, never to the app page before it.
     const trail = visit("/dashboard/gifts", "/signin", "/terms")
-    expect(resolveBack({ trail, current: "/terms", signedIn: false, ...legal }).href).toBe("/")
+    expect(resolveBack({ trail, current: "/terms", signedIn: false, ...legal }).href).toBe("/signin")
+    expect(resolveBack({ trail: visit("/dashboard/gifts", "/terms"), current: "/terms", signedIn: false, ...legal }).href).toBe("/")
     // A fallback that needs an account becomes the landing page.
     expect(resolveBack({ trail: visit("/terms"), current: "/terms", signedIn: false, fallback: "/dashboard/find" }).href).toBe("/")
   })
@@ -237,7 +247,7 @@ describe("resolveBack", () => {
     expect(resolveBack({ ...base, trail: only, referrer: "https://majnu.app/l/abc" })).toMatchObject({ href: "/l/abc", from: "referrer" })
     expect(resolveBack({ ...base, trail: only, referrer: "https://evil.example/l/abc" }).href).toBe("/")
     expect(resolveBack({ ...base, trail: only, referrer: "https://majnu.app/privacy" }).href).toBe("/")
-    expect(resolveBack({ ...base, trail: only, referrer: "https://majnu.app/signin" }).href).toBe("/")
+    expect(resolveBack({ ...base, trail: only, referrer: "https://majnu.app/signin" }).href).toBe("/signin")
     // With an earlier page in the trail, a stale referrer is ignored.
     expect(resolveBack({ ...base, trail: visit("/terms", "/privacy"), referrer: "https://majnu.app/l/abc" }).href).toBe("/terms")
   })
@@ -291,7 +301,8 @@ describe("following Back links never loops", () => {
           const back = resolveBack({ trail, current, signedIn, fallback: pages[current].fallback })
           expect(back.href.startsWith("/")).toBe(true)
           expect(back.href.startsWith("//")).toBe(false)
-          expect(["/signin", "/signup"]).not.toContain(back.href)
+          // Members never land on a sign-in page; visitors may return to one.
+          if (signedIn) expect(["/signin", "/signup"]).not.toContain(back.href)
           if (!signedIn) expect(back.href.startsWith("/dashboard")).toBe(false)
           trail = recordVisit(trail, back.href, back.intent)
           current = back.href
