@@ -17,9 +17,13 @@ import { calendarFixtures, letterFixtures } from "@/lib/letters/fixtures"
 import type { CalendarContent, LetterContent, TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { displayStyle, paperStyle } from "./chrome"
+import { TinDrawing } from "./templates/gift-3d/drawing"
 import { BoxDrawing } from "./templates/gift-box-3d/drawing"
+import { TicketDrawing } from "./templates/party-invite-3d/drawing"
 import { Compass, ink, parchment } from "./templates/treasure-map/parts"
+import { coupleNames } from "./templates/wedding-envelope-3d/layout"
 import { EnvelopeDrawing } from "./templates/wedding-envelope-3d/drawing"
+import { InviteCardDrawing } from "./templates/wedding-invite-3d/drawing"
 import { eventDateParts, formatEventTime, parseEventStart } from "./event-time"
 import { monogram, wholeName } from "./names"
 import { paletteOf, themeStyle } from "./theme"
@@ -316,6 +320,55 @@ function Envelope3DThumb({ c }: { c: LetterContent }) {
   )
 }
 
+// The three 3D templates of issue #99 as their still drawings, closed, as the
+// page shows them before three.js arrives and instead of it with reduced motion.
+function ThumbButton({ label }: { label: string }) {
+  return (
+    <span className="mt-[5cqw] rounded-full px-[5cqw] py-[2.4cqw]" style={{ background: "var(--accent)", color: "var(--accent-ink)", fontSize: cq(3.4), fontWeight: 600 }}>
+      {label}
+    </span>
+  )
+}
+
+function PopUp3DThumb({ c }: { c: LetterContent }) {
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span style={eyebrow}>{c.occasion || "You're invited"}</span>
+      <span className="mt-[2cqw]" style={{ fontFamily: "var(--formal)", fontWeight: 500, fontSize: cq(9), lineHeight: 1.1 }}>
+        For {wholeName(c.recipientName)}
+      </span>
+      <InviteCardDrawing names={coupleNames(c.senderName) || c.senderName} forName={`For ${wholeName(c.recipientName)}`} className="mt-[4cqw] block h-auto w-[86cqw]" />
+      <ThumbButton label="Open the invitation" />
+    </span>
+  )
+}
+
+function Ticket3DThumb({ c }: { c: LetterContent }) {
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span style={eyebrow}>{c.occasion || "You're invited"}</span>
+      <span className="mt-[2cqw]" style={{ ...displayStyle, fontSize: cq(7), lineHeight: 1.1 }}>
+        You&rsquo;re on the list, {wholeName(c.recipientName)}
+      </span>
+      <TicketDrawing forName={`For ${wholeName(c.recipientName)}`} occasion={c.occasion || "You're invited"} className="mt-[3cqw] block h-auto w-[50cqw]" />
+      <ThumbButton label="Tear the ticket" />
+    </span>
+  )
+}
+
+function Tin3DThumb({ c }: { c: LetterContent }) {
+  return (
+    <span className="flex h-full flex-col items-center justify-center">
+      <span style={eyebrow}>{c.occasion || "A gift"}</span>
+      <span className="mt-[2cqw]" style={{ ...displayStyle, fontSize: cq(8), lineHeight: 1.1 }}>
+        For {wholeName(c.recipientName)}
+      </span>
+      <TinDrawing forName={`For ${wholeName(c.recipientName)}`} className="mt-[4cqw] block h-auto w-[70cqw]" />
+      <ThumbButton label="Open the tin" />
+    </span>
+  )
+}
+
 function MapThumb({ c }: { c: LetterContent }) {
   const initial = Array.from((c.senderName ?? "").trim())[0]?.toUpperCase() ?? "M"
   return (
@@ -459,6 +512,12 @@ function Drawing({ id }: { id: TemplateId }) {
       return <MapThumb c={letterFixtures[id]} />
     case "wedding-envelope-3d":
       return <Envelope3DThumb c={letterFixtures[id]} />
+    case "wedding-invite-3d":
+      return <PopUp3DThumb c={letterFixtures[id]} />
+    case "party-invite-3d":
+      return <Ticket3DThumb c={letterFixtures[id]} />
+    case "gift-3d":
+      return <Tin3DThumb c={letterFixtures[id]} />
     case "advent-classic":
       return <AdventThumb c={calendarFixtures[id]} />
     case "countdown":

@@ -73,6 +73,22 @@ const STATES: { title: string; links: [string, string][] }[] = [
     ],
   },
   {
+    // Issue #99. Like the other 3D templates: with reduced motion or no WebGL
+    // each is a still drawing and the button opens it at once.
+    title: "3D pop-up card, ticket and tin",
+    links: [
+      ["Pop-up card, voice note", "/dev/templates/wedding-invite-3d?audio=1"],
+      ["Pop-up card, no event", "/dev/templates/wedding-invite-3d?event=0"],
+      ["Pop-up card, night, script", "/dev/templates/wedding-invite-3d?palette=night&font=script"],
+      ["Ticket, voice note", "/dev/templates/party-invite-3d?audio=1"],
+      ["Ticket, no event", "/dev/templates/party-invite-3d?event=0"],
+      ["Ticket, petal", "/dev/templates/party-invite-3d?palette=petal&font=serif"],
+      ["Tin, voice note", "/dev/templates/gift-3d?audio=1"],
+      ["Tin, night", "/dev/templates/gift-3d?palette=night"],
+      ["Tin, ink, script", "/dev/templates/gift-3d?palette=ink&font=script"],
+    ],
+  },
+  {
     // The 3D boxes need WebGL and motion; with reduced motion or no WebGL they
     // show a still drawing instead (check with the browser's rendering
     // settings, or block WebGL).

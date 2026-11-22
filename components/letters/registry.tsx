@@ -11,13 +11,16 @@ import type { PublicLetter } from "@/lib/letters/schema"
 import { AUDIO_SPACE_CSS, AudioNote, type LetterAudio } from "./audio-note"
 import { LetterProvider } from "./letter-context"
 import { ClassicEnvelope } from "./templates/classic-envelope"
+import { Gift3D } from "./templates/gift-3d"
 import { GiftBox3D } from "./templates/gift-box-3d"
 import { GiftReveal } from "./templates/gift-reveal"
 import { Invitation } from "./templates/invitation"
 import { PartyBox } from "./templates/party-box"
+import { PartyInvite3D } from "./templates/party-invite-3d"
 import { Postcard } from "./templates/postcard"
 import { TreasureMap } from "./templates/treasure-map"
 import { WeddingEnvelope3D } from "./templates/wedding-envelope-3d"
+import { WeddingInvite3D } from "./templates/wedding-invite-3d"
 import { paletteOf, themeStyle } from "./theme"
 import { VoiceNoteProvider } from "./voice-player"
 import { isOwnAudioSrc, templateHasVoiceSlot } from "./voice-player-model"
@@ -51,6 +54,12 @@ function Template({ letter }: { letter: PublicLetter }) {
       return <TreasureMap content={letter.content} />
     case "wedding-envelope-3d":
       return <WeddingEnvelope3D content={letter.content} slug={letter.slug} />
+    case "wedding-invite-3d":
+      return <WeddingInvite3D content={letter.content} />
+    case "party-invite-3d":
+      return <PartyInvite3D content={letter.content} />
+    case "gift-3d":
+      return <Gift3D content={letter.content} />
     case "classic-envelope":
     default:
       return <ClassicEnvelope content={letter.content} />
