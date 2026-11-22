@@ -147,10 +147,22 @@ export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "item
 
 // --- Wrapping a chosen gift ---------------------------------------------------
 
-// The templates that fit a gift, in the order they are offered.
-export const WRAP_TEMPLATES: readonly WrapTemplateId[] = ["gift-reveal", "classic-envelope", "postcard"]
+// The templates that fit a gift, in the order they are offered: the gift
+// templates first (the 3D gift box, and the party pop box for birthdays and
+// celebrations), then the letters that carry one. The first is chosen at the
+// start. POST /api/finder/wrap accepts exactly these (WRAP_TEMPLATE_IDS).
+export const WRAP_TEMPLATES: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"]
 
 export type WrapDetails = { recipientName: string; senderName: string; note: string }
+
+// Whose gift it is once wrapped: a guest (anonymous account, the gift lives in
+// this browser until they sign up) or a member (it is in My gifts). No user at
+// all reads as a guest, the finder's starting point.
+export type WrapAccount = "guest" | "member"
+
+export function wrapAccount(user: { is_anonymous?: boolean } | null | undefined): WrapAccount {
+  return user && user.is_anonymous !== true ? "member" : "guest"
+}
 
 export type WrapState =
   | { stage: "closed" }

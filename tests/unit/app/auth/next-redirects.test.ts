@@ -167,8 +167,8 @@ describe("middleware redirect for signed-in users on the sign-in pages", () => {
   })
 
   it("ignores an unsafe next", async () => {
-    expect(await visit("/signin?next=%2F%2Fevil.example")).toBe("https://majnu.app/dashboard")
-    expect(await visit("/signup?next=https%3A%2F%2Fevil.example")).toBe("https://majnu.app/dashboard")
+    expect(await visit("/signin?next=%2F%2Fevil.example")).toBe("https://majnu.app/dashboard/find")
+    expect(await visit("/signup?next=https%3A%2F%2Fevil.example")).toBe("https://majnu.app/dashboard/find")
   })
 
   it("still sends signed-out visitors of protected pages to sign-in", async () => {

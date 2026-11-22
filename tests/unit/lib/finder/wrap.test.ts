@@ -9,7 +9,8 @@ vi.mock("@/lib/letters/store", () => ({ createLetter: vi.fn(), saveLetterContent
 
 import { BuilderInvalidOutput, buildContent } from "@/lib/agents/builder"
 import type { GiftOption } from "@/lib/finder/events"
-import { giftFromOption, withChosenGift, wrapBrief, wrapOption } from "@/lib/finder/wrap"
+import { WRAP_TEMPLATES } from "@/components/finder/finder-state"
+import { WRAP_TEMPLATE_IDS, giftFromOption, withChosenGift, wrapBrief, wrapOption } from "@/lib/finder/wrap"
 import { letterFixtures } from "@/lib/letters/fixtures"
 import { createLetter, saveLetterContent } from "@/lib/letters/store"
 
@@ -59,6 +60,19 @@ describe("wrapBrief", () => {
     expect(brief).toContain("Recipient's name: not given.")
     expect(brief).toContain("Sender's name: not given. Do not invent one.")
     expect(brief).toContain("Do not invent memories")
+    expect(brief).toContain("leave event out")
+  })
+
+  it("gives a party box a celebrating occasion when the sender named none", () => {
+    expect(wrapBrief({ option: OPTION, context: CONTEXT, templateId: "party-box" })).toContain("such as \"Celebration\"")
+    expect(wrapBrief({ option: OPTION, context: CONTEXT, templateId: "gift-box-3d" })).toContain("such as \"Just because\"")
+  })
+})
+
+describe("WRAP_TEMPLATE_IDS", () => {
+  it("are the five gift templates, the same ones the finder offers", () => {
+    expect([...WRAP_TEMPLATE_IDS].sort()).toEqual([...WRAP_TEMPLATES].sort())
+    expect(WRAP_TEMPLATE_IDS).toEqual(expect.arrayContaining(["gift-box-3d", "party-box"]))
   })
 })
 
@@ -92,6 +106,19 @@ describe("wrapOption", () => {
     expect(saved).toMatchObject({ kind: "letter", templateId: "gift-reveal", title: "A gift for Mama" })
     expect(saved.content).toEqual({ ...BUILT, gifts: [giftFromOption(OPTION)] })
     expect(JSON.stringify(saved)).not.toContain("imageUrl")
+  })
+
+  it("wraps in the 3D gift box and the party box, always as a gift, with the chosen gift card and no invented event", async () => {
+    vi.mocked(buildContent).mockResolvedValue({ kind: "letter", content: { ...letterFixtures["party-box"], recipientName: "Mama" } })
+    for (const templateId of ["gift-box-3d", "party-box"] as const) {
+      await wrapOption({ option: OPTION, context: CONTEXT, templateId, now: new Date(), timezone: "Europe/Berlin" })
+      expect(buildContent).toHaveBeenLastCalledWith(expect.objectContaining({ templateId, giftRequired: true }))
+      const [, saved] = vi.mocked(saveLetterContent).mock.calls.at(-1)!
+      expect(saved).toMatchObject({ templateId, title: "A gift for Mama" })
+      expect(saved.content).toMatchObject({ gifts: [giftFromOption(OPTION)] })
+      // The party fixture has an event; the finder never knows one.
+      expect(saved.content).not.toHaveProperty("event")
+    }
   })
 
   it("creates no letter when the build fails", async () => {

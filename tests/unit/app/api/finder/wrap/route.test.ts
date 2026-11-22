@@ -83,11 +83,12 @@ describe("POST /api/finder/wrap", () => {
     })
   })
 
-  it("accepts only the three gift templates", async () => {
-    for (const templateId of ["classic-envelope", "postcard"]) {
+  it("accepts only the five gift templates, the 3D gift box and the party box among them", async () => {
+    for (const templateId of ["gift-box-3d", "party-box", "classic-envelope", "postcard"]) {
       expect((await POST(post({ ...valid, templateId }))).status).toBe(200)
+      expect(wrapOption).toHaveBeenLastCalledWith(expect.objectContaining({ templateId }))
     }
-    for (const templateId of ["advent-classic", "wedding-invite", "nope"]) {
+    for (const templateId of ["advent-classic", "wedding-invite", "wedding-envelope-3d", "treasure-map", "nope"]) {
       expect((await POST(post({ ...valid, templateId }))).status).toBe(400)
     }
   })
