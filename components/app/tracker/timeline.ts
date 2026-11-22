@@ -31,16 +31,30 @@ function newestFirst(a: TrackedEvent, b: TrackedEvent) {
   return Date.parse(b.at) - Date.parse(a.at) || b.id - a.id
 }
 
+// One formatter per timezone and style: the dashboard buckets up to a
+// thousand events, and building an Intl.DateTimeFormat is the slow part.
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+export function formatterFor(timeZone: string, style: string, options: Intl.DateTimeFormatOptions, locale = "en-GB") {
+  const id = `${timeZone}|${style}`
+  let formatter = formatters.get(id)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { timeZone, ...options })
+    formatters.set(id, formatter)
+  }
+  return formatter
+}
+
 // "2026-11-22": the calendar day of an instant in a timezone.
 export function dayKey(iso: string | Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+  return formatterFor(timeZone, "day-key", { year: "numeric", month: "2-digit", day: "2-digit" }, "en-CA").format(
     new Date(iso),
   )
 }
 
 // The day before a "YYYY-MM-DD" key, by the calendar, so a 23- or 25-hour day
 // around a clock change cannot skip or repeat one.
-function previousDay(key: string): string {
+export function previousDay(key: string): string {
   const [y, m, d] = key.split("-").map(Number)
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10)
 }
@@ -80,7 +94,24 @@ export function groupByDay(events: TrackedEvent[], timeZone: string, now: Date):
 
 // "14:05" in the viewer's timezone.
 export function timeOfDay(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(iso))
+  return formatterFor(timeZone, "time", { hour: "2-digit", minute: "2-digit" }).format(new Date(iso))
+}
+
+// "Today, 14:05", "Yesterday, 09:12", "21 Nov, 14:05" or "3 Dec 2025, 14:05":
+// a gift's first and last open in the viewer's timezone.
+export function shortDateTime(iso: string, timeZone: string, now: Date): string {
+  const key = dayKey(iso, timeZone)
+  const today = dayKey(now, timeZone)
+  const time = timeOfDay(iso, timeZone)
+  if (key === today) return `Today, ${time}`
+  if (key === previousDay(today)) return `Yesterday, ${time}`
+  const sameYear = key.slice(0, 4) === today.slice(0, 4)
+  const date = formatterFor(timeZone, sameYear ? "short-date" : "short-date-year", {
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+  }).format(new Date(iso))
+  return `${date}, ${time}`
 }
 
 // ---------- One line of the timeline ----------
