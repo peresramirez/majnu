@@ -8,12 +8,12 @@ export const steps = [
   {
     lit: 0.22,
     title: "Say who it is for",
-    line: "Majnu guesses the rest. Change anything it gets wrong.",
+    line: "Add their Instagram, TikTok or LinkedIn. Majnu builds their profile.",
   },
   {
     lit: 0.55,
-    title: "Choose from three gifts",
-    line: "Real shops, real prices, and the one Majnu would pick.",
+    title: "Choose from six gifts",
+    line: "Tap through a few questions. Real shops, real prices, Majnu's pick.",
   },
   {
     lit: 1,

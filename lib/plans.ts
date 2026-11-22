@@ -10,7 +10,7 @@ export const free = {
   price: "€0",
   summary: "Find a gift, wrap it in one of our designs, share it and see when it is opened.",
   features: [
-    "Find a gift: three ideas from shops in your country",
+    "Find a gift: six ideas from shops in your country",
     "Personalise the search with a few questions",
     "Wrap it in one of our designs",
     "Letters and invitations, with gift lists",
