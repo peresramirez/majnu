@@ -147,6 +147,15 @@ export default function PrivacyPage() {
         stored with your gift and deleted with it (Art. 6 (1) (b) GDPR).
       </p>
 
+      <h3>Free designs</h3>
+      <p>
+        Each internet connection can have a few personalised wrappers made for free every day. To count them, our
+        server calculates a code from your network address and the date with a secret key, and stores only that code:
+        with the day&apos;s count, and with the design while it is being made. The code cannot be turned back into your
+        address or linked from one day to the next, and your network address itself is not stored. We delete these
+        codes after two days (Art. 6 (1) (f) GDPR).
+      </p>
+
       <h3>Emails you send us</h3>
       <p>We keep your messages to {operator.email} for as long as we need them to help you (Art. 6 (1) (b) and (f) GDPR).</p>
 
