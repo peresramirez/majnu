@@ -49,7 +49,7 @@ export const templates: TemplateMeta[] = [
     category: "gift",
     name: "3D gift box",
     description:
-      "A ribbon-tied box in 3D. The bow unties, the sides fold open and a card rises in sparkles, then the gift card or code and your note. Needs at least one gift.",
+      "A ribbon-tied box in 3D, made around a gift. The bow unties, the sides fold open and a card rises in sparkles, then your gift and your note.",
     bestFor: ["gift cards", "vouchers", "experiences", "big surprises"],
     plan: "free",
   },
@@ -87,7 +87,7 @@ export const templates: TemplateMeta[] = [
     category: "invitation",
     name: "3D wedding envelope",
     description:
-      "An envelope sealed with wax, in 3D. The seal breaks, the flap opens and the card slides out to them as rose petals fall; then the date, time and place with a map link, your message and a gift list if you add one. Needs the date, time and place.",
+      "An envelope sealed with wax, in 3D. The seal breaks, the flap opens and the card slides out to them as rose petals fall; then the date, time and place with a map link, your message and a gift list if you add one.",
     bestFor: ["weddings", "engagements", "vow renewals", "nikah and walima"],
     plan: "free",
   },

@@ -82,6 +82,14 @@ const BuildLetterInput = z.object({
         "the sender's own words and notes, every gift with its code, link and price copied exactly, for invitations the event title, date, time, place and street address, " +
         "for calendars the start date and number of days and what the notes should be like.",
     ),
+  // Issue #59: a party pop box can be an invitation or a present. Only the
+  // builder's check, not the prompt, holds a present to its gift.
+  givenAsGift: z
+    .boolean()
+    .optional()
+    .describe(
+      "true when the page is given as a present with a gift the brief names, such as a party pop box (party-box) sent for a birthday rather than as an invitation. The page must then show that gift.",
+    ),
 })
 
 const EditLetterInput = z.object({
@@ -129,7 +137,7 @@ export const MAIN_TOOLS: BetaTool[] = [
   ),
   definition(
     "build_letter",
-    "Write the letter, invitation, gift page or calendar from a full brief and show it in the sender's preview. Replaces any content built before. Use edit_letter for changes to what is already built.",
+    "Write the letter, invitation, gift page or calendar from a full brief and show it in the sender's preview. Replaces any content built before. Use edit_letter for changes to what is already built. Set givenAsGift when the page is a present with a gift, such as a party pop box for a birthday.",
     BuildLetterInput,
   ),
   definition(
@@ -284,6 +292,9 @@ async function buildLetter(toolUse: BetaToolUseBlock, state: TurnState): Promise
     brief: input.data.brief,
     now: state.now,
     timezone: state.timezone,
+    // A present must carry its gift, also on a party pop box, where one is
+    // otherwise optional (checkContent in builder.ts sends it back once).
+    giftRequired: input.data.givenAsGift === true,
     // A new build starts from nothing, even over content built before.
     draft: draftSink(state, template.kind, template.id, null),
   })

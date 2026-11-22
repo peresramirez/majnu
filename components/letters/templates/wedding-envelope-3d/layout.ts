@@ -5,7 +5,7 @@
 // the WebGL check are the gift box's (same card, same lens).
 import type { LetterContent } from "@/lib/letters/schema"
 import { eventDateParts, formatEventTime, type EventStart } from "../../event-time"
-import { firstName } from "../../names"
+import { wholeName } from "../../names"
 import { CARD_HEIGHT, CARD_WIDTH, FOV, hasWebGL, presentDistance, wrapLines } from "../gift-box-3d/layout"
 
 export { CARD_HEIGHT, CARD_WIDTH, FOV, hasWebGL, presentDistance, wrapLines }
@@ -118,7 +118,7 @@ export type EnvelopeCardWords = {
 export function cardWords(content: LetterContent, start: EventStart | null): EnvelopeCardWords {
   const parts = start ? eventDateParts(start) : null
   return {
-    eyebrow: `For ${firstName(content.recipientName)}`,
+    eyebrow: `For ${wholeName(content.recipientName)}`,
     names: coupleNames(content.senderName) || content.occasion || "You're invited",
     headline: content.headline ?? "",
     weekday: parts?.weekday ?? "",

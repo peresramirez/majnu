@@ -10,8 +10,8 @@ import { focusRing, smallButton } from "@/components/app/styles"
 import type { DisplayMessage } from "@/lib/agents/events"
 import type { LetterKind, TemplateId } from "@/lib/letters/schema"
 import { getTemplate, type TemplateMeta } from "@/lib/letters/templates"
-import { composeMessage } from "./chat-state"
-import { ChatMessages, EmptyState } from "./chat-messages"
+import { chatFrame, composeMessage } from "./chat-state"
+import { BuiltGiftOpening, ChatMessages, EmptyState } from "./chat-messages"
 import { Composer } from "./composer"
 import { PreviewPane } from "./preview-pane"
 import { TemplatePicker } from "./template-picker"
@@ -49,8 +49,11 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
   const [draft, setDraft] = useState("")
   const [template, setTemplate] = useState<TemplateMeta | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
-  // Phones show the chat or the preview, one at a time.
-  const [view, setView] = useState<"chat" | "preview">("chat")
+  // Phones show the chat or the preview, one at a time. A built gift with no
+  // conversation (wrapped in the gift finder) opens on its preview and link.
+  const [view, setView] = useState<"chat" | "preview">(
+    () => chatFrame({ letterId: gift?.letterId ?? null, hasContent: gift?.hasContent ?? false, itemCount: 0, storedMessages: gift?.messages.length }).phoneView,
+  )
   const [unseenPreview, setUnseenPreview] = useState(false)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -58,6 +61,9 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
 
   const { letterId, previewVersion, items, streaming, status, hasContent, draft: pageDraft, draftChanges, previewShown } = chat
   const started = items.length > 0 || letterId !== null
+  // The header only once a gift exists; the built-gift opening for a gift
+  // with no conversation (issue #62).
+  const frame = chatFrame({ letterId, hasContent, itemCount: items.length })
   const templateMeta = chat.templateId ? getTemplate(chat.templateId) : pageDraft ? getTemplate(pageDraft.templateId) : undefined
   const drafting = pageDraft?.phase === "writing"
   // The draft's name once the builder has moved past it, so it is not shown half typed.
@@ -181,7 +187,7 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,36%)]">
       <section aria-label="Chat with Majnu" className={`flex min-h-0 flex-col ${view === "preview" ? "max-lg:hidden" : ""}`}>
-        {started && (
+        {frame.header && (
           <div className="flex flex-none items-center gap-3 border-b border-night-petal/10 px-4 py-2.5 sm:px-6">
             <MoonPhase lit={hasContent ? 1 : pageDraft ? 0.6 : 0.3} size={22} className="flex-none text-night-rose" />
             <div className="min-w-0 flex-1">
@@ -227,7 +233,9 @@ export function CreateChat({ gift }: { gift?: ExistingGift }) {
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         >
           <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
-            {items.length === 0 ? (
+            {frame.opening === "built" ? (
+              <BuiltGiftOpening recipientName={recipientName} onPick={sendFromChat} disabled={streaming} />
+            ) : frame.opening === "new" ? (
               <EmptyState onPick={sendFromChat} disabled={streaming} />
             ) : (
               <ChatMessages items={items} streaming={streaming} status={status} onSend={sendFromChat} />

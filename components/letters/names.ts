@@ -1,12 +1,26 @@
 // Names and titles shown around a letter. Page titles and link previews use
 // these and nothing else from the content, so they never leak the message.
+import { isGroup, shortName } from "@/lib/letters/names"
 import type { TemplateId } from "@/lib/letters/schema"
 
-// "Anna Schmidt" -> "Anna". Falls back to "you" when there is no name.
-export function firstName(name: string | null | undefined): string {
-  const first = (name ?? "").trim().split(/\s+/)[0] ?? ""
-  const clean = first.replace(/[.,;:!?]+$/, "").slice(0, 40)
-  return clean || "you"
+export { firstName, isGroup, shortName, wholeName } from "@/lib/letters/names"
+
+// The verb form that agrees with a name: verbFor("Anna", "sees", "see") is
+// "sees", verbFor("Mia & Leo", "sees", "see") and verbFor("you", ...) "see".
+export function verbFor(name: string | null | undefined, singular: string, plural: string): string {
+  const clean = (name ?? "").trim().toLowerCase()
+  return clean === "you" || isGroup(name) ? plural : singular
+}
+
+// "Anna's", "Lea and Max's", "the Schmidts'".
+export function possessive(name: string): string {
+  return isGroup(name) && /s$/i.test(name) ? `${name}'` : `${name}'s`
+}
+
+// The first letter in upper case, for a name that starts a sentence ("our
+// friends" -> "Our friends hear it").
+export function sentenceStart(text: string): string {
+  return text ? text[0].toLocaleUpperCase() + text.slice(1) : text
 }
 
 const nouns: Record<TemplateId, string> = {
@@ -28,14 +42,15 @@ export function letterNoun(templateId: string | null | undefined): string {
   return nouns[templateId as TemplateId] ?? "A letter"
 }
 
-// "A letter for Anna", "An invitation for Sophie", "An advent calendar for Lena".
+// "A letter for Anna", "An invitation for our friends", "An advent calendar for Lena".
+// One person by the first name only (shortName).
 export function letterTitle(templateId: string, recipientName: string | null | undefined): string {
-  return `${letterNoun(templateId)} for ${firstName(recipientName)}`
+  return `${letterNoun(templateId)} for ${shortName(recipientName)}`
 }
 
-// Generic link-preview text. Never the message, the gift or the place.
+// Generic link-preview text. Never the message, the gift, the place or a surname.
 export function letterDescription(recipientName: string | null | undefined): string {
-  return `Made for ${firstName(recipientName)} with Majnu.`
+  return `Made for ${shortName(recipientName)} with Majnu.`
 }
 
 // "With all my love" + "Javier". When the sign-off already names the sender

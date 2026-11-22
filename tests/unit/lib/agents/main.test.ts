@@ -54,8 +54,9 @@ vi.mock("@/lib/limits", () => ({ canUseFeature: vi.fn() }))
 vi.mock("@/lib/letters/store", () => ({ saveLetterContent: vi.fn() }))
 
 import type { ChatEvent } from "@/lib/agents/events"
-import { MAIN_SYSTEM_PROMPT, runMainAgent } from "@/lib/agents/main"
+import { MAIN_SYSTEM_PROMPT, builtGiftNote, runMainAgent } from "@/lib/agents/main"
 import { MAIN_TOOLS, runTool, type TurnState } from "@/lib/agents/tools"
+import { letterFixtures } from "@/lib/letters/fixtures"
 
 let events: ChatEvent[]
 const state = (): TurnState => ({
@@ -175,6 +176,47 @@ describe("runMainAgent", () => {
 
     expect(requests).toHaveLength(2)
     expect(result.appended.map((m) => m.role)).toEqual(["user", "assistant", "assistant"])
+  })
+})
+
+describe("a built gift with no conversation (issue #62)", () => {
+  const wrapped = (): TurnState => ({
+    ...state(),
+    letter: { kind: "letter", templateId: "gift-reveal", content: letterFixtures["gift-reveal"] },
+  })
+
+  it("says in the first message's context block what is built, so Majnu edits it", async () => {
+    replies.push({ content: [text("Sure.")], stop_reason: "end_turn" })
+    await runMainAgent({ history: [], message: "Make it warmer", state: wrapped() })
+    const turn = (requests[0]!.messages as BetaMessageParam[])[0]!.content as Array<{ type: string; text: string }>
+    expect(turn[0]!.text).toMatch(/^<context>Today is .*This gift is already built and shown in the sender's preview, with no earlier chat: template "Gift reveal" \(gift-reveal\), for "Tom", from "Lea and Max"/)
+    expect(turn[0]!.text.endsWith("</context>")).toBe(true)
+    expect(turn[1]).toEqual({ type: "text", text: "Make it warmer" })
+    expect(MAIN_SYSTEM_PROMPT).toContain("change it with edit_letter, and use build_letter only if the sender wants to start over")
+  })
+
+  it("names the gift but never its code", () => {
+    const note = builtGiftNote(wrapped().letter)!
+    const gift = letterFixtures["gift-reveal"].gifts[0]!
+    expect(note).toContain(JSON.stringify(gift.title))
+    expect(note).not.toContain(gift.code!)
+    expect(note).not.toContain(gift.url!)
+  })
+
+  it("says nothing once there is a conversation, or when nothing is built", async () => {
+    replies.push({ content: [text("Sure.")], stop_reason: "end_turn" }, { content: [text("Hello.")], stop_reason: "end_turn" })
+    const history: BetaMessageParam[] = [
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: [text("earlier reply")] as never },
+    ]
+    await runMainAgent({ history, message: "Make it warmer", state: wrapped() })
+    await runMainAgent({ history: [], message: "A letter for Anna", state: state() })
+    for (const request of requests) {
+      const messages = request.messages as BetaMessageParam[]
+      const turn = messages[messages.length - 1]!.content as Array<{ type: string; text: string }>
+      expect(turn[0]!.text).not.toContain("already built")
+    }
+    expect(builtGiftNote(state().letter)).toBeNull()
   })
 })
 

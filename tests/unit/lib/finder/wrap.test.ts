@@ -63,6 +63,12 @@ describe("wrapBrief", () => {
     expect(brief).toContain("leave event out")
   })
 
+  it("passes on the occasion the finder heard (issue #59)", () => {
+    const brief = wrapBrief({ option: OPTION, context: { ...CONTEXT, occasion: "Geburtstag" }, templateId: "party-box" })
+    expect(brief).toContain("Occasion, as the sender told the gift finder: Geburtstag. Use it as occasion, written in German")
+    expect(brief).not.toContain("Celebration")
+  })
+
   it("gives a party box a celebrating occasion when the sender named none", () => {
     expect(wrapBrief({ option: OPTION, context: CONTEXT, templateId: "party-box" })).toContain("such as \"Celebration\"")
     expect(wrapBrief({ option: OPTION, context: CONTEXT, templateId: "gift-box-3d" })).toContain("such as \"Just because\"")

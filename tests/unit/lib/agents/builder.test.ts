@@ -120,6 +120,14 @@ describe("titleFor", () => {
     expect(titleFor("advent-classic", "  Lena ")).toBe("An advent calendar for Lena")
   })
 
+  it("keeps one person to the first name and a group whole, like page titles (issue #62)", () => {
+    expect(titleFor("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie")
+    expect(titleFor("party-invite", "our friends")).toBe("An invitation for our friends")
+    expect(titleFor("wedding-envelope-3d", "Mia & Leo")).toBe("An invitation for Mia & Leo")
+    expect(titleFor("classic-envelope", "the Smiths")).toBe("A letter for the Smiths")
+    expect(titleFor("classic-envelope", "  ")).toBe("A letter for someone")
+  })
+
   it("calls the two gift boxes a gift and the 3D wedding envelope an invitation", () => {
     expect(titleFor("gift-box-3d", "Mara")).toBe("A gift for Mara")
     expect(titleFor("party-box", "Jonas")).toBe("A gift for Jonas")

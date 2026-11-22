@@ -35,4 +35,10 @@ describe("contextChips", () => {
     const chips = contextChips({ language: "zz-invalid-", country: "QQ" })
     expect(chips.map((c) => c.label)).toEqual(["QQ", "zz-invalid-"])
   })
+
+  it("shows the occasion after who it is for, so the visitor can correct it (issue #59)", () => {
+    const chips = contextChips({ language: "en", relationship: "mother", occasion: "birthday", ageRange: [45, 70] })
+    expect(chips.map((c) => c.label)).toEqual(["Your mother", "Birthday", "About 45–70", "English"])
+    expect(chips[1]).toMatchObject({ key: "occasion", description: "Occasion: birthday. Change the occasion", prefill: "The occasion is " })
+  })
 })

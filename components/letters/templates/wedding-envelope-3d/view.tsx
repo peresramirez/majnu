@@ -22,7 +22,7 @@ import { buildIcs, eventDateParts, formatEventTime, icsFileName, mapsUrl, parseE
 import { GiftList } from "../../gift-card"
 import { useLetter } from "../../letter-context"
 import { Paragraphs, SignOff } from "../../letter-text"
-import { firstName, monogram } from "../../names"
+import { monogram, wholeName } from "../../names"
 import { paletteOf } from "../../theme"
 import { Wishlist } from "../../wishlist"
 import { BrokenSeal, EnvelopeDrawing } from "./drawing"
@@ -129,7 +129,7 @@ export function WeddingEnvelopeView({ content, claimed }: { content: LetterConte
   const stageNow = useRef<Stage>("closed")
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const dark = paletteOf(content.theme).dark
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
   const initials = monogram(content.senderName)
   const names = coupleNames(content.senderName)
   const event = content.event

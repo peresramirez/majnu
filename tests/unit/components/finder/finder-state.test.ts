@@ -4,9 +4,11 @@ import {
   DEFAULT_ERROR,
   WRAP_ERROR,
   WRAP_TEMPLATES,
+  finderAnnouncement,
   finderReducer,
   initialFinderState,
   latestOptionsIndex,
+  noticeRole,
   statusLit,
   wrapAccount,
   wrapReducer,
@@ -201,5 +203,35 @@ describe("wrapAccount", () => {
     expect(wrapAccount(undefined)).toBe("guest")
     expect(wrapAccount({ is_anonymous: false })).toBe("member")
     expect(wrapAccount({})).toBe("member")
+  })
+})
+
+describe("what the finder's live region says (issue #62)", () => {
+  const ev = (event: FinderEvent): FinderAction => ({ type: "event", event })
+
+  it("reads a limit notice once, here, and gives the notice itself no live role", () => {
+    const state = run([{ type: "send", text: "limit" }, ev({ type: "limit", reason: "finder_daily", message: "That was today's last search." }), ev({ type: "done" })])
+    const notice = state.items[state.items.length - 1]
+    expect(finderAnnouncement(state.items)).toBe("That was today's last search.")
+    expect(notice.role === "notice" && noticeRole(notice)).toBeUndefined()
+  })
+
+  it("leaves an error to the notice's own alert, so it is heard once", () => {
+    const state = run([{ type: "send", text: "error" }, ev({ type: "error", message: "Something went wrong finding gifts. Try again." }), ev({ type: "done" })])
+    const notice = state.items[state.items.length - 1]
+    expect(finderAnnouncement(state.items)).toBe("")
+    expect(notice.role === "notice" && noticeRole(notice)).toBe("alert")
+    const failed = run([{ type: "send", text: "x" }, { type: "failed", message: "Check your connection." }])
+    expect(finderAnnouncement(failed.items)).toBe("")
+  })
+
+  it("says when ideas, a question or a reply arrive", () => {
+    expect(finderAnnouncement([])).toBe("")
+    const options = run([{ type: "send", text: "Mama" }, ev({ type: "options", options: [option("a"), option("b")], recommendedId: "a", why: "" })])
+    expect(finderAnnouncement(options.items)).toBe("2 gift ideas are ready.")
+    const asked = run([{ type: "send", text: "Mama" }, ev({ type: "question", text: "What does she love?" })])
+    expect(finderAnnouncement(asked.items)).toBe("Majnu asks: What does she love?")
+    const replied = run([{ type: "send", text: "Mama" }, ev({ type: "text", delta: "Hello." })])
+    expect(finderAnnouncement(replied.items)).toBe("Majnu replied.")
   })
 })

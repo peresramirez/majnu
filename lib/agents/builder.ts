@@ -8,6 +8,7 @@ import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod"
 import type { BetaMessageStream } from "@anthropic-ai/sdk/lib/BetaMessageStream"
+import { shortName } from "@/lib/letters/names"
 import { CalendarContent, LetterContent, type LetterKind, type TemplateId } from "@/lib/letters/schema"
 import { getTemplate } from "@/lib/letters/templates"
 import { AGENT_EFFORT, agentRequestBase, getClient } from "./client"
@@ -25,7 +26,8 @@ export type BuildInput = {
   // The sender's IANA timezone.
   timezone: string
   // The page is given as a gift, so it must carry one even on a template where
-  // a gift is optional (party-box). The finder's wrap step sets it.
+  // a gift is optional (party-box). The finder's wrap step sets it, and so does
+  // build_letter when the main agent says the page is a present (givenAsGift).
   giftRequired?: boolean
   // Receives the streamed JSON text for live drafts. Optional: the finder's
   // wrap step builds without one.
@@ -273,9 +275,12 @@ export async function buildContent(input: BuildInput): Promise<BuiltContent> {
   throw new BuilderInvalidOutput(problems ?? [])
 }
 
-// A generic title for the dashboard and link previews: never message text or codes.
+// A generic title for the dashboard and link previews: never message text,
+// codes or a surname. One person by the first name ("Anna Schmidt" -> "Anna"),
+// a group whole ("our friends", "Mia & Leo"), as page titles and previews do
+// (shortName in lib/letters/names.ts, issue #62).
 export function titleFor(templateId: TemplateId, recipientName: string): string {
-  const name = recipientName.trim().slice(0, 40) || "someone"
+  const name = recipientName.trim() ? shortName(recipientName) : "someone"
   switch (templateId) {
     case "gift-reveal":
     case "gift-box-3d":

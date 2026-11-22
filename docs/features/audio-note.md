@@ -60,6 +60,7 @@ flowchart LR
    7. makes the **caption**: the voice-input transcription (`lib/voice`), claimed against the same per-user and site-wide voice limits; it is skipped for ogg (OpenAI cannot read it), without `OPENAI_API_KEY`, over the limits or when OpenAI fails, and the note is saved without one;
    8. answers `{ note: { seconds, caption, mimeType, sizeBytes, updatedAt, src } }`, where `src` is the owner's own listen-back route.
 5. In the finder and on the create page the preview frame reloads after a save or a removal, so the sender sees the button appear on the page.
+   The recorder names the recipient by the whole name the sender gave, with a verb that agrees: "Anna hears it with one tap on the gift.", "Our friends hear it …" (before issue #62 it took the first word, "our hears it").
 6. **Remove** asks first ("Remove the voice note? The gift stays as it is."), then `DELETE /api/letters/<id>/audio` deletes the row and purges its file.
 
 ### Deleting files
@@ -72,7 +73,7 @@ Supabase deletes a file only through its Storage API; deleting its row in `stora
 2. The renderer puts `AudioNote` first in the page (first on screen, so first for keyboards and screen readers) and reserves a band for it at the top: every template draws its page in a top-level `<main>` whose first screen is `min-h-[100svh]`; with a note, `<main>` gets the band as top padding (its own background, stars and gradient fill it, so there is no seam) and each first-screen block gets that much less height, so a template's own button at the bottom of the first screen (the 3D box's "Open your gift") stays on it. Over a Daytona design, the frame starts below the band, which takes the letter's page colour.
 3. Nothing is fetched until the first tap. The button plays and pauses, shows "Sam 0:12 / 0:42" and a thin progress bar; the name is the signature when it is short ("Lea and Max", "Mum"), else the first name. Browsers often report Infinity as the length of a recorded file, so the stored length stands in until they know better.
 4. `GET /l/<slug>/audio` reads the file through the Storage API and answers the whole file (200) or the byte range asked for (206 with `Content-Range`), 416 past the end, with `Accept-Ranges: bytes`, `Cache-Control: private, max-age=300`, an `ETag` (the file's random name; `If-Range` is honoured), `Cross-Origin-Resource-Policy: same-origin`, `nosniff`, `noindex` and `no-referrer`. Anything else, including a letter without content, a calendar or a demo slug, is a plain `404 Not found` with `no-store`.
-5. Accessibility: the button's name says what it does ("Tap to hear Sam", "Pause Sam's voice note"); the caption is its description, read once; a live region says "Playing…", "Paused." or that it could not play; with reduced motion the bar jumps instead of gliding and nothing spins.
+5. Accessibility: the button's name says what it does ("Tap to hear Sam", "Pause Sam's voice note"); the caption is its description, read once, with a verb that agrees with the sender ("Sam says:", "Lea and Max say:", issue #62); a live region says "Playing…", "Paused." or that it could not play; with reduced motion the bar jumps instead of gliding and nothing spins.
 
 Link previews and page titles are unchanged ("A letter for Anna"): the caption never reaches metadata or the preview image.
 

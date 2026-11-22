@@ -22,7 +22,7 @@ import { useAudioPlayer } from "@/components/voice/use-audio-player"
 import { formatSeconds } from "@/lib/voice/rules"
 import type { Theme } from "@/lib/letters/schema"
 import { focusRing } from "./chrome"
-import { firstName } from "./names"
+import { firstName, possessive, verbFor } from "./names"
 import { themeStyle } from "./theme"
 
 // The band the pill sits in: its top offset (the notch, if any), its 44 px
@@ -55,7 +55,7 @@ export function AudioNote({ audio, senderName }: { audio: LetterAudio; senderNam
   const player = useAudioPlayer(audio.src, audio.seconds)
   const captionId = useId()
   const name = senderLabel(senderName)
-  const whose = name ? `${name}'s voice note` : "the voice note"
+  const whose = name ? `${possessive(name)} voice note` : "the voice note"
   const caption = audio.caption?.trim()
 
   const label = player.playing ? `Pause ${whose}` : name ? `Tap to hear ${name}` : "Tap to hear the voice note"
@@ -113,7 +113,7 @@ export function AudioNote({ audio, senderName }: { audio: LetterAudio; senderNam
       {/* `hidden`: read once, as the button's description, not again as text. */}
       {caption ? (
         <p id={captionId} hidden>
-          {name ? `${name} says: ` : "The note says: "}
+          {name ? `${name} ${verbFor(name, "says", "say")}: ` : "The note says: "}
           {caption}
         </p>
       ) : null}

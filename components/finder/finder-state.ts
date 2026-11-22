@@ -10,6 +10,7 @@ import type {
   WrapResponse,
   WrapTemplateId,
 } from "@/lib/finder/events"
+import { WRAP_ORDER } from "@/lib/finder/wrap-templates"
 
 export type FinderItem =
   | { id: string; role: "user"; text: string }
@@ -137,6 +138,26 @@ export function latestOptionsIndex(items: FinderItem[]): number {
   return -1
 }
 
+// What the finder's one polite live region says when a reply finishes (the
+// dialog and the inline panel both have it). An error notice is left out: it
+// is its own alert (role="alert" in conversation.tsx), so it is heard once. A
+// limit notice is not a live region itself, so it is heard here, once.
+export function finderAnnouncement(items: FinderItem[]): string {
+  const last = items[items.length - 1]
+  if (!last) return ""
+  if (last.role === "options") return `${last.options.length} gift ideas are ready.`
+  if (last.role === "question") return `Majnu asks: ${last.text}`
+  if (last.role === "notice") return last.tone === "error" ? "" : last.message
+  if (last.role === "assistant") return "Majnu replied."
+  return ""
+}
+
+// The live role a notice in the conversation takes: an error interrupts as an
+// alert; a limit has none, because finderAnnouncement() reads it out.
+export function noticeRole(item: Extract<FinderItem, { role: "notice" }>): "alert" | undefined {
+  return item.tone === "error" ? "alert" : undefined
+}
+
 // How full the status moon is: a crescent when a reply starts, fuller with each
 // step, and full once the options have arrived.
 export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "items">): number {
@@ -149,9 +170,11 @@ export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "item
 
 // The templates that fit a gift, in the order they are offered: the gift
 // templates first (the 3D gift box, and the party pop box for birthdays and
-// celebrations), then the letters that carry one. The first is chosen at the
+// parties), then the letters that carry one. The first is chosen at the
 // start. POST /api/finder/wrap accepts exactly these (WRAP_TEMPLATE_IDS).
-export const WRAP_TEMPLATES: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"]
+// The wrap step shows wrapTemplatesFor(context): the party pop box only when
+// the occasion Majnu heard is a birthday or a party (issue #59).
+export const WRAP_TEMPLATES: readonly WrapTemplateId[] = WRAP_ORDER
 
 export type WrapDetails = { recipientName: string; senderName: string; note: string }
 

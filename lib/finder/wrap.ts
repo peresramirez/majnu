@@ -16,7 +16,8 @@ import { createLetter, saveLetterContent } from "@/lib/letters/store"
 import type { FinderContext, GiftOption, WrapTemplateId } from "./events"
 
 // What POST /api/finder/wrap accepts. The finder offers the same ids, in its
-// own order (WRAP_TEMPLATES in components/finder/finder-state.ts).
+// own order, and the party pop box only for a birthday or a party
+// (wrapTemplatesFor in lib/finder/wrap-templates.ts).
 export const WRAP_TEMPLATE_IDS = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"] as const satisfies readonly WrapTemplateId[]
 
 export type WrapInput = {
@@ -36,6 +37,18 @@ function languageName(code: string): string {
   } catch {
     return code
   }
+}
+
+// The occasion as the visitor told the finder ("Geburtstag"), when they did;
+// otherwise a label that fits the template. The sender's note can still name
+// another one.
+function occasionLine(templateId: WrapTemplateId, occasion: string | undefined, language: string): string {
+  if (occasion) {
+    return `Occasion, as the sender told the gift finder: ${occasion}. Use it as occasion, written in ${languageName(language)}, unless the sender's words name another.`
+  }
+  return templateId === "party-box"
+    ? "Occasion: not given unless the sender's words name one. They chose the party pop box, made for birthdays and celebrations, so otherwise use a short celebrating label such as \"Celebration\", in the same language."
+    : "Occasion: not given unless the sender's words name one; otherwise use a gentle general label such as \"Just because\", in the same language."
 }
 
 // The gift as the page shows it. Never imageUrl (see above) and never a code:
@@ -64,9 +77,7 @@ export function wrapBrief(input: Omit<WrapInput, "now" | "timezone">): string {
     input.senderName
       ? `Sender's name: ${input.senderName}.`
       : "Sender's name: not given. Do not invent one. As senderName, use how the recipient knows the sender when the relationship makes it clear without guessing, such as the word for \"your child\" for a parent; otherwise a short warm phrase such as \"someone who loves you\", in the same language.",
-    input.templateId === "party-box"
-      ? "Occasion: not given unless the sender's words name one. They chose the party pop box, made for birthdays and celebrations, so otherwise use a short celebrating label such as \"Celebration\", in the same language."
-      : "Occasion: not given unless the sender's words name one; otherwise use a gentle general label such as \"Just because\", in the same language.",
+    occasionLine(input.templateId, context.occasion, language),
     "This is a gift page, not an invitation: leave event out.",
   ]
   if (input.note) {

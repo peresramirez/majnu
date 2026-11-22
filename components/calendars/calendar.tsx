@@ -14,7 +14,7 @@ import type { PublicCalendarContent, PublicDoor } from "@/lib/letters/schema"
 import { bodyStyle, displayStyle, focusRing, MadeWith, paperStyle, signOffStyle } from "@/components/letters/chrome"
 import { GiftCard } from "@/components/letters/gift-card"
 import { useLetter, useMounted, useReducedMotion } from "@/components/letters/letter-context"
-import { firstName } from "@/components/letters/names"
+import { shortName } from "@/components/letters/names"
 import { dayParts, formatDay, todayIn } from "./dates"
 
 type Variant = "advent" | "countdown"
@@ -291,7 +291,7 @@ export function Calendar({ content, variant }: { content: PublicCalendarContent;
     >
       <div className="relative mx-auto max-w-[760px] px-4 pb-12 pt-10 sm:pt-16">
         <header className="cal-rise mx-auto max-w-[520px] text-center">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.28em] text-[var(--page-muted)]">For {firstName(content.recipientName)}</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.28em] text-[var(--page-muted)]">For {shortName(content.recipientName)}</p>
           <h1 className="mt-3 text-balance text-[42px] leading-[1.04] tracking-[-0.01em] sm:text-[56px]" style={displayStyle}>
             {content.headline}
           </h1>

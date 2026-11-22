@@ -1,12 +1,13 @@
 "use client"
 
 // A gift as a card: title, price, description, the code with a copy button,
-// and a link to redeem it. The code stays out of the page until the recipient
+// and a link to redeem it (or, for a shop product without a code, to see it). The code stays out of the page until the recipient
 // asks for it (or has already unwrapped the gift).
 import { useState } from "react"
 import type { Gift } from "@/lib/letters/schema"
 import { displayStyle, focusRing } from "./chrome"
 import { CopyButton } from "./copy-button"
+import { giftLinkLabel } from "./gift-link"
 import { useLetter } from "./letter-context"
 import { safeHttps } from "./urls"
 
@@ -105,7 +106,8 @@ export function GiftCard({
             style={{ background: "var(--deep)" }}
             className={`flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-[15px] font-semibold text-[var(--deep-ink)] transition-transform duration-200 ease-calm hover:-translate-y-px ${focusRing}`}
           >
-            Redeem your gift
+            {giftLinkLabel(gift)}
+            <span className="sr-only"> (opens in a new tab)</span>
             <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4">
               <path d="M5 11 11 5M6 5h5v5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

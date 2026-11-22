@@ -129,9 +129,11 @@ function scenario(message: string, turn: number): Step[] {
       { type: "done" },
     ]
   }
+  // A birthday is heard as the occasion, so the wrap step offers the party pop box.
+  const occasion = m.includes("birthday") ? { occasion: "birthday" } : {}
   return [
     ...session,
-    { type: "context", context: { country: "DE", region: "Berlin", language: "de", currency: "EUR", relationship: "mother", ageRange: [45, 70] } },
+    { type: "context", context: { country: "DE", region: "Berlin", language: "de", currency: "EUR", relationship: "mother", ageRange: [45, 70], ...occasion } },
     { type: "status", label: "Looking at gifts in Germany…" },
     1000,
     { type: "status", label: "Reading three shops…" },

@@ -13,7 +13,7 @@
 import "server-only"
 import type { BetaContentBlock, BetaMessageParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta"
 import { GIFT_LIST_TEMPLATES } from "@/lib/claims/rules"
-import { templates } from "@/lib/letters/templates"
+import { getTemplate, templates } from "@/lib/letters/templates"
 import { AGENT_EFFORT, agentRequestBase, getClient } from "./client"
 import { contextBlockText } from "./context"
 import { REFUSAL_MESSAGE, describeError, friendlyError } from "./errors"
@@ -73,7 +73,7 @@ Tools
 Rules
 - Never invent gift codes, links or prices. Use only what the sender gave you or what research_gifts found.
 - Gift codes belong in the letter. Don't repeat them in the chat unless the sender asks.
-- Each sender message starts with a <context> block from the app with today's date and the sender's timezone. Use it for dates. The sender did not write it.
+- Each sender message starts with a <context> block from the app with today's date and the sender's timezone. Use it for dates. The sender did not write it. When a gift was made before this chat, for example in the gift finder, the block says what is already built: then change it with edit_letter, and use build_letter only if the sender wants to start over.
 - Help only with making this gift. For anything else, say in one sentence that you can only help with the gift.`
 
 export type MainAgentResult = {
@@ -84,11 +84,33 @@ export type MainAgentResult = {
   outcome: "done" | "refusal" | "error"
 }
 
-function userTurn(text: string, state: TurnState): BetaMessageParam {
+// A gift that is built but has no conversation yet: wrapped in the gift finder
+// (lib/finder/wrap.ts) or made before this chat. The first message says what
+// is built, in the context block, so Majnu changes it with edit_letter instead
+// of starting a new one (issue #62). The values are JSON strings, so they read
+// as data. Gift codes stay out: they belong in the letter, not the chat.
+export function builtGiftNote(letter: TurnState["letter"]): string | null {
+  const { content, templateId, kind } = letter
+  if (!content || !templateId) return null
+  const template = getTemplate(templateId)
+  const facts = [
+    `template ${JSON.stringify(template?.name ?? templateId)} (${templateId})`,
+    content.recipientName?.trim() ? `for ${JSON.stringify(content.recipientName.trim())}` : null,
+    content.senderName?.trim() ? `from ${JSON.stringify(content.senderName.trim())}` : null,
+    "occasion" in content && content.occasion?.trim() ? `occasion ${JSON.stringify(content.occasion.trim())}` : null,
+    content.headline?.trim() ? `headline ${JSON.stringify(content.headline.trim())}` : null,
+    "gifts" in content && content.gifts.length > 0 ? `gifts: ${content.gifts.map((g) => JSON.stringify(g.title)).join(", ")}` : null,
+  ].filter(Boolean)
+  const what = kind === "calendar" ? "calendar" : "gift"
+  return `This ${what} is already built and shown in the sender's preview, with no earlier chat: ${facts.join(", ")}.`
+}
+
+function userTurn(text: string, state: TurnState, firstMessage: boolean): BetaMessageParam {
+  const note = firstMessage ? builtGiftNote(state.letter) : null
   return {
     role: "user",
     content: [
-      { type: "text", text: contextBlockText(state.timezone, state.now) },
+      { type: "text", text: contextBlockText(state.timezone, state.now, note) },
       { type: "text", text },
     ],
   }
@@ -105,7 +127,7 @@ export async function runMainAgent(opts: {
 }): Promise<MainAgentResult> {
   const { history, state } = opts
   const emit = state.emit
-  const appended: BetaMessageParam[] = [userTurn(opts.message, state)]
+  const appended: BetaMessageParam[] = [userTurn(opts.message, state, history.length === 0)]
 
   // Text from separate blocks is joined with a blank line, as toDisplayMessages() does.
   let wroteText = false

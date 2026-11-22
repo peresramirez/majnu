@@ -11,7 +11,7 @@ import { displayStyle, focusRing, MadeWith, paperStyle, Stars } from "../chrome"
 import { GiftList } from "../gift-card"
 import { useReducedMotion } from "../letter-context"
 import { Paragraphs, SignOff } from "../letter-text"
-import { firstName } from "../names"
+import { wholeName } from "../names"
 import { paletteOf } from "../theme"
 
 function Landscape({ className = "" }: { className?: string }) {
@@ -64,7 +64,7 @@ export function Postcard({ content }: { content: LetterContent }) {
   // it is right before this hook runs in the browser).
   const stacked = useReducedMotion()
   const dark = paletteOf(content.theme).dark
-  const name = firstName(content.recipientName)
+  const name = wholeName(content.recipientName)
 
   return (
     <main className="relative min-h-[100svh] overflow-hidden" style={{ background: "var(--page)", color: "var(--page-ink)" }}>

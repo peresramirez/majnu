@@ -50,6 +50,46 @@ export function EmptyState({ onPick, disabled }: { onPick: (text: string) => voi
   )
 }
 
+// Changes to ask for on a gift that is built but has no conversation yet.
+const changeSuggestions = ["Add a few words from me", "Make the message warmer", "Show me other designs"]
+
+// An empty chat on a gift that is already built, such as one wrapped in the
+// gift finder (issue #62): no "Who is it for?", but the gift as it is and what
+// to change. Majnu hears that the gift is built with the first message
+// (builtGiftNote in lib/agents/main.ts). The header above holds the h1.
+export function BuiltGiftOpening({ recipientName, onPick, disabled }: { recipientName: string | null; onPick: (text: string) => void; disabled: boolean }) {
+  return (
+    <div className="flex flex-1 flex-col justify-end pb-2 sm:justify-center sm:pb-10">
+      <MoonPhase lit={1} size={36} className="text-night-rose" />
+      <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-night-lilac">Your gift</p>
+      <h2 className="mt-3 font-display text-[34px] leading-[1.08] tracking-[-0.01em] sm:text-[40px]">
+        {recipientName ? `Ready for ${recipientName}` : "Your gift is ready"}
+      </h2>
+      <p className="mt-4 max-w-md text-[17px] leading-relaxed text-night-lilac">
+        Send the link from the preview, or tell Majnu what to change. It starts from the page as it is.
+      </p>
+      <ul className="mt-8 grid gap-2" aria-label="Changes to ask for">
+        {changeSuggestions.map((s) => (
+          <li key={s}>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(s)}
+              className={`group flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3.5 text-left text-[15px] text-night-petal ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 ease-calm hover:ring-night-rose/50 disabled:opacity-50 ${focusRing}`}
+            >
+              {s}
+              <ArrowUpRight
+                className="h-4 w-4 flex-none text-night-lilac transition-colors duration-200 ease-calm group-hover:text-night-rose"
+                aria-hidden="true"
+              />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // Plain text with paragraphs, line breaks and **bold**. Never renders HTML.
 function RichText({ text }: { text: string }) {
   const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim() !== "")

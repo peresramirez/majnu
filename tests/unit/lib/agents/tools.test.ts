@@ -88,6 +88,22 @@ describe("checkBuild", () => {
 })
 
 describe("build_letter", () => {
+  it("holds a party pop box given as a present to its gift (issue #59)", async () => {
+    vi.mocked(buildContent).mockResolvedValue({ kind: "letter", content: letterFixtures["party-box"] })
+    await runTool(call("build_letter", { templateId: "party-box", brief, givenAsGift: true }), makeState())
+    expect(buildContent).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "build", templateId: "party-box", giftRequired: true }))
+
+    await runTool(call("build_letter", { templateId: "party-box", brief }), makeState())
+    expect(buildContent).toHaveBeenLastCalledWith(expect.objectContaining({ templateId: "party-box", giftRequired: false }))
+  })
+
+  it("offers givenAsGift as an optional field", () => {
+    const tool = MAIN_TOOLS.find((t) => t.name === "build_letter")!
+    const schema = tool.input_schema as { properties: Record<string, { type?: string }>; required?: string[] }
+    expect(schema.properties.givenAsGift?.type).toBe("boolean")
+    expect(schema.required).not.toContain("givenAsGift")
+  })
+
   it("refuses a calendar without Full moon: emits a limit, tells the model, builds nothing", async () => {
     limits({ calendar: fullMoonOnly })
     const result = await runTool(call("build_letter", { templateId: "advent-classic", brief }), makeState())

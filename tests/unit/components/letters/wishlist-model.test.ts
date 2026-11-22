@@ -3,7 +3,7 @@
 // runner cannot load .tsx (tsconfig keeps JSX for Next.js), so wishlist.tsx
 // renders this model and is checked in the browser on /dev/templates.
 import { describe, expect, it } from "vitest"
-import { claimedFrom, claimOutcome, giftListView } from "@/components/letters/wishlist-model"
+import { claimedFrom, claimOutcome, giftListView, nameHint } from "@/components/letters/wishlist-model"
 import { letterFixtures } from "@/lib/letters/fixtures"
 
 const items = letterFixtures["party-invite"].wishlist!
@@ -106,5 +106,22 @@ describe("claimedFrom", () => {
     expect(claimedFrom({ claimed: ["a", 1, "b"] })).toEqual(["a", "b"])
     expect(claimedFrom(null)).toEqual([])
     expect(claimedFrom({ error: "server_error" })).toEqual([])
+  })
+})
+
+describe("the host's name in the claim form (issue #62)", () => {
+  it("agrees with one host or a couple", () => {
+    expect(nameHint("Mia")).toBe("Only Mia sees it.")
+    expect(nameHint("Mia & Leo")).toBe("Only Mia & Leo see it.")
+    expect(nameHint("Clara and Ben")).toBe("Only Clara and Ben see it.")
+  })
+
+  it("names the host on an invitation that is not signed", () => {
+    expect(nameHint("")).toBe("Only the host sees it.")
+    expect(claimOutcome(200, { ok: true, claimed: [] }, "").message).toBe("Thank you. The host will know you are bringing it.")
+  })
+
+  it("starts the thank-you with a capital", () => {
+    expect(claimOutcome(200, { ok: true, claimed: [] }, "our family").message).toBe("Thank you. Our family will know you are bringing it.")
   })
 })

@@ -14,6 +14,17 @@ describe("letterMetadata", () => {
     expect(meta.openGraph).toMatchObject({ title: "A gift for Tom", description: "Made for Tom with Majnu." })
   })
 
+  it("names one person by the first name only, and a group whole (issue #62)", () => {
+    const named = (recipientName: string) => letterMetadata({ ...gift, content: { ...gift.content, recipientName } })
+    const single = named("Tom Becker")
+    expect(single.title).toEqual({ absolute: "A gift for Tom" })
+    expect(single.openGraph).toMatchObject({ title: "A gift for Tom", description: "Made for Tom with Majnu." })
+    expect(JSON.stringify(single)).not.toContain("Becker")
+    const group = named("our friends")
+    expect(group.title).toEqual({ absolute: "A gift for our friends" })
+    expect(group.openGraph).toMatchObject({ title: "A gift for our friends", description: "Made for our friends with Majnu." })
+  })
+
   it("keeps the page out of search engines and sends no referrer", () => {
     expect(meta.robots).toMatchObject({ index: false, follow: false })
     expect(meta.referrer).toBe("no-referrer")

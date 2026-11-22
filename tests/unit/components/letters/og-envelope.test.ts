@@ -17,11 +17,18 @@ const letter = (templateId: LetterTemplateId, content: LetterContent = letterFix
 const withName = (recipientName: string) => letter("classic-envelope", { ...letterFixtures["classic-envelope"], recipientName })
 
 describe("envelopeName", () => {
-  it("addresses the envelope to the first name only", () => {
+  it("addresses the envelope to one person's first name only, never a surname", () => {
+    expect(envelopeName(withName("Anna"))).toBe("Anna")
     expect(envelopeName(withName("Anna Schmidt"))).toBe("Anna")
     expect(envelopeName(withName("Zoë"))).toBe("Zoë")
     expect(envelopeName(withName("Łukasz"))).toBe("Łukasz")
     expect(envelopeName(withName("D’Arcy"))).toBe("D’Arcy")
+  })
+
+  it("addresses the envelope to a group as a whole (issue #62)", () => {
+    expect(envelopeName(withName("our friends"))).toBe("our friends")
+    expect(envelopeName(withName("Mia & Leo"))).toBe("Mia & Leo")
+    expect(envelopeName(withName("the Smiths"))).toBe("the Smiths")
   })
 
   it('says "you" when there is no letter or no name', () => {

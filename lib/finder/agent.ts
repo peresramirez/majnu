@@ -338,6 +338,9 @@ export function contextFor(base: BaseContext, input: FindGiftsInput, profileInte
     ...(ageRange ? { ageRange } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
     ...(interests.length > 0 ? { interests } : {}),
+    // Kept for the wrap step, which offers the party pop box only for a
+    // birthday or a party.
+    ...(input.occasion ? { occasion: input.occasion } : {}),
   }
 }
 

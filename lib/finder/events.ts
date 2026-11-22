@@ -33,6 +33,10 @@ export type FinderContext = {
   ageRange?: [number, number] // assumed from the relationship until the visitor says otherwise
   budget?: string // e.g. "under 50 €", only if the visitor gave one
   interests?: string[] // from the visitor or from a public profile they shared
+  // As the visitor said it ("Geburtstag", "her birthday party"), only if they
+  // gave one. The wrap step offers the party pop box for a birthday or a party
+  // (lib/finder/wrap-templates.ts). Added for issue #59 (additive).
+  occasion?: string
 }
 
 export type GiftOption = {

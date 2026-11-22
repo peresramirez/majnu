@@ -63,6 +63,27 @@ export function composeMessage(templateName: string | null, typed: string): stri
   return text ? `${templateMessage(templateName)} ${text}` : templateMessage(templateName)
 }
 
+// What frames the chat (issue #62).
+//   header: the bar with the gift's name and state, only once a gift exists. A
+//     first message refused by the day's letter limit creates none, so the bar
+//     does not claim "New gift · In progress".
+//   opening: what an empty chat shows. "new" is the new-gift starter ("Who is
+//     it for?"); "built" is for a gift that is built but has no conversation,
+//     such as one wrapped in the gift finder, and starts from that gift.
+//   phoneView: which half a phone shows first. A built gift with no
+//     conversation opens on its preview and share panel, because sending it is
+//     what the sender came back for.
+export type ChatFrame = { header: boolean; opening: "new" | "built" | null; phoneView: "chat" | "preview" }
+
+export function chatFrame(opts: { letterId: string | null; hasContent: boolean; itemCount: number; storedMessages?: number }): ChatFrame {
+  const built = opts.letterId !== null && opts.hasContent
+  return {
+    header: opts.letterId !== null,
+    opening: opts.itemCount > 0 ? null : built ? "built" : "new",
+    phoneView: built && (opts.storedMessages ?? 0) === 0 ? "preview" : "chat",
+  }
+}
+
 export function initialChatState(init: ChatInit = {}): ChatState {
   const items: ChatItem[] = (init.messages ?? []).map((m, i) =>
     m.role === "user"

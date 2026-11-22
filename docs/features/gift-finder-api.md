@@ -40,13 +40,28 @@ One search, in order:
 8. Ideas without a link are left out. The rest become `GiftOption`s with ids that are stable within the session, streamed as `options` with `recommendedId` and `why`. If none is left, or research failed, the search is given back and an `error` event says so.
 9. The turn ends there, without a closing model request: the visitor's next move is to look at the options. The route appends the turn to the stored conversation, saves the context and the options, and streams `done`.
 
+The context the server streams and saves is what the chips show: the place, language and currency from the request, and from `find_gifts` the relationship, the age range, the budget, the interests and, since issue #59, the occasion as the visitor said it (`FinderContext.occasion`, an additive optional field). The occasion is kept because the wrap step needs it; the chip lets the visitor see and correct it.
+
 Public profiles: when the visitor pastes a public Instagram or TikTok profile, or another public page about the person, the model calls a third tool, `read_profile`, before `find_gifts`. Its 3 to 6 interests are merged into the next search's context. That is its own page, [social-profiles.md](social-profiles.md) (issue #34).
 
 Personalising: when the visitor asks for it (the finder's button sends "Personalise the gift") or says none fit, the model calls `ask_questions`. The server first checks that a personalised search would still be allowed, then streams up to three `question` events with up to four `suggestions` each, and the turn ends. The visitor's answers are the next message, and the next `find_gifts` call counts as a personalised search: every search after the first in a session does.
 
 Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (and optionally the names and a note) loads the session through RLS, finds the option among the last ones shown, checks the daily letter limit (the new-gift gate it also asks is open to everyone), then has the builder sub-agent write the page in the visitor's language. `templateId` is one of `WRAP_TEMPLATE_IDS` in [`lib/finder/wrap.ts`](../../lib/finder/wrap.ts): `gift-reveal`, `gift-box-3d`, `party-box`, `classic-envelope` or `postcard` (the two boxes since issue #50); anything else is a 400.
 
-- The builder is called with `giftRequired: true`, so a page without the gift goes back to the model once, even on a party pop box, where a gift is otherwise optional. The brief says the page is a gift and not an invitation, and for a party pop box it asks for a celebrating occasion ("Celebration") when the visitor named none, instead of "Just because".
+Which of them the finder offers depends on the occasion (issue #59). [`lib/finder/wrap-templates.ts`](../../lib/finder/wrap-templates.ts) has `isPartyOccasion()`, which looks for the words for a birthday or a party in the occasion, in the languages visitors write in most (English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Turkish, the Scandinavian languages, Russian and Arabic), ignoring case and accents. Compounds count ("Kindergeburtstag", "Überraschungsparty"); words that contain a party word but mean a holiday, a memorial or a parent's day are taken out first ("Feiertag", "Trauerfeier", "fête des mères", "festa della mamma"), and short or ambiguous words count only on their own ("fiesta" but not "felices fiestas", "feest" but not "kerstfeest"). `wrapTemplatesFor(context)` then offers the party pop box only for a birthday or a party; the 3D gift box and the other three are offered for every gift. The route still accepts all five ids, so a page opened before the change keeps working.
+
+```mermaid
+flowchart LR
+  visitor(["Visitor: a birthday gift for my mother"]) --> agent["find_gifts<br/>occasion: Geburtstag"]
+  agent --> ctx["FinderContext.occasion<br/>streamed, saved with the session"]
+  ctx --> chip["Chip: Geburtstag"]
+  ctx --> wrapstep["wrapTemplatesFor()"]
+  wrapstep -->|birthday or party| five["5 designs, party pop box included"]
+  wrapstep -->|anything else or none| four["4 designs"]
+  ctx --> brief["wrapBrief(): the occasion for the builder"]
+```
+
+- The builder is called with `giftRequired: true`, so a page without the gift goes back to the model once, even on a party pop box, where a gift is otherwise optional. The brief says the page is a gift and not an invitation. It passes on the occasion the finder heard ("Occasion, as the sender told the gift finder: Geburtstag"), unless the sender's note names another; without one it asks for a celebrating occasion ("Celebration") on a party pop box and a gentle one ("Just because") otherwise.
 - The gift on the page is copied from the stored option after the builder has run, so the model cannot change its link or price. Any `event` the builder wrote is dropped at the same time: the finder never learns a date or a place, so an event could only be made up, and the party pop box would show it as the party.
 - Building comes before `createLetter()`, so a failed build leaves no empty letter. The title comes from `titleFor()`: "A gift for …" for the gift reveal and both boxes. The answer is `{ letterId, slug }`.
 
@@ -57,7 +72,8 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
 | `lib/finder/events.ts` | The contract with the finder chat: request, streamed events, wrap call. Frozen; additive changes only. |
 | `app/api/finder/route.ts` | Session check, location and locale, session creation, the per-session message cap, the stream, saving the turn append-only. |
 | `app/api/finder/wrap/route.ts` | Wrapping a chosen option: session, option and letter limits, then `wrapOption()`. |
-| `lib/finder/agent.ts` | The finder loop: system prompt, `find_gifts`, `ask_questions` and `read_profile` ([social-profiles.md](social-profiles.md)), default age ranges, turning research into options. |
+| `lib/finder/agent.ts` | The finder loop: system prompt, `find_gifts`, `ask_questions` and `read_profile` ([social-profiles.md](social-profiles.md)), default age ranges, the context with the occasion it heard, turning research into options. |
+| `lib/finder/wrap-templates.ts` | Which designs the wrap step offers: `isPartyOccasion()` and `wrapTemplatesFor()`, the party pop box only for a birthday or a party (issue #59). Client-safe, used by the wrap view. |
 | `lib/finder/context.ts` | Country and region from the request, language, timezone, currency, place names, age-range defaults. |
 | `lib/finder/limits.ts` | Daily search limits, the site-wide cap, sessions per day, messages per session; claiming and releasing searches. |
 | `lib/finder/sessions.ts` | Reading sessions through RLS and writing them with the service role. |
@@ -108,6 +124,10 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
   - Live against `next dev` and the real database, as a temporary member (made with the admin API, deleted afterwards with every row it owned): `POST /api/finder/wrap` with the member's cookie answered 400 for `treasure-map` and `wedding-envelope-3d`, and for `gift-box-3d` got past validation, the stored session and option and the limits to the builder. A `gift-box-3d` letter carrying a stored option exactly as `giftFromOption()` copies it rendered at `/l/<slug>` at 375 and 1440 px: the box opened to the gift card with the title, description, price and shop link, then the note; console clean.
   - On `/dev/finder` (mock transport) at 375 and 1440 px: the five choices, the arrow keys moving between them, and Ready to send with the guest text (no session) and the member text (the member's session cookie).
   - Not checked: a real search and a real wrap, because the Anthropic key was over its monthly spend limit (429 `enforced_spend_limit_reached`, until 1 December). The builder writing either box from a finder brief is unverified live.
+- Issue #59 (the party pop box only for parties), 22 November:
+  - Unit tests: [`wrap-templates.test.ts`](../../tests/unit/lib/finder/wrap-templates.test.ts) (30 birthday and party phrasings in twelve languages heard as parties; holidays, memorials, parents' days, "anniversary", "felices fiestas" and "kerstfeest" not; four designs without an occasion, five with one, the gift reveal first), [`agent.test.ts`](../../tests/unit/lib/finder/agent.test.ts) (the occasion from `find_gifts` streamed and kept in the context), [`sessions.test.ts`](../../tests/unit/lib/finder/sessions.test.ts) (read back from a stored session), [`wrap.test.ts`](../../tests/unit/lib/finder/wrap.test.ts) (passed to the builder in the brief) and [`context-chips.test.ts`](../../tests/unit/components/finder/context-chips.test.ts) (its chip).
+  - On `/dev/finder` (mock transport, its new "Birthday" scenario) at 375 and 1440 px: the "Birthday" chip, five designs with the party pop box after the 3D gift box; "First search" (no occasion) gives four, two by two from md up; the arrow keys move between them; the console shows only the mock's deliberately broken shop image.
+  - Not checked live: the model filling `occasion` for a real visitor (the Anthropic key is over its monthly spend limit until 1 December), and a wrap with the occasion in the brief.
 - Not checked: a request from a signed-up (not guest) account against the real database (no test user was created in the live project), a live wrap, the Cloudflare `cf` data on a deployed Worker (in `next dev` there is none), and the research prompt's informal-address rule in German on a fresh live search.
 
 ## Open questions
@@ -118,6 +138,6 @@ Wrapping: `POST /api/finder/wrap` with `{ sessionId, optionId, templateId }` (an
 - The contract has no limit reason for "too many sessions" or "too many messages in this session"; both use `finder_daily`. A `finder_turns` reason could be added to `lib/finder/events.ts` if the chat should say something different.
 - Reading a public social profile while personalising is built (issue #34); see [social-profiles.md](social-profiles.md).
 - The main agent's `research_gifts` (in `lib/agents/tools.ts`) does not pass a language to research, so its ideas follow the language of the brief the main agent writes. Passing the sender's language there would fix the same bug in the letters chat.
-- **The party pop box is offered for every gift, not only for birthdays.** The finder agent hears the occasion (`find_gifts` has an `occasion` field) but does not keep it in `FinderContext`, so the wrap step cannot tell a birthday. Adding `occasion?: string` to `FinderContext` (additive) and saving it in `lib/finder/agent.ts` would let the finder put the party box first, or offer it only then.
-- **"Redeem your gift" on a shop product.** The gift card's button says "Redeem your gift" for every gift with a link. For a product from the finder, which has no code, "See it in the shop" or "Your gift" would read better; that wording lives in `components/letters/gift-card.tsx`.
+- **The party words are a list, not a classifier.** An occasion in a language the list does not cover, or a party named in an unusual way, gets the four designs without the party pop box. If that shows up in practice, `find_gifts` could return a fixed kind of occasion next to the visitor's words instead.
+- **A visitor who mentions the birthday only in the wrap step's note** still sees four designs: the list is made from what Majnu heard in the search, so it does not change while they type.
 - Finder sessions and searches are kept indefinitely; a retention period should be chosen before the privacy page names them (#33).

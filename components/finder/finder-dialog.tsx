@@ -7,7 +7,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation } from "./conversation"
-import { statusLit, type FinderItem } from "./finder-state"
+import { finderAnnouncement, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import type { Finder } from "./use-finder"
 import { useVisualViewportVars } from "./visual-viewport"
@@ -21,17 +21,6 @@ type Props = {
 
 // Four lines, then the box scrolls: 4 × 24px + 16px padding.
 const MAX_COMPOSER_HEIGHT = 112
-
-// What a screen reader hears when a reply finishes.
-function announcement(items: FinderItem[]): string {
-  const last = items[items.length - 1]
-  if (!last) return ""
-  if (last.role === "options") return `${last.options.length} gift ideas are ready.`
-  if (last.role === "question") return `Majnu asks: ${last.text}`
-  if (last.role === "notice") return last.message
-  if (last.role === "assistant") return "Majnu replied."
-  return ""
-}
 
 // The gift finder: a bottom sheet as tall as the visible screen on phones (it
 // follows the keyboard, so the message box stays in view), and from md up a
@@ -203,6 +192,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                   <WrapView
                     key={wrap.option.id}
                     wrap={wrap}
+                    context={state.context}
                     onTemplate={chooseTemplate}
                     onWrap={wrapGift}
                     onBack={backToIdeas}
@@ -261,7 +251,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
             )}
 
             <p className="sr-only" aria-live="polite">
-              {state.streaming ? "" : announcement(state.items)}
+              {state.streaming ? "" : finderAnnouncement(state.items)}
             </p>
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>

@@ -1,16 +1,47 @@
 import { describe, expect, it } from "vitest"
-import { firstName, letterDescription, letterNoun, letterTitle, monogram, signOffLines } from "@/components/letters/names"
+import {
+  isGroup,
+  letterDescription,
+  letterNoun,
+  letterTitle,
+  monogram,
+  possessive,
+  sentenceStart,
+  signOffLines,
+  verbFor,
+} from "@/components/letters/names"
 import { letterFixtures } from "@/lib/letters/fixtures"
 
-describe("firstName", () => {
-  it("keeps only the first name", () => {
-    expect(firstName("Anna Schmidt")).toBe("Anna")
-    expect(firstName("  Lena ")).toBe("Lena")
-    expect(firstName("Tom,")).toBe("Tom")
+describe("isGroup and verbFor (issue #62)", () => {
+  it.each(["Mia & Leo", "Mia&Leo", "Lea and Max", "Mama und Papa", "Ana y Luis", "our friends", "Friends", "my dear friends", "Liebe Freunde", "the Schmidts", "dear neighbours", "our kids", "you all"])(
+    "reads %s as more than one person",
+    (name) => {
+      expect(isGroup(name)).toBe(true)
+      expect(verbFor(name, "sees", "see")).toBe("see")
+    },
+  )
+
+  it.each(["Anna", "Anna Schmidt", "Everyone", "Grandma", "my boss", "our Lucas", "my love", "Thomas", ""])("reads %j as one person", (name) => {
+    expect(isGroup(name)).toBe(false)
+    expect(verbFor(name, "sees", "see")).toBe("sees")
   })
-  it("falls back when there is no name", () => {
-    expect(firstName("")).toBe("you")
-    expect(firstName(null)).toBe("you")
+
+  it("agrees with you", () => {
+    expect(verbFor("you", "hears", "hear")).toBe("hear")
+  })
+})
+
+describe("possessive and sentenceStart", () => {
+  it("adds 's, or only ' to a group ending in s", () => {
+    expect(possessive("Anna")).toBe("Anna's")
+    expect(possessive("Lea and Max")).toBe("Lea and Max's")
+    expect(possessive("the Schmidts")).toBe("the Schmidts'")
+    expect(possessive("James")).toBe("James's")
+  })
+  it("starts a sentence with a capital", () => {
+    expect(sentenceStart("our friends")).toBe("Our friends")
+    expect(sentenceStart("Anna")).toBe("Anna")
+    expect(sentenceStart("")).toBe("")
   })
 })
 
@@ -28,10 +59,20 @@ describe("letterNoun", () => {
 })
 
 describe("letterTitle", () => {
-  it("names the kind of gift and the recipient's first name only", () => {
+  it("names the kind of gift and one recipient by the first name only", () => {
     expect(letterTitle("classic-envelope", "Anna")).toBe("A letter for Anna")
     expect(letterTitle("gift-reveal", "Tom")).toBe("A gift for Tom")
     expect(letterTitle("wedding-invite", "Sophie Meyer")).toBe("An invitation for Sophie")
+    expect(letterDescription("Anna Schmidt")).toBe("Made for Anna with Majnu.")
+  })
+
+  it("names a group whole (issue #62)", () => {
+    expect(letterTitle("party-invite", "our friends")).toBe("An invitation for our friends")
+    expect(letterTitle("classic-envelope", "the Smiths")).toBe("A letter for the Smiths")
+    expect(letterDescription("Mia & Leo")).toBe("Made for Mia & Leo with Majnu.")
+  })
+
+  it("names the other kinds", () => {
     expect(letterTitle("party-invite", "Everyone")).toBe("An invitation for Everyone")
     expect(letterTitle("postcard", "Grandma")).toBe("A postcard for Grandma")
     expect(letterTitle("advent-classic", "Lena")).toBe("An advent calendar for Lena")

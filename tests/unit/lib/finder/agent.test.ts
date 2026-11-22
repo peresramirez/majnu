@@ -220,6 +220,15 @@ describe("a first search", () => {
     expect(researchGiftReport).toHaveBeenCalledWith(expect.objectContaining({ occasion: "not given", budget: undefined }))
   })
 
+  it("keeps the occasion it heard in the context, for the wrap step (issue #59)", async () => {
+    const s = state()
+    scriptModel(reply([findCall({ ...MOTHER, occasion: "Geburtstag" })]))
+    await runFinderTurn({ history: [], message: "Ein Geburtstagsgeschenk für Mama", state: s })
+    expect(events[0]).toMatchObject({ type: "context", context: { relationship: "Mama", occasion: "Geburtstag" } })
+    expect(s.context.occasion).toBe("Geburtstag")
+    expect(researchGiftReport).toHaveBeenCalledWith(expect.objectContaining({ occasion: "Geburtstag" }))
+  })
+
   it("lets the model fix a call with missing fields, without searching", async () => {
     const { requests } = scriptModel(reply([findCall({ relationship: "Mama" }, "bad")]), reply([findCall()]))
     await runFinderTurn({ history: [], message: "Mama", state: state() })

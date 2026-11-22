@@ -25,7 +25,7 @@ import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/her
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation } from "./conversation"
-import { statusLit, type FinderItem } from "./finder-state"
+import { finderAnnouncement, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import { fetchTransport, type FinderTransport } from "./transport"
 import { useTypewriter } from "./typewriter"
@@ -51,17 +51,6 @@ const MAX_COMPOSER_HEIGHT = 112
 
 // A 40px chip with a 44px tap area.
 const suggestionChip = `relative inline-flex h-10 items-center rounded-full bg-night-velvet px-4 text-[15px] font-medium text-night-petal ring-1 ring-inset ring-night-petal/15 transition-[box-shadow,transform] duration-200 ease-calm before:absolute before:inset-x-0 before:-inset-y-0.5 before:content-[''] hover:ring-night-petal/40 active:scale-[0.97] ${focusRing}`
-
-// What a screen reader hears when a reply finishes (as in the finder dialog).
-function announcement(items: FinderItem[]): string {
-  const last = items[items.length - 1]
-  if (!last) return ""
-  if (last.role === "options") return `${last.options.length} gift ideas are ready.`
-  if (last.role === "question") return `Majnu asks: ${last.text}`
-  if (last.role === "notice") return last.message
-  if (last.role === "assistant") return "Majnu replied."
-  return ""
-}
 
 type Props = {
   finder: Finder
@@ -266,6 +255,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
               <WrapView
                 key={wrap.option.id}
                 wrap={wrap}
+                context={state.context}
                 onTemplate={chooseTemplate}
                 onWrap={wrapGift}
                 onBack={backToIdeas}
@@ -369,7 +359,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
       )}
 
       <p className="sr-only" aria-live="polite">
-        {state.streaming ? "" : announcement(state.items)}
+        {state.streaming ? "" : finderAnnouncement(state.items)}
       </p>
     </div>
   )
