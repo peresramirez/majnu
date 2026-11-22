@@ -31,7 +31,7 @@ export function GiftsView({
           <p className="mt-3 text-[17px] leading-relaxed text-night-lilac">
             Your gifts appear here once you make one, with the moment each one is opened.
           </p>
-          <Link href="/dashboard" className={`mt-8 ${primaryButton}`}>
+          <Link href="/dashboard/find" className={`mt-8 ${primaryButton}`}>
             Create a gift <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
@@ -49,7 +49,7 @@ export function GiftsView({
             {letters.length === 1 ? "1 gift" : `${letters.length} gifts`}, {opened} opened
           </p>
         </div>
-        <Link href="/dashboard" className={`hidden sm:inline-flex ${primaryButton}`}>
+        <Link href="/dashboard/find" className={`hidden sm:inline-flex ${primaryButton}`}>
           Create a gift
         </Link>
       </div>

@@ -6,6 +6,7 @@
 // people out at random, mid-chat.
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { afterAuthPath } from "@/app/auth/destination"
 import { nextPathFromSearch } from "@/lib/billing/next-path"
 
 const PROTECTED_PREFIXES = ["/dashboard", "/create"]
@@ -76,10 +77,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Real users skip the sign-in pages. The landing page stays open to them.
-  // A same-site ?next=... or ?plan=full-moon on the sign-in page still decides
-  // where they land, so "Choose Full moon" reaches the Plan tab either way.
+  // A same-site ?next=... on the sign-in page still decides where they land;
+  // otherwise they go where every sign-in goes: the gift finder (#47).
   if (access === "leave_auth_page") {
-    const next = nextPathFromSearch(request.nextUrl.searchParams) ?? "/dashboard"
+    const next = afterAuthPath(nextPathFromSearch(request.nextUrl.searchParams))
     return redirectKeepingSession(request, next, response, cacheHeaders)
   }
 

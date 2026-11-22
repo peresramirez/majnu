@@ -87,7 +87,7 @@ One migration: `supabase/migrations/0001_init.sql`.
 - `letters`: `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` | `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, timestamps.
 - `profiles`: `user_id` → `auth.users`, `plan` (`free` | `full-moon`), `stripe_customer_id`, `stripe_subscription_id`, `plan_renews_at`. One row per user. The billing columns are left from the retired subscription and unused.
 - `purchases` (`0007_purchases.sql`): one personalised wrapper for one letter, with the request, the consent, the Stripe ids and the status from `pending` to `done` or `refunded`. Owners read their own; only server code writes.
-- `letter_events`: `letter_id`, `type`, `day int not null default 0`, `visitor_id`, `user_agent`, `created_at`, with a unique index on `(letter_id, type, day, visitor_id)` so repeat visits do not inflate counts.
+- `letter_events`: `letter_id`, `type`, `day int not null default 0`, `visitor_id`, `user_agent`, `country`, `city`, `language`, `device`, `created_at`, with a unique index on `(letter_id, type, day, visitor_id)` so repeat visits do not inflate counts. Owners read every column except `visitor_id` and `user_agent` (the Tracker tab, issue #49).
 
 Security rules:
 
