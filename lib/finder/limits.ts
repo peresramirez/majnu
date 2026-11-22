@@ -38,15 +38,27 @@
 // whole site (default 20), because the Apify credit is $5. They are recorded
 // in the session's context (lib/finder/sessions.ts) and claimed the same way
 // as searches: record first, count second, take back when over the cap.
+//
+// Files the visitor shares (issue #77): at most 6 read in one finder session
+// and 12 per visitor per UTC day, and MAJNU_DAILY_FILE_CAP reader calls a UTC
+// day for the whole site (default 150). They are counted in the session's
+// context (`uploads`, lib/finder/sessions.ts), claimed before the reader runs
+// and given back when it fails. The visitor's and the site's counts are read
+// just before the claim is written, so two sessions claiming at the very same
+// moment can go a few files over; the session's own count cannot.
 import "server-only"
 import { countChatTurns, startOfUtcDay } from "@/lib/limits"
 import { PAID_SOURCES, usesApify, type ProfileSource } from "@/lib/social/links"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { FinderContext, FinderLimitReason } from "./events"
 import { textsFor } from "./messages"
+import { FILE_LIMITS } from "./file-rules"
 import {
+  changeUploads,
   clearProfileRead,
+  countFileReadsToday,
   countProfileReadsSince,
+  utcDay,
   listTodaysFinderSessions,
   markProfileRead,
   type FinderSession,
@@ -75,7 +87,11 @@ export function dailySearchCap(): number {
   return Number.isInteger(cap) && cap >= 0 ? cap : DEFAULT_DAILY_SEARCH_CAP
 }
 
-export type FinderLimit = { ok: true } | { ok: false; reason: FinderLimitReason; message: string }
+// The reasons a search, a session or a message can be refused for. Files have
+// their own (fileReadsResult below).
+export type SearchLimitReason = Exclude<FinderLimitReason, "files_limit">
+
+export type FinderLimit = { ok: true } | { ok: false; reason: SearchLimitReason; message: string }
 
 // Searches already made, before the one being asked for.
 export type SearchCounts = {
@@ -89,7 +105,7 @@ export type SearchCounts = {
   site: number
 }
 
-function refuse(reason: FinderLimitReason, message: string): FinderLimit {
+function refuse(reason: SearchLimitReason, message: string): FinderLimit {
   return { ok: false, reason, message }
 }
 
@@ -318,4 +334,86 @@ export async function claimProfileRead(input: {
     return { ok: false, reason: "daily_cap" }
   }
   return { ok: true, profile }
+}
+
+// ---------- Files the visitor shares (issue #77) ----------
+
+export const DEFAULT_DAILY_FILE_CAP = 150
+
+// Reader calls the whole site may make per UTC day. 0 switches reading files off.
+export function dailyFileCap(): number {
+  const raw = process.env.MAJNU_DAILY_FILE_CAP?.trim()
+  if (!raw) return DEFAULT_DAILY_FILE_CAP
+  const cap = Number(raw)
+  return Number.isInteger(cap) && cap >= 0 ? cap : DEFAULT_DAILY_FILE_CAP
+}
+
+// Files already read, before the ones being asked for.
+export type FileCounts = { session: number; visitorToday: number; siteToday: number }
+
+export type FileGrant = { granted: number; refusal?: { reason: "files_limit"; message: string } }
+
+// How many of `want` files may be read now, and why the rest may not. The
+// limit that leaves the least room names the reason; the visitor's own
+// limits come before the site's.
+export function fileReadsResult(counts: FileCounts, want: number, cap: number, language: string): FileGrant {
+  const texts = textsFor(language).files
+  const rooms = [
+    { room: FILE_LIMITS.perSession - counts.session, message: texts.session(FILE_LIMITS.perSession) },
+    { room: FILE_LIMITS.perVisitorPerDay - counts.visitorToday, message: texts.daily(FILE_LIMITS.perVisitorPerDay) },
+    { room: cap - counts.siteToday, message: texts.site },
+  ]
+  const tightest = rooms.reduce((a, b) => (b.room < a.room ? b : a))
+  const granted = Math.max(0, Math.min(want, tightest.room))
+  return granted < want ? { granted, refusal: { reason: "files_limit", message: tightest.message } } : { granted }
+}
+
+// A claim to give back from: how many, and on which UTC day.
+export type FileClaim = { day: string; count: number }
+
+export type FileClaimResult = FileGrant & { claim: FileClaim | null }
+
+// Claims up to `want` file reads for this session before the reader runs.
+// The session's count is written only if no other write came in between
+// (writeContext in sessions.ts), so it can never go over its limit.
+export async function claimFileReads(input: {
+  session: Pick<FinderSession, "id" | "ownerId">
+  want: number
+  now: Date
+  language: string
+}): Promise<FileClaimResult> {
+  const day = utcDay(input.now)
+  const cap = dailyFileCap()
+  const today = await countFileReadsToday(input.session.ownerId, input.now)
+  let grant: FileGrant = { granted: 0 }
+  const written = await changeUploads(input.session, (uploads) => {
+    const sessionToday = uploads && uploads.day === day ? uploads.today : 0
+    grant = fileReadsResult({ session: uploads?.total ?? 0, visitorToday: today.visitor, siteToday: today.site }, input.want, cap, input.language)
+    if (grant.granted === 0) return null
+    return { total: (uploads?.total ?? 0) + grant.granted, day, today: sessionToday + grant.granted }
+  })
+  if (!written) {
+    // Nothing was written: every file is over a limit, or the session is a calendar's.
+    const refusal = grant.refusal ?? { reason: "files_limit" as const, message: textsFor(input.language).files.session(FILE_LIMITS.perSession) }
+    return { granted: 0, refusal, claim: null }
+  }
+  return { ...grant, claim: { day, count: grant.granted } }
+}
+
+// Gives back `count` of a claim's reads: the reader failed for them. Never
+// throws; a count left behind costs the visitor a file, not us money.
+export async function releaseFileReads(session: Pick<FinderSession, "id" | "ownerId">, claim: FileClaim, count: number): Promise<void> {
+  if (count <= 0) return
+  try {
+    await changeUploads(session, (uploads) => {
+      if (!uploads) return null
+      return {
+        total: Math.max(0, uploads.total - count),
+        day: uploads.day,
+        today: uploads.day === claim.day ? Math.max(0, uploads.today - count) : uploads.today,
+      }
+    })
+  } catch (error) {
+    console.error("[finder] could not give back a file read", { message: error instanceof Error ? error.message : String(error) })
+  }
 }

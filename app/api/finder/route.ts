@@ -18,12 +18,26 @@
 // from the browser, and Majnu hears the choice in the context block.
 // Limits reached before any model call (sessions or searches for the day,
 // messages in this session) are a stream of `limit` and `done`.
+//
+// Photos and documents (issue #77): a message with files comes as
+// multipart/form-data, the request as JSON in the `request` part and up to 3
+// `file` parts; its message may be empty. Each file's real type is checked
+// from its first bytes (lib/finder/file-rules.ts), never its name or declared
+// type, and anything else is refused before the stream with { error }: 400
+// (too many files, an empty file, a PDF over 20 pages, locked or unreadable),
+// 413 (a file or all of them too large) or 415 (not a photo, PDF or text
+// file). Then, inside the stream and before Majnu answers, the files are
+// claimed against their limits, read once each (lib/finder/attachments.ts),
+// and only their notes are kept: in the session's context, shown as chips,
+// and as text in the stored conversation. No file is stored.
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import * as z from "zod/v4"
 import { describeError } from "@/lib/agents/errors"
 import { runFinderTurn, type FinderTurnState, type WrapFrame } from "@/lib/finder/agent"
+import { mergeNotes, readMessageFiles, sharedFilesText, type ReadableFile } from "@/lib/finder/attachments"
 import { baseContext, canonicalLocale, localeTimezone, requestLocation } from "@/lib/finder/context"
-import type { FinderEvent } from "@/lib/finder/events"
+import { FINDER_FILE_PART, FINDER_REQUEST_PART, type FinderEvent } from "@/lib/finder/events"
+import { FILE_LIMITS, checkSharedFile, displayFileName, type FileProblem } from "@/lib/finder/file-rules"
 import { canStartSession, findOpenSession, sessionMessagesResult } from "@/lib/finder/limits"
 import { textsFor } from "@/lib/finder/messages"
 import { createFinderSession, getMyFinderSession, saveFinderSession, type FinderSession } from "@/lib/finder/sessions"
@@ -37,9 +51,13 @@ export const dynamic = "force-dynamic"
 // question. Not exported: a route file may only export its handlers and config.
 const MAX_MESSAGE_LENGTH = 2000
 
+// The whole multipart body: the files' own limit and a little for the request part.
+const MAX_MULTIPART_BYTES = FILE_LIMITS.messageBytes + 64 * 1024
+
 const FinderRequestBody = z.object({
   sessionId: z.string().min(1).max(100).optional(),
-  message: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH),
+  // May be empty only when files come with it (checked below).
+  message: z.string().trim().max(MAX_MESSAGE_LENGTH),
   // Lenient: a missing or odd locale means English and Europe/Berlin, not an error.
   locale: z
     .object({
@@ -80,6 +98,72 @@ function fixedEvents(events: FinderEvent[]): Response {
   return eventResponse(out.stream)
 }
 
+type Texts = ReturnType<typeof textsFor>
+
+// The body as JSON, or a multipart body's request part and its files. Null
+// when it cannot be read; "too_big" for a multipart body over the limit.
+async function readBody(request: Request): Promise<{ raw: unknown; files: File[] } | null | "too_big"> {
+  const type = request.headers.get("content-type") ?? ""
+  if (!type.toLowerCase().startsWith("multipart/form-data")) {
+    try {
+      return { raw: await request.json(), files: [] }
+    } catch {
+      return null
+    }
+  }
+  const length = Number(request.headers.get("content-length") ?? "")
+  if (Number.isFinite(length) && length > MAX_MULTIPART_BYTES) return "too_big"
+  let form: FormData
+  try {
+    form = await request.formData()
+  } catch {
+    return null
+  }
+  const part = form.get(FINDER_REQUEST_PART)
+  if (typeof part !== "string") return null
+  try {
+    const files = form.getAll(FINDER_FILE_PART).filter((value): value is File => typeof value !== "string")
+    return { raw: JSON.parse(part), files }
+  } catch {
+    return null
+  }
+}
+
+function fileProblem(problem: FileProblem, name: string, kind: string | undefined, texts: Texts): Response {
+  const t = texts.files
+  const mb = (bytes: number) => Math.round(bytes / (1024 * 1024))
+  switch (problem) {
+    case "type":
+      return json(415, { error: t.type(name) })
+    case "empty":
+      return json(400, { error: t.empty(name) })
+    case "too_big":
+      if (kind === "pdf") return json(413, { error: t.pdfTooBig(name, mb(FILE_LIMITS.pdfBytes)) })
+      if (kind === "text") return json(413, { error: t.textTooBig(name, Math.round(FILE_LIMITS.textBytes / 1024)) })
+      return json(413, { error: t.imageTooBig(name, mb(FILE_LIMITS.imageBytes)) })
+    case "pdf_pages":
+      return json(400, { error: t.pdfPages(name, FILE_LIMITS.pdfPages) })
+    case "pdf_locked":
+      return json(400, { error: t.pdfLocked(name) })
+    case "pdf_unreadable":
+      return json(400, { error: t.pdfUnreadable(name) })
+  }
+}
+
+// Every file checked, in order, or the answer for the first one that is refused.
+async function checkFiles(files: File[], texts: Texts): Promise<ReadableFile[] | Response> {
+  if (files.length > FILE_LIMITS.perMessage) return json(400, { error: texts.files.tooMany(FILE_LIMITS.perMessage) })
+  const total = files.reduce((sum, file) => sum + file.size, 0)
+  if (total > FILE_LIMITS.messageBytes) return json(413, { error: texts.files.tooBigTogether })
+  const checked: ReadableFile[] = []
+  for (const file of files) {
+    const result = await checkSharedFile(new Uint8Array(await file.arrayBuffer()))
+    if (!result.ok) return fileProblem(result.problem, displayFileName(file.name), result.kind, texts)
+    checked.push(result)
+  }
+  return checked
+}
+
 // Keeps the Worker alive until the turn is saved, even if the visitor closes
 // the finder: options shown but not saved could not be wrapped.
 function keepRunning(work: Promise<void>): void {
@@ -97,12 +181,10 @@ export async function POST(request: Request): Promise<Response> {
   } = await supabase.auth.getUser()
   if (!user) return json(401, { error: "session_required" })
 
-  let raw: unknown
-  try {
-    raw = await request.json()
-  } catch {
-    return json(400, { error: textsFor(undefined).requests.noMessage })
-  }
+  const read = await readBody(request)
+  if (read === "too_big") return json(413, { error: textsFor(undefined).files.tooBigTogether })
+  if (!read) return json(400, { error: textsFor(undefined).requests.noMessage })
+  const raw = read.raw
   const body = FinderRequestBody.safeParse(raw)
   if (!body.success) {
     const language = (raw as { locale?: { language?: unknown } } | null)?.locale?.language
@@ -117,6 +199,12 @@ export async function POST(request: Request): Promise<Response> {
   const base = baseContext(requestLocation(request), locale)
   const timezone = localeTimezone(locale)
   const texts = textsFor(base.language)
+
+  if (!body.data.message && read.files.length === 0) return json(400, { error: texts.requests.noMessage })
+  // Checked before a session is made or loaded: a refused file costs nothing.
+  const files = await checkFiles(read.files, texts)
+  if (files instanceof Response) return files
+  const fileCount = files.length
 
   // A wrap choice needs the session whose options it chose from.
   if (body.data.wrap && !body.data.sessionId) return json(404, { error: texts.requests.optionNotFound })
@@ -177,6 +265,22 @@ export async function POST(request: Request): Promise<Response> {
     try {
       // First, so the client can send the id with every later message.
       if (!body.data.sessionId) out.emit({ type: "session", sessionId: session.id })
+
+      if (fileCount > 0) {
+        const shared = await readMessageFiles({ files, session, now, language: base.language, emit: out.emit })
+        // The bytes are not needed any more: let them go before Majnu answers.
+        files.splice(0)
+        if (shared.notes.length > 0) {
+          state.context = { ...state.context, notes: mergeNotes(state.context.notes ?? [], shared.notes) }
+          out.emit({ type: "context", context: state.context })
+        }
+        state.sharedFiles = { text: sharedFilesText(shared.outcomes), notes: shared.notes }
+        // Files alone, and none of them could be read: nothing for Majnu to answer.
+        if (!body.data.message && !shared.outcomes.some((outcome) => outcome.status === "read")) {
+          if (shared.outcomes.some((outcome) => outcome.status === "failed")) out.emit({ type: "error", message: texts.files.failed })
+          return
+        }
+      }
 
       const result = await runFinderTurn({ history: session.chat, message: body.data.message, state })
 
