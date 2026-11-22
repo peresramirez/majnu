@@ -6,6 +6,8 @@ Majnu is free: finding a gift, wrapping it in our designs, letters, invitations,
 
 There is no subscription. The Full moon subscription built earlier (issue #14) and its code are removed.
 
+A **coupon code** makes the wrapper free: "Have a code?" in the same dialog skips Stripe, the consent box and (for guests) the account step, and a failed run gives the code its use back instead of a refund. That path is described in [coupons.md](coupons.md); everything below is the paid path, which it leaves unchanged.
+
 ## How it works
 
 ```mermaid
@@ -72,6 +74,10 @@ A message whose consumer threw or died goes (with `max_retries: 0`) to `majnu-de
 - **Status card** ([`purchase-status.tsx`](../../components/wrapper/purchase-status.tsx)): polls [`GET /api/purchases/<id>`](../../app/api/purchases/[id]/route.ts) every 4 seconds (for at most 15 minutes) and announces each change politely: "Paid, starting soon", "Being designed", "Ready" with "Open the gift page", or "Refunded".
 - **Purchases tab** ([`app/(app)/dashboard/purchases/`](../../app/(app)/dashboard/purchases/page.tsx)), which replaced the Plan tab (`/dashboard/plan` redirects there): every purchase that was paid, newest first, with the gift, the request, the date, the amount, the status, a link to the gift page when done and Stripe's receipt. The purchase just paid for, and any still in progress, get the live status card; the list refreshes when one settles.
 
+### Paid with a coupon code
+
+Since issue #72 a purchase can also be paid with a coupon code ([coupons.md](coupons.md)): `POST /api/coupons/redeem` records it as `paid` with `amount_cents = 0` and `coupon_id`, without consent or Stripe ids, and hands it to the same queue. The design job treats it like any other purchase until a run fails: then `giveBack()` in [`refunds.ts`](../../lib/billing/refunds.ts) marks it `failed` and returns the code's use (`return_coupon_use()`), and never calls Stripe. The status card and the Purchases tab word it accordingly ("Code accepted, starting soon", "Your code works again", "Free with a code").
+
 ### Managed Payments
 
 The Stripe account has **Managed Payments** (Stripe as merchant of record) switched on by default. It refuses `custom_text` and requires a product tax code, and it would make Stripe the seller, with its own fees and VAT handling. The business plan and the terms make Majnu the seller with prices including VAT, so sessions pass `managed_payments: { enabled: false }`. Whether to use Managed Payments instead (it would take over VAT outside Germany) is the developer's decision; switching needs a product tax code on the wrapper product, removing that flag, and rewording the terms.
@@ -91,7 +97,7 @@ The Stripe account has **Managed Payments** (Stripe as merchant of record) switc
 | [`lib/billing/http.ts`](../../lib/billing/http.ts), [`next-path.ts`](../../lib/billing/next-path.ts) | Same-origin checks and redirects; the same-site `next` check |
 | `POST /api/checkout`, `GET /billing/return`, `POST /api/stripe/webhook`, `GET /api/purchases`, `GET /api/purchases/[id]` | The routes |
 | [`components/wrapper/`](../../components/wrapper/) | The button and dialog, the status card |
-| `purchases` table ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per wrapper |
+| `purchases` table ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql), `coupon_id` since [`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql)) | One row per wrapper, paid by card or with a coupon code |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_WRAPPER`, `STRIPE_WEBHOOK_SECRET` | Server-only Worker secrets (`npm run cf:secrets`) |
 | `DESIGN_QUEUE` binding, queues `majnu-designs` and `majnu-designs-dlq` | [`wrangler.jsonc`](../../wrangler.jsonc); `scripts/deploy.sh` creates the queues if missing |
 

@@ -34,12 +34,14 @@ Three migrations in [`supabase/migrations/`](../../supabase/migrations/):
 | [`0001_init.sql`](../../supabase/migrations/0001_init.sql) | `letters`, `profiles`, `letter_events`, the `letter_summaries` view, the `updated_at` triggers, and a trigger that gives every new user a free profile (with a backfill for existing users) |
 | [`0002_billing.sql`](../../supabase/migrations/0002_billing.sql) | `profiles.plan_cancel_at`, a nullable column without a default, so adding it is catalogue-only with no table rewrite |
 | [`0003_letter_designs.sql`](../../supabase/migrations/0003_letter_designs.sql) | `letter_designs` for Daytona pages |
+| [`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql) | `coupons` (hashed codes for the personalised wrapper), `purchases.coupon_id` with the constraints a free purchase needs, one redemption per user, and the service-role functions `redeem_coupon()` and `return_coupon_use()` ([coupons.md](coupons.md)) |
 
 | Table | Columns | Notes |
 |---|---|---|
 | `letters` | `id`, `owner_id` → `auth.users`, `slug` unique, `kind` (`letter` or `calendar`), `template_id`, `title`, `content` jsonb, `chat` jsonb, timestamps | `slug` must match `^[A-Za-z0-9_-]{6,64}$`; `title` at most 200 characters; `content` an object of at most 200,000 bytes (it is fed back to the model on edits); `chat` an array. Index on `(owner_id, created_at desc)` for the dashboard and the limits |
 | `profiles` | `user_id` → `auth.users`, `plan` (`free` or `full-moon`), `stripe_customer_id` unique, `stripe_subscription_id`, `plan_renews_at`, `plan_cancel_at`, timestamps | One row per user, created by `handle_new_user()`, a `security definer` trigger function with an empty `search_path` whose execute right is revoked from the API roles. The billing columns are left from the retired subscription; no code reads or writes them |
-| `purchases` | `owner_id`, `letter_id` (null if the letter is deleted), `status` (`pending`, `paid`, `designing`, `done`, `failed`, `refunded`), the request, `consent_at` and `consent_text`, amount, the Stripe session, payment intent and refund ids, `receipt_url`, `design_id`, `failure_reason`, timestamps ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per personalised wrapper ([billing.md](billing.md)). Owners read their own rows except `failure_reason`; only the service role writes. A partial unique index allows one `paid` or `designing` purchase per letter |
+| `purchases` | `owner_id`, `letter_id` (null if the letter is deleted), `status` (`pending`, `paid`, `designing`, `done`, `failed`, `refunded`), the request, `consent_at` and `consent_text`, amount, the Stripe session, payment intent and refund ids, `receipt_url`, `design_id`, `failure_reason`, timestamps ([`0007_purchases.sql`](../../supabase/migrations/0007_purchases.sql)) | One row per personalised wrapper ([billing.md](billing.md)). Owners read their own rows except `failure_reason`; only the service role writes. A partial unique index allows one `paid` or `designing` purchase per letter. Since `0011`, `coupon_id` marks a wrapper paid with a coupon code: such a row has amount 0, no consent and no Stripe ids, and another partial unique index allows one live redemption of a code per user |
+| `coupons` | `code_hash` (SHA-256 hex of the normalised code, unique), `label`, `max_uses`, `uses`, `expires_at`, `active`, `created_at` ([`0011_coupons.sql`](../../supabase/migrations/0011_coupons.sql)) | The codes themselves are never stored. Uses are taken and given back only by `redeem_coupon()` and `return_coupon_use()`, one transaction each ([coupons.md](coupons.md)) |
 | `letter_events` | `letter_id`, `type` (`open`, `door_open`, `gift_click`), `day` 0 to 366, `visitor_id`, `user_agent`, `country`, `city`, `language`, `device` (added in `0009_open_details.sql` for the Tracker, nullable), `created_at` | Unique on `(letter_id, type, day, visitor_id)`, so repeat visits add nothing; that index also serves lookups by letter |
 | `letter_designs` | `letter_id`, `html` (1 to 512,000 bytes), `request` (1 to 2,000 characters), `created_at` | Index on `(letter_id, created_at desc)` for the newest design |
 | `letter_summaries` (view) | Each letter with `recipient_name`, `has_content` and its open statistics | `security_invoker`, so it runs under the caller's row-level security |
@@ -59,6 +61,8 @@ Row-level security is turned on explicitly for every table (tables created by SQ
 | `letter_events` | nothing | `select` events of own letters, every column except `visitor_id` and `user_agent` (a column grant since `0009`; the visitor count comes from `private.letter_unique_visitors()`) | everything |
 | `letter_designs` | nothing | `select` designs of own letters | everything |
 | `letter_summaries` | nothing | `select`, filtered by the policies above | `select` |
+| `purchases` | nothing | `select` own rows, every column except `failure_reason` (`coupon_id` added in `0011`) | everything |
+| `coupons` | nothing | nothing | everything; `redeem_coupon()` and `return_coupon_use()` are executable by the service role only |
 
 There is no insert or delete policy for users anywhere. Policies use `(select auth.uid())`, so the function is evaluated once per query rather than once per row.
 
@@ -70,7 +74,8 @@ These values are never taken from the browser:
 |---|---|---|
 | `letters.slug`, `letters.owner_id` | `createLetter()` after checking the session, with the admin client | A link and its owner always come from the server |
 | `letters.chat` | `saveChat()` after an ownership check through RLS | The turn limit counts it; a browser that could rewrite it could reset the count or replay a huge forged history at our cost |
-| Every column of `purchases` | Checkout, the return page, the Stripe webhook and the design job ([billing.md](billing.md)), each status change a conditional update | A user must not be able to mark a design paid or done, or read why a run failed |
+| Every column of `purchases` | Checkout, the return page, the Stripe webhook and the design job ([billing.md](billing.md)), each status change a conditional update; a coupon purchase only through `redeem_coupon()` ([coupons.md](coupons.md)) | A user must not be able to mark a design paid or done, or read why a run failed |
+| Every column of `coupons` | `npm run coupon` and the two coupon functions, with the service-role key | A browser must not be able to list codes or change their uses |
 | `letter_events` | `POST /api/open` ([sharing-and-tracking.md](sharing-and-tracking.md)) | Statistics come only from the beacon route's rules |
 | `letter_designs` | The Daytona job ([daytona-redesign.md](daytona-redesign.md)) | The HTML is served from our domain |
 
