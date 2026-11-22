@@ -25,7 +25,7 @@ import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/her
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
-import { finderAnnouncement, statusLit } from "./finder-state"
+import { ANSWER_PLACEHOLDER, finderAnnouncement, hasAnswers, openQuestions, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import { fetchTransport, type FinderTransport } from "./transport"
 import { useTypewriter } from "./typewriter"
@@ -79,6 +79,9 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   const composing = wrap.stage === "closed" || wrap.stage === "choose"
   const chips = contextChips(state.context)
   const placeholder = useTypewriter(EXAMPLES, empty && draft === "")
+  // Majnu's questions are waiting for answers (issue #82).
+  const answering = !wrapping && openQuestions(state.items).length > 0
+  const sendable = draft.trim() !== "" || hasAnswers(state)
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -143,13 +146,15 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
     panel.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus({ preventScroll: true })
   }, [wrap.stage])
 
+  // Sends what is typed, with the answers picked for Majnu's open questions
+  // (issue #82): Enter, the send button and "Send answers" all come here.
   function submit(e?: FormEvent) {
     e?.preventDefault()
-    if (!draft.trim()) {
+    if (!draft.trim() && !hasAnswers(state)) {
       composer.current?.focus()
       return
     }
-    if (send(draft)) setDraft("")
+    if (send(draft, { answers: true })) setDraft("")
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -258,7 +263,16 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
             {wrapping ? (
               <WrapView key={wrap.option.id} finder={finder} wrap={wrap} />
             ) : (
-              <Conversation state={state} onSend={(text) => void send(text)} onChoose={choose} onNewSearch={newSearch} />
+              <Conversation
+                state={state}
+                onSend={(text) => void send(text)}
+                onChoose={choose}
+                onNewSearch={newSearch}
+                onAnswer={finder.answer}
+                onProfile={finder.setProfile}
+                onSendAnswers={() => submit()}
+                draftReady={draft.trim() !== ""}
+              />
             )}
           </div>
         )}
@@ -314,7 +328,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 onKeyDown={onKeyDown}
                 enterKeyHint="send"
                 maxLength={1000}
-                placeholder={empty ? placeholder : wrapping ? WRAP_PLACEHOLDER : MORE_PLACEHOLDER}
+                placeholder={empty ? placeholder : wrapping ? WRAP_PLACEHOLDER : answering ? ANSWER_PLACEHOLDER : MORE_PLACEHOLDER}
                 className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
               />
               {/* Speak instead of typing (issue #37): the words land in the box
@@ -342,7 +356,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 <button
                   type="submit"
                   aria-label="Send"
-                  aria-disabled={state.streaming || !draft.trim()}
+                  aria-disabled={state.streaming || !sendable}
                   className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-[background-color,opacity,transform] duration-200 ease-calm before:absolute before:-inset-0.5 before:content-[''] hover:bg-[#F1C4A9] active:scale-95 aria-disabled:opacity-50 ${focusRing}`}
                 >
                   <ArrowUp className="h-5 w-5" aria-hidden="true" />

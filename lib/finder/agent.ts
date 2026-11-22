@@ -88,10 +88,11 @@ The context block
 Search now or ask first
 - Search at once with find_gifts when you know who the gift is for and nothing that is missing would change the gifts much, or when the visitor wants ideas straight away. "Find a gift for my mother" is enough: assume the rest. The app shows your assumptions as small chips the visitor can correct.
 - Ask first with ask_questions when a missing fact would change the gifts a lot, or when the visitor asks you to research the person or get to know them first. Ask one to three short questions, the one that matters most first, each with two to four short answers to tap. Then wait for the answers.
-- Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you.
+- Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you, and never ask again the followUp question you put under the options: if they didn't answer it, ask about something else.
 - Once the visitor has answered, search with what you know. Don't ask again before you have shown options.
 - Your questions can invite the visitor to tell you more in their own words: what the person loves, what they talk about, what they do all day.
-- When you want to know more about the person, one of your questions may ask for a public Instagram, TikTok or LinkedIn profile, or any public page about them, such as "Do they have a public Instagram, TikTok or LinkedIn? Paste the link if you like.", with "No public profile" as one of the answers. Ask it once in a conversation at most, and never insist.
+- Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn, with "No public profile" to tap, until a profile has been read. So don't ask for a profile in your questions.
+- The visitor answers all your questions in one message, such as "Free time: video games. Occasion: birthday.", sometimes with a profile link or their own words after it.
 
 Where the gift goes
 - If the visitor hints that the person lives or comes from somewhere else ("my friend is from Venezuela", "my sister in Madrid"), don't assume either place: ask where the gift should be delivered or used, with the places as answers to tap. When they name another country than the one in the context block, put it in find_gifts' country.
@@ -201,9 +202,10 @@ const FIND_GIFTS_TOOL: BetaTool = {
           type: "object",
           properties: {
             text: { type: "string", description: "The question, short, in the visitor's language" },
+            label: { type: "string", description: "What it asks about in a word or two, in the visitor's language, e.g. 'Free time'" },
             suggestions: { type: "array", items: { type: "string" }, description: "Two to four short answers to tap" },
           },
-          required: ["text", "suggestions"],
+          required: ["text", "label", "suggestions"],
           additionalProperties: false,
         },
         "One short question that would most improve the next search, shown under the options, or null when you already know enough",
@@ -229,9 +231,10 @@ const ASK_QUESTIONS_TOOL: BetaTool = {
           type: "object",
           properties: {
             text: { type: "string", description: "The question, short, in the visitor's language" },
+            label: { type: "string", description: "What it asks about in a word or two, in the visitor's language, e.g. 'Free time', 'Occasion'" },
             suggestions: { type: "array", items: { type: "string" }, description: "Two to four short answers to tap" },
           },
-          required: ["text", "suggestions"],
+          required: ["text", "label", "suggestions"],
           additionalProperties: false,
         },
       },
@@ -329,6 +332,7 @@ export const FindGiftsInput = z.object({
   followUp: z
     .object({
       text: shortText(200),
+      label: shortText(40).optional().catch(undefined),
       suggestions: z
         .array(z.string())
         .transform((items) => items.map((item) => item.trim().slice(0, 60)).filter(Boolean).slice(0, MAX_SUGGESTIONS))
@@ -350,6 +354,7 @@ const AskQuestionsInput = z.object({
     .array(
       z.object({
         text: shortText(200),
+        label: shortText(40).optional().catch(undefined),
         suggestions: z
           .array(z.string())
           .transform((items) => items.map((item) => item.trim().slice(0, 60)).filter(Boolean).slice(0, MAX_SUGGESTIONS))
@@ -572,12 +577,27 @@ export function toOptions(report: ResearchReport, makeId: () => string = randomI
 
 // What the finder model sees of a search: enough to talk about the options
 // later ("the second one"), not the search results.
-function optionsSummary(shown: StoredOptions, followUpShown: boolean): string {
+// `followUp` is the question shown under them, if any: named, so it is not
+// asked again among the personalising questions (issue #82).
+export function optionsSummary(shown: StoredOptions, followUp: string | null): string {
   return JSON.stringify({
     shown: shown.options.map(({ id, title, price, shop }) => ({ id, title, ...(price ? { price } : {}), ...(shop ? { shop } : {}) })),
     recommendedId: shown.recommendedId,
-    note: `The visitor sees these options as cards, with your recommendation and why${followUpShown ? ", and your follow-up question under them" : ""}. Don't list them again.`,
+    note: followUp
+      ? `The visitor sees these options as cards, with your recommendation and why, and your follow-up question under them: "${followUp}". Don't list them again, and don't ask that question again.`
+      : "The visitor sees these options as cards, with your recommendation and why. Don't list them again.",
   })
+}
+
+// A question as the finder shows it.
+function questionEvent(question: { text: string; label?: string; suggestions: string[] }, state: FinderTurnState): FinderEvent {
+  return {
+    type: "question",
+    text: question.text,
+    ...(question.label ? { label: question.label } : {}),
+    ...(question.suggestions.length ? { suggestions: question.suggestions } : {}),
+    profileRead: state.profile !== null,
+  }
 }
 
 // ---------- Running the tools ----------
@@ -674,7 +694,7 @@ async function findGifts(call: BetaToolUseBlock, state: FinderTurnState, flags: 
   state.lastOptions = shown
   state.emit({ type: "options", options: shown.options, recommendedId: shown.recommendedId, why: shown.why })
   const followUpShown = await askFollowUp(input.followUp, state, context.language)
-  return { result: result(call, optionsSummary(shown, followUpShown)), terminal: true }
+  return { result: result(call, optionsSummary(shown, followUpShown && input.followUp ? input.followUp.text : null)), terminal: true }
 }
 
 // The one question under the options, if the model had one (issue #70). Its
@@ -689,7 +709,7 @@ async function askFollowUp(followUp: FindGiftsInput["followUp"], state: FinderTu
     console.error("[finder] could not check the follow-up question", describeError(error))
     return false
   }
-  state.emit({ type: "question", text: followUp.text, ...(followUp.suggestions.length ? { suggestions: followUp.suggestions } : {}) })
+  state.emit(questionEvent(followUp, state))
   return true
 }
 
@@ -708,7 +728,7 @@ async function askQuestions(call: BetaToolUseBlock, state: FinderTurnState): Pro
     }
   }
   for (const question of parsed.data.questions) {
-    state.emit({ type: "question", text: question.text, ...(question.suggestions.length ? { suggestions: question.suggestions } : {}) })
+    state.emit(questionEvent(question, state))
   }
   return { result: result(call, "The visitor sees the questions with answers to tap. Wait for their answers."), terminal: true }
 }

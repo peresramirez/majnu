@@ -1,9 +1,20 @@
 "use client"
 
 import Link from "next/link"
-import { RotateCcw } from "lucide-react"
+import { Check, RotateCcw } from "lucide-react"
 import type { GiftOption } from "@/lib/finder/events"
-import { PERSONALISE_MESSAGE, latestOptionsIndex, noticeRole, type FinderItem, type FinderState } from "./finder-state"
+import {
+  NO_PROFILE,
+  PERSONALISE_MESSAGE,
+  PROFILE_FIELD_LABEL,
+  SEND_ANSWERS,
+  latestOptionsIndex,
+  noticeRole,
+  openQuestions,
+  showsProfileField,
+  type FinderItem,
+  type FinderState,
+} from "./finder-state"
 import { GiftOptionCard } from "./gift-option-card"
 import { RichText } from "./rich-text"
 import { chip, smallButton, smallPrimary } from "./styles"
@@ -14,6 +25,65 @@ type Props = {
   onChoose: (option: GiftOption) => void
   // Starts an empty search: offered when this one is full (issue #70).
   onNewSearch?: () => void
+  // Issue #82: picking an answer, the profile field, and sending the answers
+  // (with whatever is in the message box) as one message.
+  onAnswer: (itemId: string, value: string) => void
+  onProfile: (change: { link?: string; none?: boolean }) => void
+  onSendAnswers: () => void
+  // The message box has words or files, so the answers can be sent without a pick.
+  draftReady?: boolean
+}
+
+// A picked answer: filled, with a check. Unpicked ones stay outlined.
+const pickedChip = "bg-night-rose/15 ring-night-rose/70 text-night-petal hover:bg-night-rose/20"
+
+function ProfileField({
+  state,
+  onProfile,
+  onSendAnswers,
+}: Pick<Props, "state" | "onProfile" | "onSendAnswers">) {
+  const { link, none } = state.profile
+  return (
+    <div className="mt-4">
+      <label htmlFor="finder-profile-answer" className="block text-[13px] font-medium text-night-lilac">
+        {PROFILE_FIELD_LABEL}
+      </label>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <input
+          id="finder-profile-answer"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="send"
+          maxLength={300}
+          value={link}
+          disabled={state.streaming}
+          placeholder="instagram.com/name or @name"
+          onChange={(e) => onProfile({ link: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              onSendAnswers()
+            }
+          }}
+          className={`h-9 min-w-0 flex-1 basis-[12rem] rounded-full bg-night-velvet px-3.5 text-[16px] text-night-petal ring-1 ring-inset ring-night-petal/20 placeholder:text-night-lilac/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-night-rose/60 disabled:opacity-50 sm:text-[14px]`}
+        />
+        <button
+          type="button"
+          aria-pressed={none}
+          disabled={state.streaming}
+          onClick={() => onProfile({ none: !none })}
+          className={`${chip} ${none ? pickedChip : ""}`}
+        >
+          {none && <Check className="mr-1 h-3.5 w-3.5" aria-hidden="true" />}
+          {NO_PROFILE}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // Under the newest ideas: what else Majnu can use to tailor the next search
@@ -99,9 +169,13 @@ const repliedAfter = (items: FinderItem[], i: number) => items.slice(i + 1).some
 
 // The conversation: what the visitor asked, what Majnu said, the gift ideas,
 // its questions with tappable answers, and limits or errors.
-export function Conversation({ state, onSend, onChoose, onNewSearch }: Props) {
+export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, onProfile, onSendAnswers, draftReady = false }: Props) {
   const { items, streaming } = state
   const newestOptions = latestOptionsIndex(items)
+  // The questions still open; the last one ends with the profile field and "Send answers".
+  const open = openQuestions(items)
+  const lastOpenId = open.length > 0 ? open[open.length - 1].id : null
+  const picked = open.some((q) => state.answers[q.id]) || (showsProfileField(state) && (state.profile.none || state.profile.link.trim() !== ""))
   // Between sending and the first words: what Majnu is doing, beside its mark.
   const waiting = streaming && items[items.length - 1]?.role === "user"
   return (
@@ -158,23 +232,62 @@ export function Conversation({ state, onSend, onChoose, onNewSearch }: Props) {
             )
           }
           case "question": {
-            // Answers stay tappable until the visitor has replied.
-            const open = !repliedAfter(items, i)
+            // Answers can be picked until the visitor sends (issue #82): then
+            // only the one picked stays, marked as the answer.
+            const isOpen = !repliedAfter(items, i)
+            const chosen = state.answers[item.id]
             return (
               <li key={item.id}>
                 <Said>
                   <span className="sr-only">Majnu asks: </span>
                   <RichText text={item.text} />
                 </Said>
-                {item.suggestions.length > 0 && open && (
-                  <div className="ml-[38px] mt-2.5 flex flex-wrap gap-2" role="group" aria-label="Suggested answers">
-                    {item.suggestions.map((s) => (
-                      <button key={s} type="button" className={chip} disabled={streaming} onClick={() => onSend(s)}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="ml-[38px]">
+                  {item.suggestions.length > 0 && isOpen && (
+                    <div className="mt-2.5 flex flex-wrap gap-2" role="group" aria-label={item.label ? `Answers: ${item.label}` : "Answers"}>
+                      {item.suggestions.map((s) => {
+                        const on = chosen === s
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            aria-pressed={on}
+                            className={`${chip} ${on ? pickedChip : ""}`}
+                            disabled={streaming}
+                            onClick={() => onAnswer(item.id, s)}
+                          >
+                            {on && <Check className="mr-1 h-3.5 w-3.5" aria-hidden="true" />}
+                            {s}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {!isOpen && chosen && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-night-rose/10 px-3 py-1 text-[13px] font-medium text-night-petal ring-1 ring-inset ring-night-rose/40">
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span className="sr-only">You answered: </span>
+                      {chosen}
+                    </p>
+                  )}
+                  {item.id === lastOpenId && (
+                    <>
+                      {showsProfileField(state) && <ProfileField state={state} onProfile={onProfile} onSendAnswers={onSendAnswers} />}
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          className={`${smallPrimary} aria-disabled:cursor-not-allowed aria-disabled:opacity-50`}
+                          aria-disabled={streaming || !(picked || draftReady)}
+                          onClick={() => {
+                            if (!streaming && (picked || draftReady)) onSendAnswers()
+                          }}
+                        >
+                          {SEND_ANSWERS}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </li>
             )
           }

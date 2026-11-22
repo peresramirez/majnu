@@ -281,11 +281,12 @@ describe("personalising", () => {
     )
     const result = await runFinderTurn({ history: [], message: "Personalisieren", state: state({ lastOptions: shown }) })
 
+    // No profile read yet: the finder adds its profile field under them (issue #82).
     expect(events).toEqual([
       { type: "text", delta: "Ein paar Fragen:" },
-      { type: "question", text: "Wie alt wird sie?", suggestions: ["50", "60", "70"] },
-      { type: "question", text: "Was macht sie gern?", suggestions: ["Garten", "Lesen", "Reisen", "Kochen"] },
-      { type: "question", text: "Was arbeitet sie?" },
+      { type: "question", text: "Wie alt wird sie?", suggestions: ["50", "60", "70"], profileRead: false },
+      { type: "question", text: "Was macht sie gern?", suggestions: ["Garten", "Lesen", "Reisen", "Kochen"], profileRead: false },
+      { type: "question", text: "Was arbeitet sie?", profileRead: false },
     ])
     // Checked, not claimed: the search comes with the answers.
     expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
@@ -422,11 +423,12 @@ describe("reading a public profile", () => {
       (block) => block.tool_use_id === id,
     )!
 
-  it("may ask for a public profile once, whenever Majnu wants to know more, and only reads links the visitor gave", () => {
+  it("leaves asking for a profile to the finder's own field, and only reads links the visitor gave", () => {
     expect(FINDER_TOOLS.map((tool) => tool.name)).toEqual(["find_gifts", "ask_questions", "read_profile", "fill_wrap"])
-    expect(FINDER_SYSTEM_PROMPT).toContain("When you want to know more about the person, one of your questions may ask for a public Instagram, TikTok or LinkedIn profile")
+    // Issue #82: the field under the questions asks every time, so Majnu doesn't.
+    expect(FINDER_SYSTEM_PROMPT).toContain("Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn")
     expect(FINDER_SYSTEM_PROMPT).toContain('"No public profile"')
-    expect(FINDER_SYSTEM_PROMPT).toContain("Ask it once in a conversation at most")
+    expect(FINDER_SYSTEM_PROMPT).toContain("don't ask for a profile in your questions")
     expect(FINDER_SYSTEM_PROMPT).toContain("One profile per conversation.")
     expect(FINDER_TOOLS[2].description).toContain("Instagram, TikTok or LinkedIn")
     expect(FINDER_SYSTEM_PROMPT).toContain("never guess one or look someone up")
@@ -606,7 +608,7 @@ describe("searching now or asking first (issue #70)", () => {
     scriptModel(reply([askCall([{ text: "Wo soll das Geschenk hin?", suggestions: ["Deutschland", "Venezuela"] }])]))
     const s = state()
     await runFinderTurn({ history: [], message: "Mein Freund ist aus Venezuela, 30, mag Videospiele", state: s })
-    expect(events).toEqual([{ type: "question", text: "Wo soll das Geschenk hin?", suggestions: ["Deutschland", "Venezuela"] }])
+    expect(events).toEqual([{ type: "question", text: "Wo soll das Geschenk hin?", suggestions: ["Deutschland", "Venezuela"], profileRead: false }])
     expect(canSearch).toHaveBeenCalledWith("user-1", "session-1", expect.any(Date), "de")
     expect(claimSearch).not.toHaveBeenCalled()
     expect(researchGiftReport).not.toHaveBeenCalled()
@@ -639,12 +641,15 @@ describe("searching now or asking first (issue #70)", () => {
   })
 
   it("adds one follow-up question under the options, only while a search is left", async () => {
-    const followUp = { text: "Was macht sie in ihrer Freizeit?", suggestions: ["Garten", "Lesen", "Reisen"] }
+    const followUp = { text: "Was macht sie in ihrer Freizeit?", label: "Freizeit", suggestions: ["Garten", "Lesen", "Reisen"] }
     const { requests } = scriptModel(reply([findCall({ ...MOTHER, followUp })]))
-    await runFinderTurn({ history: [], message: "Mama", state: state() })
+    const result = await runFinderTurn({ history: [], message: "Mama", state: state() })
     expect(events.map((e) => e.type)).toEqual(["context", "status", "options", "question"])
-    expect(events[3]).toEqual({ type: "question", ...followUp })
+    expect(events[3]).toEqual({ type: "question", ...followUp, profileRead: false })
     expect(requests).toHaveLength(1)
+    // Named in the search's result, so Majnu does not ask it again (issue #82).
+    const searched = result.appended.at(-1)?.content as { content: string }[]
+    expect(JSON.parse(searched[0].content).note).toContain(`"Was macht sie in ihrer Freizeit?". Don't list them again, and don't ask that question again.`)
 
     events = []
     vi.mocked(canSearch).mockResolvedValue({ ok: false, reason: "session_full", message: "Voll." })

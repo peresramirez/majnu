@@ -100,8 +100,13 @@ export type FinderEvent =
   | { type: "context"; context: FinderContext }
   // Three options (sometimes fewer), with the one Majnu recommends and why.
   | { type: "options"; options: GiftOption[]; recommendedId: string; why: string }
-  // A personalising question; `suggestions` become tappable answers.
-  | { type: "question"; text: string; suggestions?: string[] }
+  // A personalising question; `suggestions` become answers the visitor picks
+  // (issue #82: picked, not sent, until they send all their answers as one
+  // message). `label` names what it asks about in a word or two ("Free
+  // time"), for that message. `profileRead` says a public profile was already
+  // read in this session, so the finder offers no profile field under the
+  // questions. Both added for issue #82 (additive).
+  | { type: "question"; text: string; suggestions?: string[]; label?: string; profileRead?: boolean }
   | { type: "limit"; reason: FinderLimitReason; message: string }
   | { type: "error"; message: string }
   // On the wrap step: what Majnu heard for the page (fill_wrap), filled into

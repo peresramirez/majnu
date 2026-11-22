@@ -19,7 +19,7 @@ export type FinderItem =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "assistant"; text: string }
   | { id: string; role: "options"; options: GiftOption[]; recommendedId: string; why: string }
-  | { id: string; role: "question"; text: string; suggestions: string[] }
+  | { id: string; role: "question"; text: string; suggestions: string[]; label?: string; profileRead?: boolean }
   | { id: string; role: "notice"; tone: "limit" | "error"; message: string; reason?: FinderLimitReason; retry?: string }
 
 export type FinderState = {
@@ -35,10 +35,25 @@ export type FinderState = {
   // The last message sent, so an error can offer to send it again.
   lastMessage: string | null
   nextId: number
+  // Issue #82: the answer picked for each question, by item id. Picking sends
+  // nothing; all of them go in one message (composeAnswers). Kept after
+  // sending, so answered questions show what was picked.
+  answers: Record<string, string>
+  // The optional profile field under the open questions.
+  profile: ProfileAnswer
+  // The visitor sent "No public profile": the field is not offered again.
+  profileDeclined: boolean
 }
 
+export type ProfileAnswer = { link: string; none: boolean }
+
 export type FinderAction =
-  | { type: "send"; text: string }
+  // `answered`: the message carries the picked answers and the profile field
+  // (composeAnswers). Otherwise the open questions' picks are dropped.
+  | { type: "send"; text: string; answered?: boolean }
+  // Picks an answer, or clears it when it is picked again.
+  | { type: "answer"; itemId: string; value: string }
+  | { type: "profile"; link?: string; none?: boolean }
   | { type: "event"; event: FinderEvent }
   // The request failed before or while streaming (network, HTTP status, sign-in).
   // `reason` adds the matching action, e.g. a sign-in link.
@@ -55,8 +70,22 @@ export const PERSONALISE_MESSAGE = "Personalise the gift"
 export const DEFAULT_ERROR = "Something went wrong finding gifts. Try again."
 export const CUT_OFF = "The reply stopped before it finished. Send your message again to pick up where it left off."
 
+export const EMPTY_PROFILE: ProfileAnswer = { link: "", none: false }
+
 export function initialFinderState(): FinderState {
-  return { sessionId: null, items: [], streaming: false, status: null, steps: 0, context: null, lastMessage: null, nextId: 0 }
+  return {
+    sessionId: null,
+    items: [],
+    streaming: false,
+    status: null,
+    steps: 0,
+    context: null,
+    lastMessage: null,
+    nextId: 0,
+    answers: {},
+    profile: EMPTY_PROFILE,
+    profileDeclined: false,
+  }
 }
 
 type NewItem = FinderItem extends infer T ? (T extends FinderItem ? Omit<T, "id"> : never) : never
@@ -90,7 +119,13 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
     case "options":
       return push(state, { role: "options", options: event.options, recommendedId: event.recommendedId, why: event.why })
     case "question":
-      return push(state, { role: "question", text: event.text, suggestions: event.suggestions ?? [] })
+      return push(state, {
+        role: "question",
+        text: event.text,
+        suggestions: event.suggestions ?? [],
+        ...(event.label ? { label: event.label } : {}),
+        ...(event.profileRead ? { profileRead: true } : {}),
+      })
     case "limit":
       return push(state, { role: "notice", tone: "limit", message: event.message, reason: event.reason })
     case "error":
@@ -111,8 +146,23 @@ function applyEvent(state: FinderState, event: FinderEvent): FinderState {
 export function finderReducer(state: FinderState, action: FinderAction): FinderState {
   switch (action.type) {
     case "send": {
+      const open = openQuestions(state.items)
+      // What was picked for questions this message does not answer is dropped.
+      const answers = action.answered ? state.answers : withoutKeys(state.answers, open.map((q) => q.id))
+      const declined = state.profileDeclined || (action.answered === true && showsProfileField(state) && state.profile.none)
       const next = push(state, { role: "user", text: action.text })
-      return { ...next, streaming: true, status: null, steps: 0, lastMessage: action.text }
+      return { ...next, streaming: true, status: null, steps: 0, lastMessage: action.text, answers, profile: EMPTY_PROFILE, profileDeclined: declined }
+    }
+    case "answer": {
+      const question = openQuestions(state.items).find((q) => q.id === action.itemId)
+      if (!question || state.streaming || !question.suggestions.includes(action.value)) return state
+      if (state.answers[action.itemId] === action.value) return { ...state, answers: withoutKeys(state.answers, [action.itemId]) }
+      return { ...state, answers: { ...state.answers, [action.itemId]: action.value } }
+    }
+    case "profile": {
+      if (action.none !== undefined) return { ...state, profile: action.none ? { link: "", none: true } : { ...state.profile, none: false } }
+      const link = (action.link ?? "").slice(0, MAX_PROFILE_LINK)
+      return { ...state, profile: { link, none: link.trim() ? false : state.profile.none } }
     }
     case "event":
       return applyEvent(state, action.event)
@@ -136,6 +186,68 @@ export function finderReducer(state: FinderState, action: FinderAction): FinderS
     case "reset":
       return initialFinderState()
   }
+}
+
+// --- Answering Majnu's questions (issue #82) ---------------------------------
+
+export const NO_PROFILE = "No public profile"
+export const PROFILE_FIELD_LABEL = "Their Instagram, TikTok or LinkedIn (optional)"
+export const SEND_ANSWERS = "Send answers"
+// The message box's placeholder while questions are open.
+export const ANSWER_PLACEHOLDER = "Or answer in your own words"
+const MAX_PROFILE_LINK = 300
+
+function withoutKeys(record: Record<string, string>, keys: string[]): Record<string, string> {
+  if (!keys.some((key) => key in record)) return record
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)))
+}
+
+// The questions the visitor can still answer: those after their newest message.
+export function openQuestions(items: FinderItem[]): Extract<FinderItem, { role: "question" }>[] {
+  let lastUser = -1
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].role === "user") {
+      lastUser = i
+      break
+    }
+  }
+  return items.slice(lastUser + 1).filter((item): item is Extract<FinderItem, { role: "question" }> => item.role === "question")
+}
+
+// Whether the open questions end with the profile field: always, until a
+// public profile has been read in this session or the visitor said they have
+// none, so Majnu does not have to remember to ask.
+export function showsProfileField(state: Pick<FinderState, "items" | "profileDeclined">): boolean {
+  const open = openQuestions(state.items)
+  return open.length > 0 && !state.profileDeclined && !open.some((q) => q.profileRead)
+}
+
+function sentence(text: string): string {
+  const trimmed = text.trim()
+  return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`
+}
+
+// The one message that answers the open questions: each picked answer, as
+// "Free time: video games." (or the question and the answer when Majnu gave
+// no label), then the profile field, then what the visitor typed.
+export function composeAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined">, typed: string): string {
+  const parts: string[] = []
+  for (const question of openQuestions(state.items)) {
+    const answer = state.answers[question.id]?.trim()
+    if (!answer) continue
+    parts.push(question.label ? sentence(`${question.label.trim()}: ${answer}`) : `${question.text.trim()} ${sentence(answer)}`)
+  }
+  if (showsProfileField(state)) {
+    if (state.profile.none) parts.push(`${NO_PROFILE}.`)
+    else if (state.profile.link.trim()) parts.push(state.profile.link.trim())
+  }
+  if (typed.trim()) parts.push(typed.trim())
+  return parts.join(" ")
+}
+
+// Something to send besides typed words: a picked answer or the profile field.
+export function hasAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined">): boolean {
+  return composeAnswers(state, "") !== ""
 }
 
 // The index of the newest options item: only that one offers "Personalise the gift".

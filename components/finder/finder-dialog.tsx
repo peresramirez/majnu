@@ -7,7 +7,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
-import { finderAnnouncement, statusLit } from "./finder-state"
+import { ANSWER_PLACEHOLDER, finderAnnouncement, hasAnswers, openQuestions, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import type { Finder } from "./use-finder"
 import { useVisualViewportVars } from "./visual-viewport"
@@ -50,6 +50,9 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
   // The message box stays while the visitor chooses a design and fills in the
   // page: what they type there goes to Majnu with their choice (issue #70).
   const composing = wrap.stage === "closed" || wrap.stage === "choose"
+  // Majnu's questions are waiting for answers (issue #82).
+  const answering = !wrapping && openQuestions(state.items).length > 0
+  const sendable = draft.trim() !== "" || hasAnswers(state)
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -98,9 +101,11 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
     content.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus({ preventScroll: true })
   }, [wrap.stage, open])
 
+  // Sends what is typed, with the answers picked for Majnu's open questions
+  // (issue #82): Enter, the send button and "Send answers" all come here.
   function submit(e?: FormEvent) {
     e?.preventDefault()
-    if (send(draft)) setDraft("")
+    if (send(draft, { answers: true })) setDraft("")
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -198,6 +203,10 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     state={state}
                     onSend={(text) => void send(text)}
                     onChoose={choose}
+                    onAnswer={finder.answer}
+                    onProfile={finder.setProfile}
+                    onSendAnswers={() => submit()}
+                    draftReady={draft.trim() !== ""}
                     onNewSearch={() => {
                       finder.reset()
                       setDraft("")
@@ -225,7 +234,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     onKeyDown={onKeyDown}
                     enterKeyHint="send"
                     maxLength={1000}
-                    placeholder={wrapping ? WRAP_PLACEHOLDER : MORE_PLACEHOLDER}
+                    placeholder={wrapping ? WRAP_PLACEHOLDER : answering ? ANSWER_PLACEHOLDER : MORE_PLACEHOLDER}
                     className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
                   />
                   <VoiceButton
@@ -244,7 +253,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                   <button
                     type="submit"
                     aria-label="Send"
-                    aria-disabled={state.streaming || !draft.trim()}
+                    aria-disabled={state.streaming || !sendable}
                     className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-[background-color,opacity,transform] duration-200 before:absolute before:-inset-0.5 before:content-[''] hover:bg-[#F1C4A9] active:scale-95 aria-disabled:opacity-50 ${focusRing}`}
                   >
                     <ArrowUp className="h-5 w-5" aria-hidden="true" />

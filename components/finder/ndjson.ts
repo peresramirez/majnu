@@ -69,7 +69,14 @@ export function parseFinderEvent(line: string): FinderEvent | null {
     case "question": {
       if (!isString(e.text)) return null
       const suggestions = Array.isArray(e.suggestions) ? e.suggestions.filter(isString).filter((s) => s.trim() !== "") : undefined
-      return suggestions && suggestions.length ? { type: "question", text: e.text, suggestions } : { type: "question", text: e.text }
+      // The label and whether a profile was read: issue #82.
+      return {
+        type: "question",
+        text: e.text,
+        ...(suggestions && suggestions.length ? { suggestions } : {}),
+        ...(isString(e.label) && e.label.trim() ? { label: e.label } : {}),
+        ...(e.profileRead === true ? { profileRead: true } : {}),
+      }
     }
     case "limit":
       return isString(e.reason) && LIMIT_REASONS.has(e.reason) && isString(e.message)
