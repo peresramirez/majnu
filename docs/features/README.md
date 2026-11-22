@@ -25,7 +25,8 @@ Every page follows the same outline:
 | [data-and-security.md](data-and-security.md) | Schema and migrations, row-level security, server-only writes, the spending guard, secrets, deploying |
 | [landing-and-brand.md](landing-and-brand.md) | The landing page and its scroll scene, the Night Post brand, the legal pages |
 | [agent-workflow.md](agent-workflow.md) | How the repository is built: a lead session, parallel task sessions, CI before merge |
-| [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and the four app tabs |
+| [guest-accounts.md](guest-accounts.md) | Guest (anonymous) accounts, upgrading them with email or Google, the Turnstile bot check on sign-in, and where signing in lands (the gift finder) |
+| [app-shell.md](app-shell.md) | The signed-in app: the four tabs (Find a gift, My gifts, Create, Tracker), the gift finder inline as the first screen, the Create hub for letters, invitations, calendars and templates, and Purchases in the account menu (issue #47) |
 | [voice-input.md](voice-input.md) | Voice input: the microphone button in the finder and the Letters & invitations chat, `POST /api/transcribe` with OpenAI's `gpt-transcribe`, and the daily limits in `voice_transcriptions` (issue #37) |
 | [gift-list.md](gift-list.md) | Gift lists on wedding and birthday invitations: Majnu researches and adds gifts, guests claim one each with `POST /api/claim` (no account, one claim per gift, a per-visitor limit), and the host sees who is bringing what on My gifts and can release a claim (issue #35) |
 | [audio-note.md](audio-note.md) | Voice notes in gifts: the sender records up to two minutes after wrapping, on the create page or in My gifts; one note per letter in a private Storage bucket, deleted with the letter; recipients tap "Tap to hear" on every template and over designs, streamed with Range support from `/l/<slug>/audio` (issue #38) |
