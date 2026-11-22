@@ -48,6 +48,7 @@ A door with a gift and no note shows "A little something" as its title on the re
 | Piece | Job |
 |---|---|
 | `app/(app)/dashboard/create/page.tsx` | The Create tab's "Make a calendar" links to the start (or, for a guest, to sign-up with `next` back to it). |
+| `components/app/tabs.ts`, `components/app/gift-card.tsx` | `/dashboard/calendars` lights the Create tab; My gifts' "Continue" opens a calendar in this editor (`giftEditorPath()`), which sends a calendar made in the letters chat back to its chat. |
 | `app/(app)/dashboard/calendars/new/page.tsx` | The start: the guest gate or the setup form. |
 | `app/(app)/dashboard/calendars/[id]/page.tsx` | The editor page: loads the letter (RLS) and its session; a calendar made in the letters chat has no session and is sent back to its chat. |
 | `components/calendars/setup-form.tsx` | Who it is for, the budget per door and for the last door, the kind of calendar, the start date or big day, the timezone, the sender's name. |
@@ -110,7 +111,7 @@ A door with a gift and no note shows "A little something" as its title on the re
 
 ## Open questions
 
-- **Links into the editor** (files of other sessions, left for the lead): the finder's wrapped-gift screen (`components/finder/wrap-view.tsx`) still sends "Make a calendar" to the letters chat with `?template=advent-classic`; it should link to `/dashboard/calendars/new`, as the Create tab now does. `activeTab()` in `components/app/tabs.ts` should count `/dashboard/calendars` as the Create tab. My gifts (`components/app/gift-card.tsx`) links every letter to `/create/<id>`, where a calendar made here opens as a chat with an empty conversation; it should link to `/dashboard/calendars/<id>` for calendars (the editor sends chat-made ones back to their chat).
+- **One link left in another session's file:** the finder's wrapped-gift screen (`components/finder/wrap-view.tsx`) still sends "Make a calendar" to the letters chat with `?template=advent-classic`; it should link to `/dashboard/calendars/new`, as the Create tab does.
 - **Calendars made in the letters chat** have no session, so no pool or notes here; the editor sends them back to their chat. A setup step could create a session for them.
 - **The language of the editor.** The editor is in English like the rest of the app; the pool's ideas and Majnu's notes follow the browser's language.
 - **More like this** spends one of the 2 personalised searches a day, which is little when filling 24 doors. A separate small allowance (say 3 a day) could be added to `pool-limits.ts` if senders run out.
