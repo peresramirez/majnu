@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { createClient } from "@supabase/supabase-js"
 
-const GROUPS = new Set(["mother", "father", "partner", "best_friend", "sibling", "grandparent", "colleague", "child_teen", "general"])
+const GROUPS = new Set(["mother", "father", "partner", "best_friend", "sibling", "grandparent", "colleague", "child_teen", "cat", "dog", "bird", "general"])
 const BATCH = 100
 
 // npm passes flags after `--` as arguments; read them from argv only.
