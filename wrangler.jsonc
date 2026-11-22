@@ -48,6 +48,9 @@
       }
     ]
   },
+  // Cloudflare Email Service: Majnu's account emails (lib/email/sender.ts),
+  // sent from hello@majnu.app only. majnu.app must be onboarded to Email Sending.
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["hello@majnu.app"] }],
   "workers_dev": true,
   "routes": [
     { "pattern": "majnu.app", "custom_domain": true },

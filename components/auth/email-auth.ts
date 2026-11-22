@@ -11,7 +11,10 @@
 // account stays a guest account.
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-type Auth = Pick<SupabaseClient["auth"], "getUser" | "signInWithPassword" | "signUp" | "updateUser">
+type Auth = Pick<
+  SupabaseClient["auth"],
+  "getUser" | "signInWithPassword" | "signUp" | "updateUser" | "signInWithOtp" | "resetPasswordForEmail"
+>
 
 export type AuthFailure = { message: string; code?: string }
 
@@ -55,6 +58,38 @@ export async function signUpWithEmail(
   const { data, error } = await auth.signUp({ email, password, options: captchaOptions(captchaToken) })
   if (error) return { ok: false, error: toFailure(error), upgradedGuest: false }
   return { ok: true, status: data.session ? "signed_in" : "confirm_email", upgradedGuest: false }
+}
+
+export type EmailLinkResult = { ok: true } | { ok: false; error: AuthFailure }
+
+// "Email me a sign-in link": a one-time link to an existing account, sent by
+// Majnu through Cloudflare Email Service (Supabase's Send Email hook). It does
+// not create accounts (sign-up does that). For an address with no account
+// Supabase refuses with otp_disabled; that counts as sent, so the form says
+// the same thing either way and does not reveal who has an account.
+// `redirectTo` is the auth callback with `next`; the email's link carries
+// `next` on to /auth/confirm.
+export async function sendSignInLink(
+  auth: Auth,
+  { email, captchaToken, redirectTo }: { email: string; captchaToken?: string; redirectTo: string },
+): Promise<EmailLinkResult> {
+  const { error } = await auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: redirectTo, ...captchaOptions(captchaToken) },
+  })
+  if (!error || error.code === "otp_disabled" || /signups not allowed/i.test(error.message)) return { ok: true }
+  return { ok: false, error: toFailure(error) }
+}
+
+// "Forgot your password?": Supabase sends a reset link (only when the account
+// exists, but answers the same either way). The link signs the browser in and
+// lands on /reset-password, where updateUser sets the new password.
+export async function sendPasswordReset(
+  auth: Auth,
+  { email, captchaToken, redirectTo }: { email: string; captchaToken?: string; redirectTo: string },
+): Promise<EmailLinkResult> {
+  const { error } = await auth.resetPasswordForEmail(email, { redirectTo, ...captchaOptions(captchaToken) })
+  return error ? { ok: false, error: toFailure(error) } : { ok: true }
 }
 
 // Without a Turnstile site key (local tests, or before the widget exists) the

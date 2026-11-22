@@ -196,7 +196,7 @@ export default function PrivacyPage() {
       <p>These providers process data on our behalf, under data processing agreements (Art. 28 GDPR):</p>
       <ul>
         <li><strong>Supabase</strong>: database and sign-in. Servers in Frankfurt, Germany.</li>
-        <li><strong>Cloudflare</strong>: hosting and delivery of the site, the country and region used by the gift finder, the Turnstile bot check, and forwarding of email sent to {operator.email}.</li>
+        <li><strong>Cloudflare</strong>: hosting and delivery of the site, the country and region used by the gift finder, the Turnstile bot check, sending account emails (sign-in links, password resets and email confirmations) from hello@majnu.app through Cloudflare Email Service, and forwarding of email sent to {operator.email}.</li>
         <li><strong>Anthropic</strong>: the AI model that writes Majnu&apos;s replies, searches the web for gift ideas, and reads the photos and documents you share in the gift finder to write short notes about them. Under its commercial terms, Anthropic does not use this data to train its models.</li>
         <li><strong>Google</strong>: sign-in with Google, and the mailbox our email is forwarded to.</li>
         <li><strong>Stripe</strong>: payments for personalised wrappers, and their receipts.</li>
