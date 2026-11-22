@@ -83,7 +83,7 @@ export function PartyInvite3D({ content }: { content: LetterContent }) {
           <div className="pointer-events-none relative flex min-h-[100svh] flex-col items-center justify-between px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-14 sm:pt-16">
             <div className={`pt-words text-center ${stage !== "closed" ? "opacity-0" : ""}`}>
               <p className="text-[12px] font-semibold uppercase tracking-[0.28em] text-[var(--page-muted)]">{content.occasion || "You're invited"}</p>
-              <h1 className="mt-3 text-balance text-[34px] leading-tight sm:text-[42px]" style={displayStyle}>
+              <h1 className="mt-3 text-balance text-[30px] leading-tight sm:text-[42px]" style={displayStyle}>
                 You&rsquo;re on the list, {name}
               </h1>
             </div>

@@ -182,8 +182,11 @@ export async function createTicketScene(container: HTMLElement, opts: TicketScen
   }
   const edge = new THREE.MeshStandardMaterial({ color: c.accent, roughness: 0.6 })
   const ticket = new THREE.Group()
-  // Body above the perforation, stub below; the whole ticket centred.
-  ticket.position.y = -(BODY - STUB) / 2 + 0.05
+  // Body above the perforation, stub below; the whole ticket centred a little
+  // low, clear of the heading above it and the button below.
+  const restY = -(BODY - STUB) / 2 - 0.2
+  ticket.position.y = restY
+  ticket.scale.setScalar(0.88)
   scene.add(ticket)
   const body = slab({ shape: bodyShape(), depth: DEPTH, front: tex(frontTexture(words, c, f), BODY, BODY / 2), back: tex(backTexture(words, c, f), BODY, BODY / 2), edge })
   ticket.add(body)
@@ -215,7 +218,7 @@ export async function createTicketScene(container: HTMLElement, opts: TicketScen
     if (idle) {
       ticket.rotation.y = Math.sin(time * 0.7) * 0.22
       ticket.rotation.z = Math.sin(time * 0.5) * 0.03
-      ticket.position.y = -(BODY - STUB) / 2 + 0.05 + Math.sin(time * 1.3) * 0.04
+      ticket.position.y = restY + Math.sin(time * 1.3) * 0.04
     }
     if (stubFall) {
       stubFall.vy -= 6 * dt

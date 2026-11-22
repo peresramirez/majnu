@@ -13,6 +13,7 @@ export type PaperColors = {
   wrap: string
   wrapShade: string
   accent: string
+  accentInk: string
   accentSoft: string
   deep: string
   deepInk: string
@@ -26,9 +27,15 @@ export type PaperFonts = {
   script: boolean
 }
 
+// The first plain colour in a CSS value. Some palette variables are gradients
+// (--deep), which a canvas cannot paint with; their first stop stands in.
+export function firstColor(value: string, fallback: string): string {
+  return value.match(/#[0-9a-f]{3,8}\b|(?:rgb|hsl)a?\([^)]*\)/i)?.[0] ?? fallback
+}
+
 export function readColors(el: HTMLElement): PaperColors {
   const s = getComputedStyle(el)
-  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
+  const v = (name: string, fallback: string) => firstColor(s.getPropertyValue(name).trim(), fallback)
   return {
     page: v("--page-flat", "#1E1430"),
     paper: v("--paper", "#F7F0E6"),
@@ -38,6 +45,7 @@ export function readColors(el: HTMLElement): PaperColors {
     wrap: v("--wrap", "#33224A"),
     wrapShade: v("--wrap-shade", "#271A39"),
     accent: v("--accent", "#E2A98A"),
+    accentInk: v("--accent-ink", "#2A1C3A"),
     accentSoft: v("--accent-soft", "#CD8DBD"),
     deep: v("--deep", "#33224A"),
     deepInk: v("--deep-ink", "#F7F0E6"),

@@ -61,6 +61,9 @@ function labelTexture(words: TinWords, c: PaperColors, f: PaperFonts) {
   const canvas = document.createElement("canvas")
   canvas.width = canvas.height = size
   const ctx = canvas.getContext("2d")!
+  // The lid's UVs mirror the canvas; drawing it mirrored makes it read true.
+  ctx.translate(size, 0)
+  ctx.scale(-1, 1)
   ctx.fillStyle = c.accent
   ctx.fillRect(0, 0, size, size)
   ctx.fillStyle = c.paper
@@ -97,10 +100,9 @@ function cardTexture(words: TinWords, c: PaperColors, f: PaperFonts) {
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext("2d")!
-  const g = ctx.createLinearGradient(0, 0, w, h)
-  g.addColorStop(0, c.accent)
-  g.addColorStop(1, c.paperAccent)
-  ctx.fillStyle = g
+  // The accent colour, with the palette's own ink for it, so the words read
+  // on every palette.
+  ctx.fillStyle = c.accent
   ctx.fillRect(0, 0, w, h)
   // A soft sheen across the card.
   const sheen = ctx.createLinearGradient(0, 0, w, 0)
@@ -111,7 +113,7 @@ function cardTexture(words: TinWords, c: PaperColors, f: PaperFonts) {
   ctx.fillRect(0, 0, w, h)
   ctx.textAlign = "left"
   ctx.textBaseline = "alphabetic"
-  ctx.fillStyle = c.deep
+  ctx.fillStyle = c.accentInk
   ctx.font = `700 30px ${f.body}`
   ctx.fillText(words.eyebrow.toUpperCase(), 64, 96)
   if (words.price) {
@@ -121,7 +123,7 @@ function cardTexture(words: TinWords, c: PaperColors, f: PaperFonts) {
   }
   drawStack(
     ctx,
-    [{ kind: "text", text: words.giftTitle, font: `${f.displayWeight} ${f.script ? 92 : 78}px ${f.display}`, color: c.deep, lineHeight: f.script ? 94 : 86, maxLines: 3 }],
+    [{ kind: "text", text: words.giftTitle, font: `${f.displayWeight} ${f.script ? 92 : 78}px ${f.display}`, color: c.accentInk, lineHeight: f.script ? 94 : 86, maxLines: 3 }],
     w / 2,
     140,
     h - 120,
@@ -129,7 +131,7 @@ function cardTexture(words: TinWords, c: PaperColors, f: PaperFonts) {
   )
   ctx.textAlign = "left"
   ctx.textBaseline = "alphabetic"
-  ctx.fillStyle = c.deep
+  ctx.fillStyle = c.accentInk
   ctx.globalAlpha = 0.75
   ctx.font = `600 30px ${f.body}`
   ctx.fillText(words.forName, 64, h - 64)
@@ -198,6 +200,7 @@ export async function createTinScene(container: HTMLElement, opts: TinSceneOptio
   // The cap's UVs run round the circle; turn the label to read from the front.
   labelTex.center.set(0.5, 0.5)
   labelTex.rotation = -Math.PI / 2
+  labelTex.flipY = false
   const lidBody = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.035, R + 0.035, LID_H, 64), [
     metal(c.accent),
     new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.55, metalness: 0.15 }),
@@ -279,7 +282,7 @@ export async function createTinScene(container: HTMLElement, opts: TinSceneOptio
       duration: 1.1,
       easing: ease.inOutCubic,
       onUpdate: (t) => {
-        lid.position.set(1.9 * t, ly + Math.sin(t * Math.PI) * 0.9 - t * 0.5, -0.6 * t)
+        lid.position.set(2.8 * t, ly + Math.sin(t * Math.PI) * 0.9 - t * 0.5, -0.6 * t)
         lid.rotation.z = -0.9 * t
       },
     })
@@ -300,7 +303,7 @@ export async function createTinScene(container: HTMLElement, opts: TinSceneOptio
     scene.attach(card)
     const p0 = card.position.clone()
     const q0 = card.quaternion.clone()
-    const target = new THREE.Vector3(0, 0.55, 1.6)
+    const target = new THREE.Vector3(0, 0.85, 1.6)
     const q1 = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(camera.position.clone(), target, camera.up))
     // Two turns about the vertical, unwound as it settles.
     const spin = new THREE.Quaternion()

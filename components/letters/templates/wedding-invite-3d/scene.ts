@@ -97,7 +97,8 @@ function bottomTexture(words: InviteWords, c: PaperColors, f: PaperFonts) {
         { kind: "text", text: words.address, font: `400 24px ${f.body}`, color: c.paperMuted, lineHeight: 32, maxLines: 2 },
       ] as const)
     : ([{ kind: "text", text: words.forName, font: `500 52px ${f.formal}`, color: c.paperInk, lineHeight: 64, maxLines: 2 }] as const)
-  drawStack(ctx, [...blocks], w / 2, 50, h - 90, w - 330)
+  // Narrower than the page: the arches of cut paper stand in front of it.
+  drawStack(ctx, [...blocks], w / 2, 40, h - 130, w - 420)
   return canvas
 }
 
@@ -211,7 +212,7 @@ export async function createInviteScene(container: HTMLElement, opts: InviteScen
     return { g, depth: 0.1 + 0.11 * i }
   })
 
-  const shadow = blobShadow(1.6, 0.28)
+  const shadow = blobShadow(1.4, 0.2)
   shadow.position.set(0, -H - 0.35, 0.2)
   shadow.scale.set(1, 0.5, 1)
   scene.add(shadow)
