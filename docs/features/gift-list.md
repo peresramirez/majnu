@@ -2,7 +2,7 @@
 
 ## What it does
 
-A host making a wedding or birthday invitation can add a **gift list**: gifts they would like, which Majnu can research for them in the Letters & invitations chat. Guests see the list at the end of the invitation and tap **I'll bring this** to claim a gift, optionally leaving a first name for the host. A claimed gift shows as taken for everyone else and cannot be claimed twice. Guests need no account and nothing is stored on their device. The host sees who is bringing what on **My gifts** and can release a claim. Issue #35, decided in [plan.md](../plan.md) ("Gift list on invitations").
+A host making a wedding or birthday invitation (`wedding-invite`, `party-invite`, `wedding-envelope-3d`, or a `party-box` with the party's date and place) can add a **gift list**: gifts they would like, which Majnu can research for them in the Letters & invitations chat. Guests see the list at the end of the invitation and tap **I'll bring this** to claim a gift, optionally leaving a first name for the host. A claimed gift shows as taken for everyone else and cannot be claimed twice. Guests need no account and nothing is stored on their device. The host sees who is bringing what on **My gifts** and can release a claim. Issue #35, decided in [plan.md](../plan.md) ("Gift list on invitations").
 
 ## How it works
 
@@ -29,8 +29,8 @@ flowchart LR
 
 ### The host adds gifts
 
-1. The main agent's prompt ([`main.ts`](../../lib/agents/main.ts), step 5) offers a gift list once, after a wedding or birthday invitation is built. If the host wants ideas, it calls `research_gifts` with the host (or the couple) as the person the gifts are for; the research sub-agent is unchanged.
-2. The host picks some, and the agent calls **`update_gift_list`** ([`tools.ts`](../../lib/agents/tools.ts)) with `add` (title, description, price, link, copied from the research or the host) and/or `removeIds`. The tool refuses anything but a built `wedding-invite` or `party-invite`.
+1. The main agent's prompt ([`main.ts`](../../lib/agents/main.ts), step 5) offers a gift list once, after a wedding or birthday invitation is built. The step names every template in `GIFT_LIST_TEMPLATES` ([`rules.ts`](../../lib/claims/rules.ts)), read from that list when the prompt is built, so the prompt cannot drift from what the tool accepts; it adds that a `party-box` takes one only when it carries the party's date and place (issue #50). If the host wants ideas, it calls `research_gifts` with the host (or the couple) as the person the gifts are for; the research sub-agent is unchanged.
+2. The host picks some, and the agent calls **`update_gift_list`** ([`tools.ts`](../../lib/agents/tools.ts)) with `add` (title, description, price, link, copied from the research or the host) and/or `removeIds`. The tool refuses anything but a built invitation whose template is in `GIFT_LIST_TEMPLATES`: `wedding-invite`, `party-invite`, `wedding-envelope-3d` and `party-box` (the last two since issue #52).
 3. [`changeGiftList()`](../../lib/claims/rules.ts) removes first, then appends new gifts with a **server-made random id** (10 characters). Existing gifts keep their ids, so claims on them stay valid; the same gift (title and link) is not added twice; only https links are kept; the list stops at 12 gifts and the tool tells the model which were left out.
 4. The list is saved with `saveLetterContent()` under the host's own session, the preview reloads, and the tool result lists every gift with its id, so the model can take one off later.
 
@@ -39,7 +39,7 @@ The **builder never sees or writes the list**: its structured-output schema is `
 ### A guest claims a gift
 
 1. `/l/<slug>` renders the invitation through `<LetterRenderer>`. The gift list comes with the letter's content (`toPublicView()` passes `wishlist` through like every other field). [`wishlist.tsx`](../../components/letters/wishlist.tsx) shows it after the sign-off: title, description, price and a plain "See it in the shop" link (https only, new tab, no referrer). There are no images, so the page still loads nothing from other sites.
-2. **Which gifts are taken comes from the server.** [`templates/invitation.tsx`](../../components/letters/templates/invitation.tsx) is a server component: given the letter's `slug`, it reads the claimed ids with `claimedIdsForPage()` while the page renders. Today the registry does not pass the slug (see Open questions), so the list instead calls `GET /api/claim?slug=…` once after loading; until the answer arrives its buttons are disabled, so nobody can claim from a guess.
+2. **Which gifts are taken comes from the server.** [`templates/invitation.tsx`](../../components/letters/templates/invitation.tsx), [`party-box.tsx`](../../components/letters/templates/party-box.tsx) and [`wedding-envelope-3d.tsx`](../../components/letters/templates/wedding-envelope-3d.tsx) are server components: the registry passes the letter's `slug`, and they read the claimed ids with `claimedIdsForPage()` while the page renders, so taken gifts arrive as taken. Without a slug (the template workbench) the list calls `GET /api/claim?slug=…` once after loading; until the answer arrives its buttons are disabled, so nobody can claim from a guess.
 3. Tapping **I'll bring this** opens a small form with an optional first name ("Only Mia sees it.") and **Yes, I'll bring it**. Escape or Cancel closes it and returns focus to the button.
 4. The browser posts `{ slug, itemId, name? }` to [`POST /api/claim`](../../app/api/claim/route.ts). The route refuses bodies over 1,024 characters (413), anything that is not valid JSON in that shape (400, zod), and requests a browser marks as `Sec-Fetch-Site: cross-site` (403). The name is cleaned ([`cleanGuestName()`](../../lib/claims/rules.ts): control and formatting characters removed, spaces collapsed, at most 40 characters).
 5. [`claimGift()`](../../lib/claims/claim.ts) loads the letter by exact slug with the service-role client. Unknown slugs, demo slugs, letters that are not invitations and invitations without a list answer `not_found`; a gift that is not on the list answers `item_not_found`. Without `OPEN_HASH_SECRET` claims are off (`unavailable`).
@@ -82,7 +82,7 @@ The owner's preview (`/create/<id>/preview`) shows the list with taken gifts but
 | [`app/api/claim/route.ts`](../../app/api/claim/route.ts) | `POST` claims a gift, `GET` lists the claimed ids |
 | [`lib/agents/tools.ts`](../../lib/agents/tools.ts) | The `update_gift_list` tool and `keepGiftList()` |
 | [`lib/agents/builder.ts`](../../lib/agents/builder.ts) | `BuilderLetterContent` (the schema without the list) and `contentForBuilder()` |
-| [`lib/agents/main.ts`](../../lib/agents/main.ts) | The gift-list step and the tool's line in the system prompt |
+| [`lib/agents/main.ts`](../../lib/agents/main.ts) | The gift-list step, which names every template in `GIFT_LIST_TEMPLATES`, and the tool's line in the system prompt |
 | [`components/letters/wishlist.tsx`](../../components/letters/wishlist.tsx), [`wishlist-model.ts`](../../components/letters/wishlist-model.ts) | The list on the invitation, in the elegant and the playful mood; the model holds what it shows and how each answer changes it |
 | [`components/letters/templates/invitation.tsx`](../../components/letters/templates/invitation.tsx), [`invitation-view.tsx`](../../components/letters/templates/invitation-view.tsx) | Server wrapper that reads the claims when it has the slug; the client invitation, which shows the list after the sign-off |
 | [`app/(app)/dashboard/gifts/`](../../app/(app)/dashboard/gifts/) | Loads the lists, the release action and its button |
@@ -120,11 +120,11 @@ The owner's preview (`/create/<id>/preview`) shows the list with taken gifts but
   - the owner's preview showed the taken gift with claiming disabled;
   - one live chat turn: asked to add two gifts to the built party invitation, Majnu called `update_gift_list`; the list grew to five with the original ids and the existing claim intact.
   - Both moods on `/dev/templates` at 375 and 1440 px, keyboard (Tab, Enter, Escape) and the browser console (no errors).
-- **Not checked live:** the visitor limit's 429 against the real database (the test invitation had three gifts; covered by unit tests); research-then-add in one conversation (one live turn only, research has its own tests); the server-rendered claim path on `/l/<slug>`, which needs the registry change below (covered by unit tests).
+- **Issue #50:** [`main.test.ts`](../../tests/unit/lib/agents/main.test.ts) checks that the gift-list step names every id in `GIFT_LIST_TEMPLATES`. A live chat turn adding a list to a `wedding-envelope-3d` could not be run: the Anthropic key was over its monthly spend limit (429 `enforced_spend_limit_reached`, until 1 December).
+- **Not checked live:** the visitor limit's 429 against the real database (the test invitation had three gifts; covered by unit tests); research-then-add in one conversation (one live turn only, research has its own tests); the server-rendered claim path on `/l/<slug>` at the time (covered by unit tests; the registry has passed the slug since).
 
 ## Open questions
 
-- **The registry should pass the slug.** [`registry.tsx`](../../components/letters/registry.tsx) renders `<Invitation content mood />`. Adding `slug={letter.slug}` to the two invitation cases makes the page read the claims while it renders, so taken gifts arrive as taken in the HTML instead of after a request. Until then the list asks `GET /api/claim` after loading. The registry belongs to another session, so this is a follow-up.
 - **Middleware runs on `/api/claim`.** Unlike `/api/open`, the route is not in the middleware matcher's exclusions, so each claim costs a Supabase Auth call for nothing (a guest has no session, so no cookie is set). Adding `api/claim` next to `api/open` in [`middleware.ts`](../../middleware.ts) fixes it.
 - **A chat that did not build the invitation** (for example a letter made elsewhere, or reopened without history) does not tell the agent that an invitation exists, so it may offer to build one first. The same is true for `edit_letter` today.
 - Removing a gift leaves its claim row in place; it is not shown and does not block anything, and it is deleted with the invitation.
