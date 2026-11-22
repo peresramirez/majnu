@@ -170,6 +170,63 @@ export const letterFixtures: Record<LetterTemplateId, LetterContent> = {
       { id: "fxenv03", title: "A night in Hunza", description: "Towards our honeymoon in the mountains.", price: "€150" },
     ],
   },
+  // Issue #99. 18 September 2027 is a Saturday.
+  "wedding-invite-3d": {
+    recipientName: "Hannah",
+    senderName: "Mira and Daniel",
+    occasion: "Wedding",
+    headline: "We're getting married, and we want you there",
+    body: [
+      "After seven years, two cities and one very patient dog, we are making it official in the vineyard where Daniel proposed.",
+      "The ceremony is in the garden, dinner is under the pergola, and the dancing goes on until the candles burn down.",
+    ],
+    signOff: "With love",
+    theme: { palette: "sage", font: "serif" },
+    gifts: [],
+    event: {
+      title: "Mira and Daniel's wedding",
+      startsAt: "2027-09-18T15:30:00+02:00",
+      locationName: "Weingut Knipser",
+      address: "Hauptstraße 47, 67229 Laumersheim, Germany",
+    },
+  },
+  // 10 April 2027 is a Saturday.
+  "party-invite-3d": {
+    recipientName: "Lukas",
+    senderName: "Jonas",
+    occasion: "Birthday party",
+    headline: "Thirty, flirty and throwing a party",
+    body: ["Bring your best dance moves and your worst jokes. Food from eight, the DJ from ten, and nobody leaves before the cake."],
+    signOff: "See you on the dance floor",
+    theme: { palette: "night", font: "sans" },
+    gifts: [],
+    event: {
+      title: "Jonas turns 30",
+      startsAt: "2027-04-10T20:00:00+02:00",
+      locationName: "Club der Visionäre",
+      address: "Am Flutgraben 1, 12435 Berlin, Germany",
+    },
+  },
+  "gift-3d": {
+    recipientName: "Elif",
+    senderName: "Can",
+    occasion: "Thank you",
+    headline: "For the best neighbour on the street",
+    body: [
+      "You watered the tomatoes, fed the cat and caught every parcel for a whole month. This one is for slow Sunday mornings.",
+    ],
+    signOff: "With thanks",
+    theme: { palette: "rose", font: "serif" },
+    gifts: [
+      {
+        title: "Breakfast for two at Café Kranzler",
+        description: "The big breakfast platter for two, any weekend morning this year.",
+        url: "https://example.com/redeem",
+        code: "KRZ-4B2F-ELIF",
+        price: "€58",
+      },
+    ],
+  },
 }
 
 const adventNotes = [

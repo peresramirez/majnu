@@ -169,7 +169,7 @@ describe("wrapReducer", () => {
   })
 
   it("offers the gift templates first, the 3D gift box and the party box among them, then the letters", () => {
-    expect(WRAP_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"])
+    expect(WRAP_TEMPLATES).toEqual(["gift-reveal", "gift-box-3d", "gift-3d", "party-box", "classic-envelope", "postcard"])
     expect(wrapReducer(chosen, { type: "template", templateId: "gift-box-3d" })).toMatchObject({ stage: "choose", templateId: "gift-box-3d" })
     expect(wrapReducer(chosen, { type: "template", templateId: "party-box" })).toMatchObject({ stage: "choose", templateId: "party-box" })
   })

@@ -33,6 +33,9 @@ const nouns: Record<TemplateId, string> = {
   "party-box": "A gift",
   "treasure-map": "A letter",
   "wedding-envelope-3d": "An invitation",
+  "wedding-invite-3d": "An invitation",
+  "party-invite-3d": "An invitation",
+  "gift-3d": "A gift",
   "advent-classic": "An advent calendar",
   countdown: "A countdown",
 }

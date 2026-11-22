@@ -26,6 +26,9 @@ export const VOICE_NOTE_IN_TEMPLATE: Record<LetterTemplateId, boolean> = {
   "party-invite": true,
   "treasure-map": true,
   "wedding-envelope-3d": true,
+  "wedding-invite-3d": true,
+  "party-invite-3d": true,
+  "gift-3d": true,
 }
 
 // The renderer draws unknown ids as the classic envelope, so they follow it.

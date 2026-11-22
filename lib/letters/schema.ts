@@ -6,7 +6,8 @@
 import * as z from "zod/v4"
 
 // Added after setup (additive): gift-box-3d, party-box, treasure-map (issue #40);
-// wedding-envelope-3d (issue #52).
+// wedding-envelope-3d (issue #52); wedding-invite-3d, party-invite-3d, gift-3d
+// (issue #99).
 export const LETTER_TEMPLATE_IDS = [
   "classic-envelope",
   "wedding-invite",
@@ -17,6 +18,9 @@ export const LETTER_TEMPLATE_IDS = [
   "party-box",
   "treasure-map",
   "wedding-envelope-3d",
+  "wedding-invite-3d",
+  "party-invite-3d",
+  "gift-3d",
 ] as const
 export const CALENDAR_TEMPLATE_IDS = ["advent-classic", "countdown"] as const
 export const TEMPLATE_IDS = [...LETTER_TEMPLATE_IDS, ...CALENDAR_TEMPLATE_IDS] as const
