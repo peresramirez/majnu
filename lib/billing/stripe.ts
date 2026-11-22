@@ -41,6 +41,8 @@ export function wrapperPriceId(): string {
 // Tags Checkout Sessions from this flow in the Stripe Dashboard. A fixed label
 // with a random suffix, as Stripe recommends for integration_identifier.
 export const CHECKOUT_INTEGRATION_ID = "majnu_wrapper_hxqmtrpa"
+// The same for top-ups of personalisations bought in advance (./credits.ts).
+export const CREDITS_INTEGRATION_ID = "majnu_credits_wkzfqbnd"
 
 // Verifies the Stripe-Signature header against the raw body and returns the
 // event. Throws Stripe's SignatureVerificationError when the signature is

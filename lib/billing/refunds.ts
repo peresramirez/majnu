@@ -4,21 +4,32 @@
 // the day's free designs gets that free design back (docs/features/coupons.md,
 // docs/features/free-designs.md). Neither of those ever reaches Stripe.
 import "server-only"
-import { markFailed, markRefunded, returnCouponUse, returnFreeDesign, type Purchase } from "./purchases"
+import { markFailed, markRefunded, returnCouponUse, returnDesignCredit, returnFreeDesign, type Purchase } from "./purchases"
 import { createStripeClient } from "./stripe"
 
 export type RefundOutcome = { outcome: "refunded"; refundId: string } | { outcome: "failed"; reason: string }
 
-export type GiveBackOutcome = RefundOutcome | { outcome: "code_returned" } | { outcome: "free_returned" } | { outcome: "nothing_to_return" }
+export type GiveBackOutcome =
+  | RefundOutcome
+  | { outcome: "code_returned" }
+  | { outcome: "free_returned" }
+  | { outcome: "credit_returned" }
+  | { outcome: "nothing_to_return" }
 
 // What the design job calls when a run fails: a coupon purchase is marked
 // failed and its code gets the use back, a free purchase is marked failed and
 // the free design is given back (each in one database call); a paid one is
 // refunded through Stripe as below.
 export async function giveBack(
-  purchase: Pick<Purchase, "id" | "paymentIntentId" | "couponId" | "freeDay">,
+  purchase: Pick<Purchase, "id" | "paymentIntentId" | "couponId" | "freeDay"> & Partial<Pick<Purchase, "paidWithCredit">>,
   reason: string,
 ): Promise<GiveBackOutcome> {
+  // Paid with a personalisation bought in advance: marking it failed gives
+  // the personalisation back (0013_design_credits.sql). Never Stripe: the
+  // top-up's payment stays, the balance is one higher again.
+  if (purchase.paidWithCredit) {
+    return (await returnDesignCredit(purchase.id, reason)) ? { outcome: "credit_returned" } : { outcome: "nothing_to_return" }
+  }
   if (purchase.couponId) {
     return (await returnCouponUse(purchase.id, reason)) ? { outcome: "code_returned" } : { outcome: "nothing_to_return" }
   }

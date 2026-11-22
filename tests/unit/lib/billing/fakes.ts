@@ -14,11 +14,15 @@ export type StoredCoupon = { id: string; uses: number; maxUses: number }
 // free_design_days (0012_free_designs.sql), keyed `${day}|${ipHash}`.
 export type FreeCounter = { day: string; ipHash: string; used: number }
 
+export type StoredGrant = { id: string; ownerId: string; quantity: number; refundedQuantity: number; amountCents: number; currency: string; sessionId: string; paymentIntentId: string | null; receiptUrl: string | null }
+
 export const db = {
   purchases: new Map<string, StoredPurchase>(),
   letters: new Map<string, WrapperLetter & { ownerId: string }>(),
   coupons: new Map<string, StoredCoupon>(),
   freeDays: new Map<string, FreeCounter>(),
+  // credit_grants (0013_design_credits.sql), keyed by Checkout Session id.
+  creditGrants: new Map<string, StoredGrant>(),
   // Whose session the user client reads with (row-level security).
   currentUser: "user-1",
   seq: 0,
@@ -29,6 +33,7 @@ export function resetDb() {
   db.letters.clear()
   db.coupons.clear()
   db.freeDays.clear()
+  db.creditGrants.clear()
   db.currentUser = "user-1"
   db.seq = 0
 }
@@ -49,6 +54,7 @@ export function addPurchase(overrides: Partial<StoredPurchase> & { letterId: str
     couponId: null,
     freeDay: null,
     freeIpHash: null,
+    paidWithCredit: false,
     consentText: "consent",
     amountCents: 299,
     currency: "eur",
@@ -137,6 +143,13 @@ export const purchasesModule = {
     if (coupon && coupon.uses > 0) coupon.uses--
     return true
   }),
+  // return_design_credit in 0013_design_credits.sql: only a credit purchase
+  // that is paid or designing, once. Failed, it no longer counts.
+  returnDesignCredit: vi.fn(async (id: string, reason: string) => {
+    const p = db.purchases.get(id)
+    if (!p?.paidWithCredit) return false
+    return transition(id, ["paid", "designing"], { status: "failed", finishedAt: now(), failureReason: reason }) !== null
+  }),
   // return_free_design in 0012_free_designs.sql: only a free purchase that is
   // paid or designing, once; the hash is cleared and the day's use given back.
   returnFreeDesign: vi.fn(async (id: string, reason: string) => {
@@ -148,6 +161,62 @@ export const purchasesModule = {
     if (counter && counter.used > 0) counter.used--
     return true
   }),
+}
+
+// design_credits_balance (0013_design_credits.sql): bought minus refunded
+// minus credit purchases that did not fail.
+export function creditBalance(ownerId: string): number {
+  const bought = [...db.creditGrants.values()].filter((g) => g.ownerId === ownerId).reduce((n, g) => n + g.quantity - g.refundedQuantity, 0)
+  const used = [...db.purchases.values()].filter((p) => p.ownerId === ownerId && p.paidWithCredit && p.status !== "failed").length
+  return bought - used
+}
+
+// grant_design_credits, claim_design_credit and design_credits_balance as the
+// database answers them.
+export function creditRpc(name: string, args: Record<string, unknown>): { data: unknown; error: null } {
+  if (name === "design_credits_balance") return { data: creditBalance(args.p_owner_id as string), error: null }
+  if (name === "grant_design_credits") {
+    const sessionId = args.p_checkout_session_id as string
+    const existing = db.creditGrants.get(sessionId)
+    if (existing) return { data: { outcome: "already_granted", grant_id: existing.id, balance: creditBalance(existing.ownerId) }, error: null }
+    db.seq++
+    const grant: StoredGrant = {
+      id: `00000000-0000-4000-9000-${String(db.seq).padStart(12, "0")}`,
+      ownerId: args.p_owner_id as string,
+      quantity: args.p_quantity as number,
+      refundedQuantity: 0,
+      amountCents: args.p_amount_cents as number,
+      currency: args.p_currency as string,
+      sessionId,
+      paymentIntentId: (args.p_payment_intent_id as string | null) ?? null,
+      receiptUrl: (args.p_receipt_url as string | null) ?? null,
+    }
+    db.creditGrants.set(sessionId, grant)
+    return { data: { outcome: "granted", grant_id: grant.id, balance: creditBalance(grant.ownerId) }, error: null }
+  }
+  if (name !== "claim_design_credit") throw new Error(`unexpected rpc ${name}`)
+  const owner = args.p_owner_id as string
+  const letter = db.letters.get(args.p_letter_id as string)
+  if (!letter || letter.ownerId !== owner || letter.kind !== "letter" || !letter.built) {
+    return { data: { outcome: "letter_not_found", purchase_id: null, balance: null }, error: null }
+  }
+  if ([...db.purchases.values()].some((p) => p.letterId === letter.id && (p.status === "paid" || p.status === "designing"))) {
+    return { data: { outcome: "in_progress", purchase_id: null, balance: null }, error: null }
+  }
+  const balance = creditBalance(owner)
+  if (balance < 1) return { data: { outcome: "none_left", purchase_id: null, balance: 0 }, error: null }
+  const p = addPurchase({
+    ownerId: owner,
+    letterId: letter.id,
+    request: args.p_request as string,
+    status: "paid",
+    amountCents: 0,
+    consentAt: now(),
+    consentText: args.p_consent_text as string,
+    paidWithCredit: true,
+    paidAt: now(),
+  })
+  return { data: { outcome: "claimed", purchase_id: p.id, balance: balance - 1 }, error: null }
 }
 
 // claim_free_design and free_designs_left (0012_free_designs.sql) as the
@@ -210,6 +279,7 @@ export const stripeModule = {
     return id
   },
   CHECKOUT_INTEGRATION_ID: "majnu_wrapper_test",
+  CREDITS_INTEGRATION_ID: "majnu_credits_test",
 }
 
 export function resetStripe() {
