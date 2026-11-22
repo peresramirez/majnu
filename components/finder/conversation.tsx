@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { RotateCcw } from "lucide-react"
 import type { GiftOption } from "@/lib/finder/events"
-import { PERSONALISE_MESSAGE, latestOptionsIndex, type FinderItem, type FinderState } from "./finder-state"
+import { PERSONALISE_MESSAGE, latestOptionsIndex, noticeRole, type FinderItem, type FinderState } from "./finder-state"
 import { GiftOptionCard } from "./gift-option-card"
 import { RichText } from "./rich-text"
 import { chip, smallButton, smallPrimary } from "./styles"
@@ -36,7 +36,8 @@ function Notice({ item, last, busy, onSend }: { item: Extract<FinderItem, { role
   const signin = item.reason === "signin_required"
   return (
     <div
-      role={item.tone === "error" ? "alert" : "status"}
+      // Heard once: an error as this alert, a limit from the finder's live region.
+      role={noticeRole(item)}
       className="ml-[38px] rounded-2xl bg-night-velvet/70 px-4 py-3 text-[15px] leading-relaxed text-night-petal ring-1 ring-inset ring-night-petal/10"
     >
       <p>{item.message}</p>

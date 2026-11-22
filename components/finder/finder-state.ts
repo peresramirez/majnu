@@ -138,6 +138,26 @@ export function latestOptionsIndex(items: FinderItem[]): number {
   return -1
 }
 
+// What the finder's one polite live region says when a reply finishes (the
+// dialog and the inline panel both have it). An error notice is left out: it
+// is its own alert (role="alert" in conversation.tsx), so it is heard once. A
+// limit notice is not a live region itself, so it is heard here, once.
+export function finderAnnouncement(items: FinderItem[]): string {
+  const last = items[items.length - 1]
+  if (!last) return ""
+  if (last.role === "options") return `${last.options.length} gift ideas are ready.`
+  if (last.role === "question") return `Majnu asks: ${last.text}`
+  if (last.role === "notice") return last.tone === "error" ? "" : last.message
+  if (last.role === "assistant") return "Majnu replied."
+  return ""
+}
+
+// The live role a notice in the conversation takes: an error interrupts as an
+// alert; a limit has none, because finderAnnouncement() reads it out.
+export function noticeRole(item: Extract<FinderItem, { role: "notice" }>): "alert" | undefined {
+  return item.tone === "error" ? "alert" : undefined
+}
+
 // How full the status moon is: a crescent when a reply starts, fuller with each
 // step, and full once the options have arrived.
 export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "items">): number {
