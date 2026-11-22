@@ -1,8 +1,8 @@
-# Guest accounts, upgrading, the bot check and the app tabs
+# Guest accounts, upgrading, the bot check and where sign-in lands
 
 ## What it does
 
-Visitors can use Majnu without signing up. The gift finder gives them an invisible **guest account** (a Supabase anonymous user), and from then on they use the app like anyone else: they own the gifts they wrap, see them under My gifts, and share them. A quiet line in the app asks them to create an account; when they do, with email or Google, the guest account itself becomes the real account, so nothing is lost. Advent calendars need a real account. Email sign-in and sign-up carry an invisible Cloudflare Turnstile token, so captcha protection can be switched on in Supabase without breaking them. The app has four tabs: **Find a gift**, **Letters & invitations**, **My gifts** and **Purchases** (the personalised wrappers bought, which replaced the Plan tab).
+Visitors can use Majnu without signing up. The gift finder gives them an invisible **guest account** (a Supabase anonymous user), and from then on they use the app like anyone else: they own the gifts they wrap, see them under My gifts, and share them. A quiet line in the app asks them to create an account; when they do, with email or Google, the guest account itself becomes the real account, so nothing is lost. Advent calendars need a real account. Email sign-in and sign-up carry an invisible Cloudflare Turnstile token, so captcha protection can be switched on in Supabase without breaking them. Signing up, signing in and upgrading a guest account all land on the gift finder, the app's first tab (issue #47); the tabs themselves are described in [app-shell.md](app-shell.md).
 
 ## How it works
 
@@ -18,7 +18,7 @@ flowchart LR
     MW[middleware.ts<br/>routeAccess]
     GA[signInWithGoogle<br/>server action]
     CB[/auth/callback/]
-    APP[(app) shell<br/>4 tabs + guest notice]
+    APP[(app) shell<br/>opens on Find a gift<br/>4 tabs + guest notice]
     LIM[lib/limits.ts<br/>calendar gate]
   end
   SB[(Supabase Auth)]
@@ -34,6 +34,8 @@ flowchart LR
   GA -- "guest: linkIdentity<br/>else: signInWithOAuth" --> SB --> G --> CB
   CB -- exchangeCodeForSession --> SB
   CB -- "refused link: /signin?auth_error=code" --> SI
+  CB -- "afterAuthPath: next, else /dashboard/find" --> APP
+  SI & SU -- "password sign-in or sign-up: afterAuthPath" --> APP
   MW --> APP
   APP --> LIM
 ```
@@ -48,9 +50,11 @@ flowchart LR
 
 `is_anonymous` comes from `getUser()`, which asks Supabase Auth, so it is current even when the token in the cookie is older than an upgrade.
 
-**The app shell** (`components/app/app-shell.tsx`) shows the five tabs from `components/app/tabs.ts` (Find a gift, Letters & invitations, Templates, My gifts, Purchases): top tabs from `md` up, a bottom bar on phones (where "Letters & invitations" shows as "Letters", with the rest read to screen readers). `/dashboard` is still the letters chat, so every existing link to it (the default after sign-in, emails, "New gift" buttons) opens the same screen; Find a gift is the new `/dashboard/find`, which for now invites the visitor to the finder on the landing page and is kept thin so the finder can be mounted there. For guests, `getSignedInUser()` returns `isGuest: true`, the shell adds the line "You're using Majnu as a guest. Create an account to keep your gifts." under the header, and the account menu offers Create an account and Sign in.
+**Where sign-in lands** (`app/auth/destination.ts`). `afterAuthPath(next)` returns `next` when `safeNextPath()` accepts it (a path on this site, never another host, a scheme or a sign-in page), and otherwise `/dashboard/find`, the gift finder. The auth callback uses it for Google sign-in and sign-up, Google linked to a guest, and every email link (a sign-up confirmation, a guest's upgrade); the sign-in and sign-up forms use it after a password sign-in or a sign-up that needs no confirmation, and for a guest's "Back to Majnu" link while the confirmation email is on its way. An old `?plan=full-moon` link still means Purchases (`nextPathFromSearch()`).
 
-**Upgrading with email** (`components/auth/email-auth.ts`, run in the browser). `signUpWithEmail` asks Supabase who the user is. For a guest it calls `updateUser({ email, password }, { emailRedirectTo })`: the password is set at once, and the email waits for confirmation. Supabase emails a link that lands on `/auth/callback?next=...`, which exchanges the code for a session in this browser; the account is now a real one with the same user id. For everyone else it calls `signUp` with the Turnstile token, as before.
+**The app shell** (`components/app/app-shell.tsx`, details in [app-shell.md](app-shell.md)) shows four tabs: Find a gift, My gifts, Create and Tracker. For guests, `getSignedInUser()` returns `isGuest: true`, the shell adds the line "You're using Majnu as a guest. Create an account to keep your gifts." under the header, the account menu offers Create an account and Sign in (members see Purchases there instead), and Create asks a guest to create an account before an advent calendar, coming back to Create afterwards.
+
+**Upgrading with email** (`components/auth/email-auth.ts`, run in the browser). `signUpWithEmail` asks Supabase who the user is. For a guest it calls `updateUser({ email, password }, { emailRedirectTo })`: the password is set at once, and the email waits for confirmation. Supabase emails a link that lands on `/auth/callback?next=...`, which exchanges the code for a session in this browser and continues to `next` or the finder; the account is now a real one with the same user id. For everyone else it calls `signUp` with the Turnstile token, as before.
 
 **Upgrading with Google** (`app/auth/actions.ts`). `signInWithGoogle` checks the user on the server. A guest gets `linkIdentity({ provider: "google" })`, which adds Google to the guest account; anyone else gets `signInWithOAuth`. If linking is refused, the guest sees why and can choose **Sign in with Google anyway** (`switchAccount`), which signs in to that Google account's own Majnu account and leaves the guest account behind:
 
@@ -74,10 +78,11 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 | `components/auth/auth-errors.ts` | Plain-language messages for Supabase error codes and callback codes |
 | `components/auth/callback-url.ts` | `authCallbackUrl`, `signInErrorPath`, `safeAuthErrorCode` (all same-site, all checked) |
 | `app/auth/actions.ts` | `signInWithGoogle(next, { switchAccount })`: `linkIdentity` for guests, `signInWithOAuth` otherwise; `signOut` |
-| `app/auth/callback/route.ts` | Exchanges the code, or sends refused links and failed exchanges to `/signin?auth_error=...` |
-| `components/app/tabs.ts`, `app-shell.tsx` | The five tabs and which one is active |
+| `app/auth/callback/route.ts` | Exchanges the code and lands on `afterAuthPath(next)`, or sends refused links and failed exchanges to `/signin?auth_error=...` |
+| `app/auth/destination.ts` | `afterAuthPath(next)`: a same-site `next`, otherwise the gift finder |
+| `components/app/tabs.ts`, `app-shell.tsx` | The four tabs, `APP_HOME` and which tab is active ([app-shell.md](app-shell.md)) |
 | `components/app/guest-notice.tsx`, `account-menu.tsx`, `session.ts` | The guest line, the guest account menu, `SessionUser.isGuest` |
-| `app/(app)/dashboard/find/page.tsx`, `components/app/find-invite.tsx` | The Find a gift tab (an invitation until the finder is mounted) |
+| `app/(app)/dashboard/find/page.tsx`, `components/finder/finder-panel.tsx` | The Find a gift tab: the gift finder inline |
 | `lib/limits.ts`, `lib/agents/events.ts` | The calendar gate and the `"signin_required"` limit reason |
 | `app/(marketing)/privacy/page.tsx`, `terms/page.tsx` | Guest accounts, country and region, Turnstile, Apify, the finder's limits (read from `lib/finder/limits.ts`) |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public site key of the Turnstile widget "Majnu" (in `.env.production`); its secret lives only in Supabase |
@@ -99,6 +104,7 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 
 ## How it was checked
 
+- **Where sign-in lands (22 November, issue #47).** Unit tests: `tests/unit/app/auth/destination.test.ts` (the finder by default; same-site `next` kept; other hosts, schemes, backslashes, control characters and sign-in pages refused) and `tests/unit/app/auth/next-redirects.test.ts` (the callback lands on `/dashboard/find` without a `next` or with an unsafe one). With `curl` against `next dev`: `/auth/callback` → `/dashboard/find`; `?next=/dashboard/gifts` kept; `//evil.example` and `https://evil.example` → `/dashboard/find`; a bad code → `/signin?auth_error=exchange_failed`. In an isolated Chrome, a temporary confirmed user (created with the service-role key, deleted afterwards) signed in through the real `/signin` form and landed on `/dashboard/find`. A temporary guest (anonymous sign-ins are now on) saw the guest notice, the guest account menu and Create's "Create an account" for calendars. Not checked end to end: Google sign-in and linking (needs a person at Google, left to the lead) and a guest's email upgrade (it sends a real confirmation email).
 - Unit tests: `tests/unit/lib/supabase/middleware.test.ts` (every route for signed-out, guest and real users, and `updateSession` redirects), `tests/unit/lib/limits.test.ts` (calendar gate for guests and real users, with billing off and on), `tests/unit/app/auth/next-redirects.test.ts` (Google linking for guests, switching accounts, refused links as data, callback errors), `tests/unit/components/auth/*` (email flows, error messages, callback URLs), `tests/unit/components/app/tabs.test.ts`.
 - In an isolated Chrome at 375 and 1440 px: `/signin` and `/signup` show no Turnstile and no layout shift; the Turnstile script loads and the widget renders. That automated browser fails Cloudflare's challenge (error 600010), and the sign-in form then went ahead without a token: a real sign-in request with an unknown address reached Supabase from the browser and showed "That email and password don't match". The remaining console messages on those pages came from inside the Turnstile challenge (pages without it had none). `/signin?auth_error=identity_already_exists` shows the message and "Sign in with Google anyway". The app shell with a guest (through a temporary mock page, since deleted) shows the notice, four tabs and the guest menu, and is keyboard navigable; a real user's shell has no notice. Privacy and terms render without horizontal scrolling.
 - With `curl`: `/dashboard/find`, `/dashboard` and `/create/...` redirect to `/signin` without a session; `/signin` and `/signup` answer 200; the callback turns `error_code=identity_already_exists` into `/signin?next=...&auth_error=identity_already_exists`.
@@ -109,6 +115,6 @@ The callback passes on only short snake_case codes, and the sign-in form shows o
 - **Owner settings in Supabase**: switch on anonymous sign-ins (Authentication → Sign In / Providers) and **Allow manual linking** (same page), which `linkIdentity` needs. Then enter the Turnstile secret under Authentication → Bot and Abuse Protection; from then on every email sign-in, sign-up and anonymous sign-in needs a token, which these forms and the finder send. The "Change email address" template is what a guest receives when upgrading with email; its default wording ("from {{ .Email }} to {{ .NewEmail }}") reads oddly with no old address, so give it a sign-up wording.
 - **Merging two accounts** is not built. A guest who signs in to an existing account (with email, or with Google when that Google account already has a Majnu account) leaves the guest account and its gifts behind; the forms say so. A follow-up could move the guest's letters to the account they sign in to, on the server, after proving both sessions.
 - **Clean-up of guest accounts**: Supabase does not delete anonymous users. A scheduled job could delete guest accounts older than 30 days that own no letters.
-- **After sign-in** people still land on `/dashboard` (Letters & invitations), set by `lib/billing/next-path.ts`. Once the finder is mounted in the Find a gift tab, `/dashboard/find` may be the better default.
+- **A signed-in member who opens `/signin` or `/signup`** is still sent to `/dashboard` (the letters chat) by `lib/supabase/middleware.ts` when there is no `next`. That is not a sign-in, but `afterAuthPath()` would make it consistent; the middleware was outside the #47 task. `afterSignInPath()` in `lib/billing/next-path.ts` (default `/dashboard`) is no longer used by the auth code and could go.
 - The terms read the finder's limits from `FINDER_LIMITS` in `lib/finder/limits.ts`, which applies them to every user. There are no plans any more (`lib/plans.ts` describes the free tier and the personalised wrapper), so the limits are the same for everyone.
 - Two small Turnstile loaders exist: `components/auth/turnstile.ts` (sign-in forms) and `components/finder/anonymous-session.ts` (the finder's anonymous sign-in). Both reuse `window.turnstile` once loaded; they could share one helper.

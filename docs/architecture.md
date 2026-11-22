@@ -240,6 +240,7 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 - [Gift finder, landing page](features/gift-finder-ui.md)
 - [Gift finder, server](features/gift-finder-api.md)
 - [Guest accounts](features/guest-accounts.md)
+- [The app shell: the finder first, then Create](features/app-shell.md)
 - [Voice input](features/voice-input.md)
 - [Gift list on invitations](features/gift-list.md)
 
