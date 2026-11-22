@@ -423,17 +423,20 @@ export function WrapView({ finder, wrap }: Props) {
       {step === "design" ? (
         <fieldset className="mt-4" disabled={busy}>
           <legend className="sr-only">Design</legend>
-          {/* Four designs (no party pop box) sit two by two; five, three and two. */}
-          <div className={`grid gap-3 ${templates.length === 4 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+          {/* Every design in one row to swipe through (developer's request): it
+              snaps card by card, and the next card peeks in so people see there
+              is more. Arrow keys move between the radios as usual. */}
+          <p className="mb-2 text-xs text-night-lilac">Swipe to see all {templates.length} designs.</p>
+          <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
             {templates.map((id) => {
               const selected = wrap.templateId === id
               return (
-                <label key={id} className="group relative block cursor-pointer rounded-3xl">
+                <label key={id} className="group relative block w-[210px] shrink-0 cursor-pointer snap-start rounded-3xl sm:w-[230px]">
                   <input type="radio" name="template" value={id} checked={selected} onChange={() => chooseTemplate(id as WrapTemplateId)} className="peer sr-only" />
                   <TemplateCard
                     id={id}
-                    orientation="responsive"
-                    className={`h-full transition-shadow duration-300 ease-calm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-night-rose [&_[data-template-thumbnail]]:w-[88px] md:[&_[data-template-thumbnail]]:mx-auto md:[&_[data-template-thumbnail]]:w-full md:[&_[data-template-thumbnail]]:max-w-[150px] ${
+                    orientation="vertical"
+                    className={`h-full transition-shadow duration-300 ease-calm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-night-rose [&_[data-template-thumbnail]]:mx-auto [&_[data-template-thumbnail]]:w-full [&_[data-template-thumbnail]]:max-w-[150px] ${
                       selected ? "ring-2 ring-night-rose" : "group-hover:ring-night-petal/30"
                     }`}
                   />
