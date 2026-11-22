@@ -105,7 +105,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Follow the conversation: new gift ideas scroll to their top (so all three
+  // Follow the conversation: new gift ideas scroll to their top (so all six
   // can be read from the first), anything else to the bottom while the reader
   // is already near it. Coming back to the tab jumps to where it left off.
   const lastItem = state.items[state.items.length - 1]
@@ -243,7 +243,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
               Who is the gift for?
             </h1>
             <p className="mt-3 max-w-[52ch] text-[16px] leading-relaxed text-night-lilac sm:text-[17px]">
-              Describe them in a few words, or say it. Majnu finds three gifts that suit them, from shops where you live,
+              Describe them in a few words, or say it. Majnu finds six gifts that suit them, from shops where you live,
               and wraps the one you choose in a page made for them.
             </p>
             <div ref={checkHostRef} className="flex justify-start empty:hidden [&:not(:empty)]:mt-4" />
@@ -252,8 +252,8 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
           <div className={`${column} pt-4 ${ready ? "pb-6 md:flex md:h-full md:flex-col md:pb-5" : wrapping ? "pb-3" : "pb-6"}`}>
             {chips.length > 0 && !wrapping && (
               <div className="mb-4">
-                <p className="text-xs text-night-lilac">Majnu assumed this. Tap one to change it.</p>
-                <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="What Majnu assumed">
+                <p className="text-xs text-night-lilac">Their profile so far. Tap one to change it.</p>
+                <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Their profile so far">
                   {chips.map((c) => (
                     <li key={c.key}>
                       <button

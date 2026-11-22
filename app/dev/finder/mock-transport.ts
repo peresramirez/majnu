@@ -138,9 +138,10 @@ function scenario(message: string, turn: number): Step[] {
     1000,
     { type: "status", label: "Reading three shops…" },
     900,
-    ...words("Here are three ideas for your mother, from shops that deliver in Germany. I guessed she is between 45 and 70; tap the chips above if that's wrong. "),
+    ...words("Here are six ideas for your mother, from shops that deliver in Germany. I guessed she is between 45 and 70; tap the chips above if that's wrong. "),
     300,
-    { type: "options", options: FIRST, recommendedId: "opt-2", why: "Time together is the gift most mothers say they want, and the pieces you make become a keepsake." },
+    // Six, the recommended one first, as the server sends them.
+    { type: "options", options: [FIRST[1], FIRST[0], FIRST[2], ...SECOND], recommendedId: "opt-2", why: "Time together is the gift most mothers say they want, and the pieces you make become a keepsake." },
     { type: "done" },
   ]
 }

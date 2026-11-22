@@ -27,6 +27,7 @@ import {
   FINDER_TOOLS,
   FindGiftsInput,
   MAX_FINDER_REQUESTS,
+  OPTIONS_PER_SEARCH,
   parseFillWrap,
   runFinderTurn,
   STARTED_OVER_LINE,
@@ -147,7 +148,7 @@ beforeEach(() => {
 })
 
 describe("a first search", () => {
-  it("streams context, status, then three options with a recommendation, and ends the turn", async () => {
+  it("streams context, status, then the options with the recommended one first, and ends the turn", async () => {
     const { requests } = scriptModel(reply([thinking, findCall()]))
     const s = state()
     const result = await runFinderTurn({ history: [], message: "Finde ein Geschenk für meine Mutter", state: s })
@@ -160,7 +161,9 @@ describe("a first search", () => {
     expect(events[1]).toEqual({ type: "status", label: "Ich schaue nach Geschenken in Berlin…" })
     const options = events[2] as Extract<FinderEvent, { type: "options" }>
     expect(options.options).toHaveLength(3)
-    expect(options.options[0]).toMatchObject({
+    // The researcher recommended the second idea: it is shown first.
+    expect(options.options.map((o) => o.title)).toEqual(["Fotobuch", "Kräutergarten", "Kochkurs"])
+    expect(options.options[1]).toMatchObject({
       title: "Kräutergarten",
       description: "Sechs Kräuter zum Ziehen.",
       reason: "Sie gärtnert gern.",
@@ -170,7 +173,7 @@ describe("a first search", () => {
       imageUrl: "https://garten.example/k.jpg",
     })
     expect(new Set(options.options.map((o) => o.id)).size).toBe(3)
-    expect(options.recommendedId).toBe(options.options[1].id)
+    expect(options.recommendedId).toBe(options.options[0].id)
     expect(options.why).toBe("Ein Fotobuch erzählt eure Geschichte.")
 
     // One finder request: no closing sentence after the options.
@@ -182,7 +185,7 @@ describe("a first search", () => {
     expect(s.context.relationship).toBe("Mama")
   })
 
-  it("searches in the visitor's language and country, for three ideas with images", async () => {
+  it("searches in the visitor's language and country, for six ideas with images", async () => {
     scriptModel(reply([findCall()]))
     await runFinderTurn({ history: [], message: "Finde ein Geschenk für meine Mutter", state: state() })
 
@@ -193,7 +196,7 @@ describe("a first search", () => {
         countryCode: "DE",
         country: "Berlin, Germany",
         currency: "EUR",
-        ideas: 3,
+        ideas: 6,
         images: true,
         occasion: "not given",
         recipient: expect.stringContaining("probably about 45 to 70 years old (assumed)"),
@@ -424,11 +427,12 @@ describe("limits and failures", () => {
 })
 
 describe("toOptions", () => {
-  it("always keeps the recommended idea among the three", () => {
-    const ideas = Array.from({ length: 5 }, (_, i) => ({ title: `Idee ${i}`, reason: "Grund.", url: `https://shop.example/${i}` }))
-    const shown = toOptions({ ideas, recommended: 4, why: "" })!
-    expect(shown.options.map((o) => o.title)).toEqual(["Idee 0", "Idee 1", "Idee 4"])
-    expect(shown.recommendedId).toBe(shown.options[2].id)
+  it("keeps six, always with the recommended idea, shown first", () => {
+    const ideas = Array.from({ length: 8 }, (_, i) => ({ title: `Idee ${i}`, reason: "Grund.", url: `https://shop.example/${i}` }))
+    const shown = toOptions({ ideas, recommended: 7, why: "" })!
+    expect(OPTIONS_PER_SEARCH).toBe(6)
+    expect(shown.options.map((o) => o.title)).toEqual(["Idee 7", "Idee 0", "Idee 1", "Idee 2", "Idee 3", "Idee 4"])
+    expect(shown.recommendedId).toBe(shown.options[0].id)
     // Without a why, the recommended option's own reason is used.
     expect(shown.why).toBe("Grund.")
     // Without a description, the reason stands in.
@@ -727,13 +731,47 @@ describe("reading a public profile", () => {
 })
 
 describe("searching now or asking first (issue #70)", () => {
-  it("lets Majnu decide: search at once when it knows enough, ask first when it matters", () => {
-    expect(FINDER_SYSTEM_PROMPT).not.toContain("Don't ask questions first")
-    expect(FINDER_SYSTEM_PROMPT).toContain("Search at once with find_gifts")
-    expect(FINDER_SYSTEM_PROMPT).toContain('"Find a gift for my mother" is enough')
-    expect(FINDER_SYSTEM_PROMPT).toContain("Ask first with ask_questions when a missing fact would change the gifts a lot, or when the visitor asks you to research the person")
+  it("always asks one round first, then searches (22 November)", () => {
+    expect(FINDER_SYSTEM_PROMPT).not.toContain('"Find a gift for my mother" is enough')
+    expect(FINDER_SYSTEM_PROMPT).toContain("On the visitor's first message, always ask before you search")
+    expect(FINDER_SYSTEM_PROMPT).toContain("call ask_questions once with one to three short questions")
+    expect(FINDER_SYSTEM_PROMPT).toContain("Once the visitor has answered, search with find_gifts")
     expect(FINDER_SYSTEM_PROMPT).toContain("Don't ask again before you have shown options")
-    expect(FINDER_TOOLS[1].description).toContain("before a first search")
+    expect(FINDER_SYSTEM_PROMPT).toContain("six options")
+    expect(FINDER_SYSTEM_PROMPT).not.toMatch(/three options/)
+    expect(FINDER_TOOLS[0].description).toContain("six gift options")
+    expect(FINDER_TOOLS[0].description).toContain("never on the visitor's first message")
+    expect(FINDER_TOOLS[1].description).toContain("always on their first message")
+  })
+
+  it("refuses a search on the first message, so the model asks instead", async () => {
+    const { requests } = scriptModel(
+      reply([findCall()]),
+      reply([askCall([{ text: "Was macht sie gern?", label: "Freizeit", suggestions: ["Garten", "Lesen"] }])]),
+    )
+    const result = await runFinderTurn({ history: [], message: "Finde ein Geschenk für meine Mutter", state: state({ askFirst: true }) })
+
+    expect(researchGiftReport).not.toHaveBeenCalled()
+    expect(claimSearch).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(2)
+    const refused = (requests[1].messages as BetaMessageParam[]).at(-1)!.content as { tool_use_id: string; content: string; is_error?: boolean }[]
+    expect(refused[0]).toMatchObject({ tool_use_id: "find-1", is_error: true })
+    expect(refused[0].content).toContain("first message")
+    expect(events).toEqual([{ type: "question", text: "Was macht sie gern?", label: "Freizeit", suggestions: ["Garten", "Lesen"], profileRead: false }])
+    expect(result.outcome).toBe("done")
+  })
+
+  it("asks on the first message without being refused, and searches on the answer", async () => {
+    const { requests } = scriptModel(reply([askCall([{ text: "Wie alt?", suggestions: ["50", "60"] }])]))
+    await runFinderTurn({ history: [], message: "Mama", state: state({ askFirst: true }) })
+    expect(requests).toHaveLength(1)
+    expect(events.map((e) => e.type)).toEqual(["question"])
+
+    events = []
+    scriptModel(reply([findCall({ ...MOTHER, age: { min: 60, max: 60 } }, "find-2")]))
+    await runFinderTurn({ history: [], message: "Wie alt: 60", state: state({ askFirst: false }) })
+    expect(researchGiftReport).toHaveBeenCalledTimes(1)
+    expect(events.map((e) => e.type)).toEqual(["context", "status", "options"])
   })
 
   it("asks where the gift goes instead of assuming the connection's place, and has no city written in", () => {

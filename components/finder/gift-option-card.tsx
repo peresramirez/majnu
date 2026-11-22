@@ -45,7 +45,8 @@ type Props = {
 }
 
 // One gift idea: photo, shop and price, title, why it suits them, and the two
-// things to do with it. A row on phones, a column from md up.
+// things to do with it. A column: six of them sit in a swipeable row on phones
+// and three by two from md up.
 export function GiftOptionCard({ option, recommended, onChoose, disabled }: Props) {
   const href = shopHref(option.url)
   const shop = shopName(option)
@@ -53,24 +54,19 @@ export function GiftOptionCard({ option, recommended, onChoose, disabled }: Prop
   return (
     <article
       aria-label={recommended ? `${option.title}, recommended` : option.title}
-      className={`flex h-full gap-3 rounded-[20px] bg-night-velvet p-3 ring-1 ring-inset md:flex-col md:gap-0 md:p-0 ${
+      className={`flex h-full flex-col rounded-[20px] bg-night-velvet ring-1 ring-inset ${
         recommended ? "ring-night-petal/30" : "ring-night-petal/10"
       }`}
     >
-      <span className="relative block w-[88px] shrink-0 self-start md:w-full">
-        <ProductImage src={option.imageUrl} className="aspect-square rounded-[14px] md:aspect-[4/3] md:rounded-b-none md:rounded-t-[20px]" />
+      <span className="relative block w-full shrink-0">
+        <ProductImage src={option.imageUrl} className="aspect-[4/3] rounded-t-[20px]" />
         {recommended && (
-          <span className="absolute left-2.5 top-2.5 hidden rounded-full bg-night-orchid px-2 py-0.5 text-[11px] font-semibold tracking-wide text-night-plum md:inline-block">
+          <span className="absolute left-2.5 top-2.5 inline-block rounded-full bg-night-orchid px-2 py-0.5 text-[11px] font-semibold tracking-wide text-night-plum">
             Recommended
           </span>
         )}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col md:p-3.5 md:pt-3">
-        {recommended && (
-          <span className="mb-1.5 self-start rounded-full bg-night-orchid px-2 py-0.5 text-[11px] font-semibold tracking-wide text-night-plum md:hidden">
-            Recommended
-          </span>
-        )}
+      <div className="flex min-w-0 flex-1 flex-col p-3.5 pt-3">
         {meta && <p className="truncate text-xs font-medium text-night-lilac">{meta}</p>}
         <h3 className="mt-0.5 font-display text-[17px] leading-snug text-night-petal">{option.title}</h3>
         {option.reason && <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-night-lilac">{option.reason}</p>}

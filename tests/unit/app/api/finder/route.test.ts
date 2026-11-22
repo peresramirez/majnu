@@ -94,8 +94,10 @@ describe("continuing today's open session (issue #70)", () => {
     expect(canStartSession).not.toHaveBeenCalled()
     const { state, history } = vi.mocked(runFinderTurn).mock.calls[0][0]
     expect(history).toBe(existing.chat)
-    // The visitor sees none of the earlier conversation: Majnu is told so.
+    // The visitor sees none of the earlier conversation: Majnu is told so,
+    // and asks first again.
     expect(state.startedOver).toBe(true)
+    expect(state.askFirst).toBe(true)
     expect(saveFinderSession).toHaveBeenCalledWith(existing, expect.objectContaining({ chat: [...existing.chat, userTurn, assistantTurn] }))
   })
 
@@ -103,6 +105,8 @@ describe("continuing today's open session (issue #70)", () => {
     vi.mocked(findOpenSession).mockResolvedValue(fresh)
     await eventsOf(await POST(post({ message: "Mama", locale })))
     expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.startedOver).toBe(false)
+    // Still the conversation's first message: Majnu asks before it searches.
+    expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.askFirst).toBe(true)
   })
 
   it("starts a new session only when none is open, and never for a message that has an id", async () => {
@@ -182,6 +186,8 @@ describe("POST /api/finder", () => {
     expect(events.map((e) => e.type)).toEqual(["session", "context", "options", "done"])
     expect(canStartSession).toHaveBeenCalledWith("user-1", expect.any(Date), "de")
     expect(createFinderSession).toHaveBeenCalledWith("user-1", { country: "DE", region: "Berlin", language: "de", currency: "EUR" }, "Europe/Berlin")
+    // A new conversation: Majnu asks one round of questions before any search.
+    expect(vi.mocked(runFinderTurn).mock.calls[0][0].state.askFirst).toBe(true)
   })
 
   it("gives the agent the country and region, the browser language and timezone, and nothing more precise", async () => {
@@ -202,6 +208,8 @@ describe("POST /api/finder", () => {
     expect(createFinderSession).not.toHaveBeenCalled()
     const { state, history } = vi.mocked(runFinderTurn).mock.calls[0][0]
     expect(history).toBe(existing.chat)
+    // A later message in the conversation may search.
+    expect(state.askFirst).toBe(false)
     expect(state.context).toEqual({ ...fresh.context, relationship: "Mama" })
     expect(state.lastOptions).toBe(existing.lastOptions)
     expect(saveFinderSession).toHaveBeenCalledWith(existing, {

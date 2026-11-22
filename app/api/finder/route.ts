@@ -256,6 +256,9 @@ export async function POST(request: Request): Promise<Response> {
     profiles: session.profiles,
     wrap,
     startedOver,
+    // The first message the visitor sees in this conversation: Majnu asks one
+    // round of questions before it searches.
+    askFirst: session.chat.length === 0 || startedOver,
     emit: out.emit,
   }
 

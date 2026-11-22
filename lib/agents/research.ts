@@ -5,8 +5,8 @@
 // Two callers:
 // - the main agent's research_gifts tool, through researchGifts(), which
 //   returns 3 to 5 short ideas;
-// - the gift finder, through researchGiftReport(), which also asks for a
-//   description, the shop, a product image and one recommendation, all in the
+// - the gift finder, through researchGiftReport(), which asks for six ideas
+//   with a description, the shop, a product image and one recommendation, all in the
 //   visitor's language with prices in their currency.
 //
 // Search runs on Tavily (our client tool search_web, see tavily.ts) when
@@ -45,7 +45,7 @@ export type ResearchInput = {
   countryCode?: string
   // ISO 4217 ("EUR"): the currency prices are given in.
   currency?: string
-  // How many ideas to report, 1 to 5. Unset: 3 to 5.
+  // How many ideas to report, 1 to 6 (the gift finder asks for six). Unset: 3 to 5.
   ideas?: number
   // Ask Tavily for product images.
   images?: boolean
@@ -82,7 +82,9 @@ export const MAX_SEARCHES = 4
 // answered, one nudge to report.
 export const MAX_REQUESTS = 4
 const MAX_TOKENS = 16000
-const MAX_IDEAS = 5
+const MAX_IDEAS = 6
+// The most a caller that asks for no number gets (the main agent's 3 to 5).
+const DEFAULT_MAX_IDEAS = 5
 
 // The two system prompts are constants, so each mode's prompt is byte-stable.
 // Everything that changes per request (language, country, currency, how many
@@ -270,7 +272,7 @@ function toShortIdeas(ideas: ResearchIdea[]): GiftIdea[] {
 // Ideas from a report_gifts input, cleaned for the main agent's chat cards;
 // null when the input does not fit.
 export function toGiftIdeas(input: unknown): GiftIdea[] | null {
-  const report = toReport(input, undefined, MAX_IDEAS)
+  const report = toReport(input, undefined, DEFAULT_MAX_IDEAS)
   return report ? toShortIdeas(report.ideas) : null
 }
 
@@ -382,7 +384,7 @@ export async function researchGiftReport(input: ResearchInput): Promise<Research
   const tavilyKey = process.env.TAVILY_API_KEY?.trim() || undefined
   const system = tavilyKey ? TAVILY_RESEARCH_SYSTEM_PROMPT : RESEARCH_SYSTEM_PROMPT
   const tools = tavilyKey ? TAVILY_TOOLS : ANTHROPIC_TOOLS
-  const wanted = input.ideas ? Math.max(1, Math.min(MAX_IDEAS, Math.round(input.ideas))) : MAX_IDEAS
+  const wanted = input.ideas ? Math.max(1, Math.min(MAX_IDEAS, Math.round(input.ideas))) : DEFAULT_MAX_IDEAS
   const search: SearchContext | undefined = tavilyKey
     ? {
         apiKey: tavilyKey,
