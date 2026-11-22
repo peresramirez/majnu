@@ -34,6 +34,9 @@ describe("reading a stored session back", () => {
       interests: ["Garten"],
     })
     expect(parseContext({ ageRange: "old", language: 7 })).toEqual({ language: "en" })
+    // The occasion is kept for the wrap step (issue #59).
+    expect(parseContext({ language: "de", occasion: "Geburtstag" })).toEqual({ language: "de", occasion: "Geburtstag" })
+    expect(parseContext({ language: "de", occasion: 30 })).toEqual({ language: "de" })
     expect(parseContext(null)).toEqual({ language: "en" })
   })
 

@@ -266,6 +266,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
               <WrapView
                 key={wrap.option.id}
                 wrap={wrap}
+                context={state.context}
                 onTemplate={chooseTemplate}
                 onWrap={wrapGift}
                 onBack={backToIdeas}

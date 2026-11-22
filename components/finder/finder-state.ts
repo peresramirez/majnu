@@ -10,6 +10,7 @@ import type {
   WrapResponse,
   WrapTemplateId,
 } from "@/lib/finder/events"
+import { WRAP_ORDER } from "@/lib/finder/wrap-templates"
 
 export type FinderItem =
   | { id: string; role: "user"; text: string }
@@ -149,9 +150,11 @@ export function statusLit(state: Pick<FinderState, "steps" | "streaming" | "item
 
 // The templates that fit a gift, in the order they are offered: the gift
 // templates first (the 3D gift box, and the party pop box for birthdays and
-// celebrations), then the letters that carry one. The first is chosen at the
+// parties), then the letters that carry one. The first is chosen at the
 // start. POST /api/finder/wrap accepts exactly these (WRAP_TEMPLATE_IDS).
-export const WRAP_TEMPLATES: readonly WrapTemplateId[] = ["gift-reveal", "gift-box-3d", "party-box", "classic-envelope", "postcard"]
+// The wrap step shows wrapTemplatesFor(context): the party pop box only when
+// the occasion Majnu heard is a birthday or a party (issue #59).
+export const WRAP_TEMPLATES: readonly WrapTemplateId[] = WRAP_ORDER
 
 export type WrapDetails = { recipientName: string; senderName: string; note: string }
 

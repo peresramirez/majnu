@@ -63,6 +63,7 @@ const StoredContext = z.object({
   ageRange: z.tuple([z.number(), z.number()]).optional().catch(undefined),
   budget: z.string().optional().catch(undefined),
   interests: z.array(z.string()).optional().catch(undefined),
+  occasion: z.string().optional().catch(undefined),
 })
 
 const StoredOption = z.object({

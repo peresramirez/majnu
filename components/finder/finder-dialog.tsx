@@ -203,6 +203,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                   <WrapView
                     key={wrap.option.id}
                     wrap={wrap}
+                    context={state.context}
                     onTemplate={chooseTemplate}
                     onWrap={wrapGift}
                     onBack={backToIdeas}

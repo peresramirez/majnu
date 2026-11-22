@@ -9,9 +9,10 @@ import { TemplateCard } from "@/components/letters/template-card"
 import { SharePanel } from "@/components/share/share-panel"
 import { AudioNoteRecorder } from "@/components/voice/audio-note-recorder"
 import { MakeItUnique } from "@/components/wrapper/make-it-unique"
-import type { WrapTemplateId } from "@/lib/finder/events"
+import type { FinderContext, WrapTemplateId } from "@/lib/finder/events"
+import { wrapTemplatesFor } from "@/lib/finder/wrap-templates"
 import { createClient } from "@/lib/supabase/client"
-import { WRAP_TEMPLATES, wrapAccount, type WrapAccount, type WrapDetails, type WrapState } from "./finder-state"
+import { wrapAccount, type WrapAccount, type WrapDetails, type WrapState } from "./finder-state"
 import { ProductImage } from "./gift-option-card"
 import { PreviewDialog } from "./preview-dialog"
 import { focusRing, primaryButton, quietLink, textLink } from "./styles"
@@ -21,6 +22,9 @@ type OpenWrap = Exclude<WrapState, { stage: "closed" }>
 
 type Props = {
   wrap: OpenWrap
+  // What Majnu assumed in the search: its occasion decides whether the party
+  // pop box is offered (a birthday or a party only).
+  context: FinderContext | null
   onTemplate: (id: WrapTemplateId) => void
   onWrap: (details: WrapDetails) => void
   onBack: () => void
@@ -177,7 +181,7 @@ function PreviewFrame({ src }: { src: string }) {
 
 // Wrapping the chosen gift: pick a template, add names if you like, then see
 // the page as they will and send the link.
-export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUrl }: Props) {
+export function WrapView({ wrap, context, onTemplate, onWrap, onBack, previewUrl, shareUrl }: Props) {
   const [details, setDetails] = useState<WrapDetails>({ recipientName: "", senderName: "", note: "" })
   // The finished page, larger, in a dialog over the finder.
   const [enlarged, setEnlarged] = useState<string | null>(null)
@@ -185,6 +189,8 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
   const [noteVersion, setNoteVersion] = useState(0)
   const account = useAccount()
   const busy = wrap.stage === "wrapping"
+  // The party pop box only for a birthday or a party (issue #59).
+  const templates = wrapTemplatesFor(context)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -236,8 +242,9 @@ export function WrapView({ wrap, onTemplate, onWrap, onBack, previewUrl, shareUr
 
       <fieldset className="mt-4" disabled={busy}>
         <legend className="sr-only">Design</legend>
-        <div className="grid gap-3 md:grid-cols-3">
-          {WRAP_TEMPLATES.map((id) => {
+        {/* Four designs (no party pop box) sit two by two; five, three and two. */}
+        <div className={`grid gap-3 ${templates.length === 4 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+          {templates.map((id) => {
             const selected = wrap.templateId === id
             return (
               <label key={id} className="group relative block cursor-pointer rounded-3xl">

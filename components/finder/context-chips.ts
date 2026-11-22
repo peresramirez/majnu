@@ -34,6 +34,12 @@ export function contextChips(context: FinderContext | null, locale = "en"): Cont
       prefill: "It's for my ",
     })
   }
+  // The occasion decides whether the party pop box is offered when wrapping,
+  // so the visitor can see it and correct it.
+  const occasion = context.occasion?.trim()
+  if (occasion) {
+    chips.push({ key: "occasion", label: capitalise(occasion), description: `Occasion: ${occasion}. Change the occasion`, prefill: "The occasion is " })
+  }
   const age = context.ageRange
   if (age && age.length === 2 && Number.isFinite(age[0]) && Number.isFinite(age[1])) {
     const [from, to] = age[0] <= age[1] ? age : [age[1], age[0]]
