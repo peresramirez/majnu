@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { ArrowLeft, ArrowRight, Maximize2 } from "lucide-react"
-import { LETTERS_CHAT } from "@/components/app/tabs"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import { TemplateCard } from "@/components/letters/template-card"
 import { SharePanel } from "@/components/share/share-panel"
@@ -238,8 +237,8 @@ function KeepingNote({ account }: { account: WrapAccount | null }) {
         </p>
         <p>
           Want to send an advent calendar instead?{" "}
-          {/* As the Create tab's "Make a calendar": the letters chat with the calendar attached. */}
-          <Link href={`${LETTERS_CHAT}?template=advent-classic`} className={quietLink}>
+          {/* As the Create tab's "Make a calendar": the calendar editor (issue #48). */}
+          <Link href="/dashboard/calendars/new" className={quietLink}>
             Make a calendar
           </Link>
           .
