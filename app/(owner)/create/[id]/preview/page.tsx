@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
 import { MoonPhase } from "@/components/brand/moon-phase"
 import type { LetterAudio } from "@/components/letters/audio-note"
 import { LetterRenderer } from "@/components/letters/registry"
@@ -7,6 +8,7 @@ import { ownerAudioSrc } from "@/lib/audio/rules"
 import { getMyAudioNote } from "@/lib/audio/store"
 import { getMyLetter, toPublicView } from "@/lib/letters/store"
 import { createClient } from "@/lib/supabase/server"
+import { BackLink } from "@/lib/navigation/use-back"
 
 export const metadata: Metadata = { title: "Preview", robots: { index: false, follow: false } }
 export const dynamic = "force-dynamic"
@@ -42,5 +44,21 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ i
     )
   }
   const audio = view.kind === "letter" ? await audioFor(letter.id) : null
-  return <LetterRenderer letter={view} audio={audio} />
+  // The page is full-bleed like /l/<slug>, so it needs its own way back
+  // (the developer could not leave it): a small pill over the template, back
+  // to where the owner came from, or to this gift's chat.
+  return (
+    <>
+      <BackLink
+        fallback={`/create/${letter.id}`}
+        signedInFallback={`/create/${letter.id}`}
+        aria-label="Back"
+        className="fixed left-3 top-[max(12px,env(safe-area-inset-top))] z-[60] inline-flex h-10 items-center gap-1.5 rounded-full bg-[#1B1226]/80 px-3.5 text-sm font-medium text-[#F4E9EF] shadow-lg ring-1 ring-inset ring-white/20 backdrop-blur-md transition-colors hover:bg-[#1B1226] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E8B19A]"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back
+      </BackLink>
+      <LetterRenderer letter={view} audio={audio} />
+    </>
+  )
 }
