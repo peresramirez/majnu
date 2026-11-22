@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Check, RotateCcw } from "lucide-react"
+import { Check, Paperclip, RotateCcw } from "lucide-react"
 import type { GiftOption } from "@/lib/finder/events"
 import {
   NO_PROFILE,
@@ -186,10 +186,20 @@ export function Conversation({ state, onSend, onChoose, onNewSearch, onAnswer, o
           case "user":
             return (
               <li key={item.id} className="flex justify-end">
-                <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-night-petal/10 px-3.5 py-2 text-[15px] leading-relaxed text-night-petal">
+                <div className="max-w-[85%] rounded-[18px] rounded-br-md bg-night-petal/10 px-3.5 py-2 text-[15px] leading-relaxed text-night-petal">
                   <span className="sr-only">You: </span>
-                  {item.text}
-                </p>
+                  {item.text && <p className="whitespace-pre-wrap">{item.text}</p>}
+                  {/* Photos and documents sent with it (issue #77): only their names. */}
+                  {item.files && item.files.length > 0 && (
+                    <p className={`flex items-start gap-1.5 text-[13px] text-night-lilac ${item.text ? "mt-1" : ""}`}>
+                      <Paperclip className="mt-[3px] h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        <span className="sr-only">Shared: </span>
+                        {item.files.map((file) => file.name).join(", ")}
+                      </span>
+                    </p>
+                  )}
+                </div>
               </li>
             )
           case "assistant":

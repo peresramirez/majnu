@@ -16,7 +16,9 @@ import type {
 import { WRAP_ORDER } from "@/lib/finder/wrap-templates"
 
 export type FinderItem =
-  | { id: string; role: "user"; text: string }
+  // `files`: photos and documents sent with it (issue #77), as shown.
+  // `filesRefused`: the request was refused before any was read.
+  | { id: string; role: "user"; text: string; files?: SentFile[]; filesRefused?: boolean }
   | { id: string; role: "assistant"; text: string }
   | { id: string; role: "options"; options: GiftOption[]; recommendedId: string; why: string }
   | { id: string; role: "question"; text: string; suggestions: string[]; label?: string; profileRead?: boolean }
@@ -47,17 +49,20 @@ export type FinderState = {
 
 export type ProfileAnswer = { link: string; none: boolean }
 
+export type SentFile = { kind: "image" | "pdf" | "text"; name: string }
+
 export type FinderAction =
   // `answered`: the message carries the picked answers and the profile field
   // (composeAnswers). Otherwise the open questions' picks are dropped.
-  | { type: "send"; text: string; answered?: boolean }
+  | { type: "send"; text: string; answered?: boolean; files?: SentFile[] }
   // Picks an answer, or clears it when it is picked again.
   | { type: "answer"; itemId: string; value: string }
   | { type: "profile"; link?: string; none?: boolean }
   | { type: "event"; event: FinderEvent }
   // The request failed before or while streaming (network, HTTP status, sign-in).
   // `reason` adds the matching action, e.g. a sign-in link.
-  | { type: "failed"; message: string; reason?: FinderLimitReason }
+  // `noRetry`: sending the words again would leave the files out.
+  | { type: "failed"; message: string; reason?: FinderLimitReason; noRetry?: boolean }
   // The response body ended.
   | { type: "closed" }
   | { type: "reset" }
@@ -150,7 +155,7 @@ export function finderReducer(state: FinderState, action: FinderAction): FinderS
       // What was picked for questions this message does not answer is dropped.
       const answers = action.answered ? state.answers : withoutKeys(state.answers, open.map((q) => q.id))
       const declined = state.profileDeclined || (action.answered === true && showsProfileField(state) && state.profile.none)
-      const next = push(state, { role: "user", text: action.text })
+      const next = push(state, { role: "user", text: action.text, ...(action.files?.length ? { files: action.files } : {}) })
       return { ...next, streaming: true, status: null, steps: 0, lastMessage: action.text, answers, profile: EMPTY_PROFILE, profileDeclined: declined }
     }
     case "answer": {
@@ -167,12 +172,16 @@ export function finderReducer(state: FinderState, action: FinderAction): FinderS
     case "event":
       return applyEvent(state, action.event)
     case "failed": {
-      const next = push(state, {
+      // Files refused with the request were not read: they leave the search's 6.
+      const last = state.items[state.items.length - 1]
+      const items =
+        last?.role === "user" && last.files?.length ? [...state.items.slice(0, -1), { ...last, filesRefused: true }] : state.items
+      const next = push({ ...state, items }, {
         role: "notice",
         tone: "error",
         message: action.message,
         reason: action.reason,
-        retry: action.reason ? undefined : (state.lastMessage ?? undefined),
+        retry: action.reason || action.noRetry ? undefined : (state.lastMessage ?? undefined),
       })
       return { ...next, streaming: false, status: null }
     }
@@ -248,6 +257,11 @@ export function composeAnswers(state: Pick<FinderState, "items" | "answers" | "p
 // Something to send besides typed words: a picked answer or the profile field.
 export function hasAnswers(state: Pick<FinderState, "items" | "answers" | "profile" | "profileDeclined">): boolean {
   return composeAnswers(state, "") !== ""
+}
+
+// Files sent so far in this search, so the box can say when its 6 are used.
+export function filesSent(items: FinderItem[]): number {
+  return items.reduce((count, item) => count + (item.role === "user" && !item.filesRefused ? (item.files?.length ?? 0) : 0), 0)
 }
 
 // The index of the newest options item: only that one offers "Personalise the gift".

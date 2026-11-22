@@ -25,10 +25,13 @@ import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/her
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
-import { ANSWER_PLACEHOLDER, finderAnnouncement, hasAnswers, openQuestions, statusLit } from "./finder-state"
+import { AttachButton, AttachmentTray, DropOverlay } from "./attachment-tray"
+import { filesFromClipboard } from "./attachments"
+import { ANSWER_PLACEHOLDER, filesSent, finderAnnouncement, hasAnswers, openQuestions, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
 import { fetchTransport, type FinderTransport } from "./transport"
 import { useTypewriter } from "./typewriter"
+import { useAttachments, useFileDrop } from "./use-attachments"
 import { useFinder, type Finder } from "./use-finder"
 import { WRAP_PLACEHOLDER, WrapFooter, WrapView } from "./wrap-view"
 
@@ -81,7 +84,10 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   const placeholder = useTypewriter(EXAMPLES, empty && draft === "")
   // Majnu's questions are waiting for answers (issue #82).
   const answering = !wrapping && openQuestions(state.items).length > 0
-  const sendable = draft.trim() !== "" || hasAnswers(state)
+  // Photos and documents waiting to go with the next message (issue #77).
+  const attachments = useAttachments(filesSent(state.items))
+  const drop = useFileDrop((files) => void attachments.add(files), composing)
+  const sendable = (draft.trim() !== "" || hasAnswers(state) || attachments.items.length > 0) && !attachments.preparing
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -150,11 +156,16 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   // (issue #82): Enter, the send button and "Send answers" all come here.
   function submit(e?: FormEvent) {
     e?.preventDefault()
-    if (!draft.trim() && !hasAnswers(state)) {
+    // A photo still being made smaller goes with the message, so wait for it.
+    if (attachments.preparing) return
+    if (!draft.trim() && !hasAnswers(state) && attachments.items.length === 0) {
       composer.current?.focus()
       return
     }
-    if (send(draft, { answers: true })) setDraft("")
+    if (send(draft, { answers: true, files: attachments.items })) {
+      setDraft("")
+      attachments.clear()
+    }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -181,6 +192,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   function newSearch() {
     reset()
     setDraft("")
+    attachments.clear()
     seen.current = null
     requestAnimationFrame(() => composer.current?.focus())
   }
@@ -190,7 +202,8 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
   const column = `mx-auto w-full px-4 sm:px-6 ${ready ? "max-w-[960px]" : "max-w-[720px]"}`
 
   return (
-    <div ref={panel} className={`flex h-full min-h-0 flex-col ${empty ? "md:justify-center md:pb-[6vh]" : ""}`}>
+    <div ref={panel} {...drop.handlers} className={`relative flex h-full min-h-0 flex-col ${empty ? "md:justify-center md:pb-[6vh]" : ""}`}>
+      <DropOverlay show={drop.dragging} />
       {!empty && (
         <div className="flex-none border-b border-night-petal/10">
           <div className={`${column} flex items-center gap-3 py-2`}>
@@ -308,11 +321,14 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
           className={`flex-none bg-night-plum ${empty ? "border-t border-night-petal/10 md:border-t-0 md:bg-transparent" : "border-t border-night-petal/10"}`}
         >
           <div className={`${column} pb-3 pt-2.5 ${empty ? "md:py-0" : ""}`}>
+            <AttachmentTray items={attachments.items} preparing={attachments.preparing} error={attachments.error} onRemove={attachments.remove} />
             <div
-              className={`group/row flex items-end gap-2 rounded-[22px] bg-night-velvet py-1 pl-4 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/60 ${
+              className={`group/row flex items-end gap-1 rounded-[22px] bg-night-velvet py-1 pl-1 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 ease-calm focus-within:ring-2 focus-within:ring-night-rose/60 ${
                 empty ? "md:rounded-[26px] md:py-1.5 md:pr-1.5 md:shadow-[0_18px_48px_-20px_rgba(0,0,0,0.75)]" : ""
               }`}
             >
+              {/* Photos and documents about the person (issue #77). */}
+              <AttachButton onFiles={(files) => void attachments.add(files)} disabled={state.streaming} />
               <label htmlFor="finder-panel-message" className="sr-only">
                 {empty ? "Who is the gift for?" : "Message to Majnu"}
               </label>
@@ -326,10 +342,17 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onKeyDown}
+                onPaste={(e) => {
+                  // A pasted photo or screenshot becomes a preview; text pastes as usual.
+                  const files = filesFromClipboard(e.clipboardData)
+                  if (files.length === 0) return
+                  e.preventDefault()
+                  void attachments.add(files)
+                }}
                 enterKeyHint="send"
                 maxLength={1000}
                 placeholder={empty ? placeholder : wrapping ? WRAP_PLACEHOLDER : answering ? ANSWER_PLACEHOLDER : MORE_PLACEHOLDER}
-                className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
+                className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:truncate placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
               />
               {/* Speak instead of typing (issue #37): the words land in the box
                   for the sender to check, and nothing is sent until they do. */}
@@ -345,6 +368,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 <button
                   type="submit"
                   aria-label="Find a gift"
+                  onMouseDown={(e) => e.preventDefault()}
                   className={`inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-night-rose text-[15px] font-semibold text-night-plum transition-[background-color,transform] duration-200 ease-calm hover:bg-[#F1C4A9] active:scale-[0.97] sm:w-auto sm:px-5 ${focusRing}`}
                 >
                   <span className="hidden sm:inline" aria-hidden="true">
@@ -356,6 +380,9 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 <button
                   type="submit"
                   aria-label="Send"
+                  // Focus stays in the message box, so the keyboard stays up and the
+                  // phone's tab bar does not come back and move the button mid-tap.
+                  onMouseDown={(e) => e.preventDefault()}
                   aria-disabled={state.streaming || !sendable}
                   className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-[background-color,opacity,transform] duration-200 ease-calm before:absolute before:-inset-0.5 before:content-[''] hover:bg-[#F1C4A9] active:scale-95 aria-disabled:opacity-50 ${focusRing}`}
                 >

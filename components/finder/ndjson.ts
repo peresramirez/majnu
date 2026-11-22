@@ -16,7 +16,7 @@ const isString = (v: unknown): v is string => typeof v === "string"
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 const optionalString = (v: unknown) => v === undefined || isString(v)
 
-const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required"])
+const LIMIT_REASONS = new Set(["finder_daily", "personalise_daily", "session_full", "site_busy", "signin_required", "files_limit"])
 
 function isGiftOption(v: unknown): v is GiftOption {
   if (!isRecord(v)) return false
