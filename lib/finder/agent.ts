@@ -1,8 +1,12 @@
 // The gift finder agent (issue #31, docs/plan.md "Gift finder"). The visitor
-// says who the gift is for. On the first message of a conversation Majnu
-// always asks one round of one to three quick questions with answers to tap,
-// and searches only once the visitor has answered (22 November): the server
-// refuses a search on that first message (`askFirst`). Then it searches,
+// says who the gift is for. The first message of a conversation is answered by
+// the route itself, at once, with six gifts from Majnu's catalogue (issue #97,
+// lib/finder/catalog-match.ts); this agent first hears of it in the next
+// message, which starts with a <catalogue_shown> block. Asked to personalise,
+// it asks one round of one to three quick questions with answers to tap (and
+// an Other answer the app adds), and searches once the visitor has answered.
+// A first message the catalogue did not answer (files, or no catalogue) is
+// asked about first: the server refuses a search on it (`askFirst`). Then it searches,
 // assuming the rest (relationship, an age range, the place and currency from
 // the network) and showing those assumptions. It shows six options with one
 // recommended, first, and may add one follow-up question under them. Asked to
@@ -102,13 +106,15 @@ The context block
 - The connection shows where the visitor is, not where the person lives.
 
 Ask first, then search
-- On the visitor's first message, always ask before you search, even for a short request such as "Find a gift for my mother": read what they wrote, then call ask_questions once with one to three short questions, the one that matters most first, each with two to four short answers to tap. Then wait for the answers. If the first message has a profile link, read it with read_profile first, then ask.
+- The app answers the visitor's first message itself, at once, with six ready ideas from Majnu's own catalogue for the kind of person it is for, and "Want ideas made just for them?" under them. Your first message in the conversation then starts with a <catalogue_shown> block from the app: the visitor's first message and the ideas they saw. The visitor did not write the block. Their own message follows it.
+- When that message is "Personalise the gift", the visitor wants ideas made just for that person: call ask_questions once with one to three short questions, the one that matters most first, each with two to four short answers to tap, and wait for the answers. If their first message already told you what the person loves and more (interests, the occasion, a budget), search with find_gifts at once instead. If the first message has a profile link, read it with read_profile first.
+- When the visitor's first message reaches you without a <catalogue_shown> block (they shared files, or the catalogue could not be read), always ask before you search, even for a short request such as "Find a gift for my mother": read what they wrote, then call ask_questions once with one to three short questions, and wait for the answers. If it has a profile link, read it with read_profile first, then ask.
 - Ask what would change the choice most: what they love or do in their free time, the occasion, the budget, or where the gift should go. Never ask what the visitor has already told you, and never ask again the followUp question you put under the options: if they didn't answer it, ask about something else.
 - Once the visitor has answered, search with find_gifts with what you know, and assume the rest. The app shows your assumptions as small chips the visitor can correct. Don't ask again before you have shown options.
-- After that first round, search at once when the visitor wants other gifts or changes something, and ask again only to personalise or when they ask you to get to know the person first.
+- After that, search at once when the visitor wants other gifts or tells you more about the person, and ask again only to personalise or when they ask you to get to know the person first.
 - Your questions can invite the visitor to tell you more in their own words: what the person loves, what they talk about, what they do all day.
 - Under your questions the app adds an optional field for the person's public Instagram, TikTok or LinkedIn, with "No public profile" to tap. The visitor can put one link or several in it. So don't ask for a profile in your questions.
-- The visitor answers all your questions in one message, such as "Free time: video games. Occasion: birthday.", sometimes with a profile link or their own words after it.
+- Every question also has an "Other" answer where the visitor types their own. The visitor answers all your questions in one message, such as "Free time: video games. Occasion: other: her retirement party.", sometimes with a profile link or their own words after it. An "other:" answer is in their own words: take it as seriously as a tapped one.
 
 Where the gift goes
 - If the visitor hints that the person lives or comes from somewhere else ("my friend is from Venezuela", "my sister in Madrid"), don't assume either place: ask where the gift should be delivered or used, with the places as answers to tap. When they name another country than the one in the context block, put it in find_gifts' country.
@@ -167,7 +173,7 @@ const nullable = (schema: Record<string, unknown>, description: string) => ({ an
 const FIND_GIFTS_TOOL: BetaTool = {
   name: "find_gifts",
   description:
-    "Search the web for six gift options for the person, in the visitor's language and country, with one recommended. The visitor sees your assumptions as chips, then the options. One call per visitor message, never on the visitor's first message.",
+    "Search the web for six gift options for the person, in the visitor's language and country, with one recommended. The visitor sees your assumptions as chips, then the options. One call per visitor message, never on a first message the app asks you to ask about first.",
   strict: true,
   input_schema: {
     type: "object",
@@ -236,7 +242,7 @@ const FIND_GIFTS_TOOL: BetaTool = {
 const ASK_QUESTIONS_TOOL: BetaTool = {
   name: "ask_questions",
   description:
-    "Ask the visitor one to three short questions: always on their first message, before any search, or later to personalise the gift. Each has two to four short answers the visitor can tap. After this, wait for the answers.",
+    "Ask the visitor one to three short questions to personalise the gift, before a search. Each has two to four short answers the visitor can tap, and the app adds an Other answer to type. After this, wait for the answers.",
   strict: true,
   input_schema: {
     type: "object",
@@ -443,6 +449,10 @@ export type FinderTurnState = {
   // or one continued after starting over): Majnu asks one round of questions
   // before any search, so find_gifts is refused until it has (22 November).
   askFirst?: boolean
+  // What the app's instant answer from the catalogue showed the visitor
+  // (issue #97, catalogueShownText), for the first model turn after it: put
+  // in that turn's user message, after the context block.
+  catalogueShown?: string | null
   emit: (event: FinderEvent) => void
 }
 
@@ -961,14 +971,17 @@ async function runCall(call: BetaToolUseBlock, state: FinderTurnState, flags: Tu
 
 // ---------- The loop ----------
 
-// The context block, then what the files showed (text only, issue #77), then
-// the visitor's words. A message of files alone has no words.
+// The context block, then what the catalogue showed (issue #97), then what the
+// files showed (text only, issue #77), then the visitor's words. A message of
+// files alone has no words.
 export function userTurn(message: string, state: FinderTurnState): BetaMessageParam {
   const files = state.sharedFiles?.text ?? ""
+  const catalogue = state.catalogueShown ?? ""
   return {
     role: "user",
     content: [
       { type: "text", text: contextBlockText(state) },
+      ...(catalogue ? [{ type: "text" as const, text: catalogue }] : []),
       ...(files ? [{ type: "text" as const, text: files }] : []),
       ...(message.trim() ? [{ type: "text" as const, text: message }] : []),
     ],

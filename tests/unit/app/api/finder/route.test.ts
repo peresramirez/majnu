@@ -19,6 +19,9 @@ vi.mock("@/lib/finder/limits", async (importOriginal) => ({
   findOpenSession: vi.fn(),
 }))
 vi.mock("@/lib/finder/agent", () => ({ runFinderTurn: vi.fn() }))
+// No catalogue rows: a first message goes to Majnu, who asks first (issue #97
+// has its own tests in catalogue.test.ts).
+vi.mock("@/lib/finder/catalog", () => ({ loadCatalogue: vi.fn(async () => []) }))
 
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta"
 import { POST } from "@/app/api/finder/route"

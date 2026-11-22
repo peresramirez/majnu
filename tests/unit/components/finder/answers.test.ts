@@ -3,7 +3,9 @@
 import { describe, expect, it } from "vitest"
 import {
   NO_PROFILE,
+  OTHER_ANSWER,
   composeAnswers,
+  pickedAnswer,
   finderReducer,
   hasAnswers,
   initialFinderState,
@@ -150,5 +152,78 @@ describe("sending the answers", () => {
     const fresh = run([{ type: "reset" }], s)
     expect(fresh.answers).toEqual({})
     expect(fresh.profileDeclined).toBe(false)
+  })
+})
+
+describe("the Other answer (issue #97)", () => {
+  const free = (state: FinderState) => openQuestions(state.items)[0].id
+  const occasion = (state: FinderState) => openQuestions(state.items)[1].id
+
+  it("goes into the answers as 'other:' with the visitor's own words", () => {
+    const start = asked(true)
+    const state = run(
+      [
+        { type: "answer", itemId: free(start), value: OTHER_ANSWER },
+        { type: "other", itemId: free(start), text: "  restores   old motorbikes " },
+        { type: "answer", itemId: occasion(start), value: "Birthday" },
+      ],
+      start,
+    )
+    expect(pickedAnswer(state, free(start))).toBe("other: restores old motorbikes")
+    expect(composeAnswers(state, "")).toBe("Free time: other: restores old motorbikes. Occasion: Birthday.")
+    expect(hasAnswers(state)).toBe(true)
+  })
+
+  it("counts only once something is typed, and only while Other is picked", () => {
+    const start = asked(true)
+    const picked = run([{ type: "answer", itemId: free(start), value: OTHER_ANSWER }], start)
+    expect(composeAnswers(picked, "")).toBe("")
+    expect(hasAnswers(picked)).toBe(false)
+    const typed = run([{ type: "other", itemId: free(start), text: "chess" }], picked)
+    expect(composeAnswers(typed, "")).toBe("Free time: other: chess.")
+    // Picking a suggestion instead drops the typed words from the message.
+    const switched = run([{ type: "answer", itemId: free(start), value: "Football" }], typed)
+    expect(composeAnswers(switched, "")).toBe("Free time: Football.")
+  })
+
+  it("takes nothing for a question that is not open, or while Majnu is replying", () => {
+    const start = asked(true)
+    expect(run([{ type: "other", itemId: "nope", text: "x" }], start).others).toEqual({})
+    const busy = run([{ type: "send", text: "hi" }], start)
+    expect(run([{ type: "other", itemId: free(start), text: "x" }], busy).others).toEqual({})
+  })
+
+  it("caps the typed answer", () => {
+    const start = asked(true)
+    const state = run([{ type: "other", itemId: free(start), text: "a".repeat(500) }], start)
+    expect(state.others[free(start)]).toHaveLength(200)
+  })
+})
+
+describe("the catalogue's instant ideas (issue #97)", () => {
+  it("are marked, so the finder offers ideas made just for them under them", () => {
+    const option = { id: "cat-a", title: "Buch", description: "Ein Buch.", reason: "Liest gern.", url: "https://shop.example/a" }
+    const state = run([
+      { type: "send", text: "für meine Mama" },
+      ev({ type: "options", options: [option], recommendedId: "cat-a", why: "Liest gern.", source: "catalogue" }),
+      { type: "send", text: "Personalise the gift" },
+      ev({ type: "options", options: [option], recommendedId: "cat-a", why: "Weil." }),
+    ])
+    const options = state.items.filter((item) => item.role === "options")
+    expect(options.map((item) => (item as { catalogue?: boolean }).catalogue)).toEqual([true, undefined])
+  })
+})
+
+describe("the personalisation meter's value (issue #97)", () => {
+  it("follows the newest context event that carries one", () => {
+    const p1 = { score: 20, next: { key: "profile" as const, label: "Add their Instagram, TikTok or LinkedIn", gain: 20 } }
+    const p2 = { score: 40, next: { key: "occasion" as const, label: "Name the occasion", gain: 10 } }
+    const state = run([
+      ev({ type: "context", context: { language: "de", relationship: "Mama" }, personalisation: p1 }),
+      ev({ type: "context", context: { language: "de", relationship: "Mama", interests: ["Jazz"] } }),
+    ])
+    expect(state.personalisation).toEqual(p1)
+    expect(run([ev({ type: "context", context: { language: "de" }, personalisation: p2 })], state).personalisation).toEqual(p2)
+    expect(initialFinderState().personalisation).toBeNull()
   })
 })

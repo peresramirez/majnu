@@ -5,6 +5,7 @@
 // Every finder request needs a Supabase session. Visitors who have not signed
 // up get an invisible anonymous account first (see docs/plan.md, "Gift finder").
 import type { TemplateId } from "@/lib/letters/schema"
+import type { Personalisation } from "./personalisation"
 
 // What the browser tells us. Country and region never come from the browser:
 // the server reads them from the request (Cloudflare's network location).
@@ -97,9 +98,15 @@ export type FinderEvent =
   | { type: "text"; delta: string }
   // What Majnu is doing right now, e.g. "Looking at gifts in Germany…".
   | { type: "status"; label: string }
-  | { type: "context"; context: FinderContext }
+  // `personalisation`: how well Majnu knows the person so far, 0 to 100, and
+  // the addition that would raise it most (lib/finder/personalisation.ts).
+  // Added for issue #97 (additive).
+  | { type: "context"; context: FinderContext; personalisation?: Personalisation }
   // Three options (sometimes fewer), with the one Majnu recommends and why.
-  | { type: "options"; options: GiftOption[]; recommendedId: string; why: string }
+  // `source: "catalogue"`: the instant first answer from Majnu's own gift
+  // catalogue (issue #97), with no research; the finder offers "Want ideas
+  // made just for them?" under it. Added for issue #97 (additive).
+  | { type: "options"; options: GiftOption[]; recommendedId: string; why: string; source?: "catalogue" }
   // A personalising question; `suggestions` become answers the visitor picks
   // (issue #82: picked, not sent, until they send all their answers as one
   // message). `label` names what it asks about in a word or two ("Free

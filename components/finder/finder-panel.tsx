@@ -24,6 +24,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { EXAMPLES, SUGGESTIONS, type Suggestion } from "@/components/landing/hero-finder"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
+import { PersonalisationMeter } from "./personalisation-meter"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
 import { AttachButton, AttachmentTray, DropOverlay } from "./attachment-tray"
 import { filesFromClipboard } from "./attachments"
@@ -253,6 +254,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
             {chips.length > 0 && !wrapping && (
               <div className="mb-4">
                 <p className="text-xs text-night-lilac">Their profile so far. Tap one to change it.</p>
+                <PersonalisationMeter value={finder.state.personalisation} />
                 <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Their profile so far">
                   {chips.map((c) => (
                     <li key={c.key}>
@@ -283,6 +285,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 onNewSearch={newSearch}
                 onAnswer={finder.answer}
                 onProfile={finder.setProfile}
+                onOther={finder.setOther}
                 onSendAnswers={() => submit()}
                 draftReady={draft.trim() !== ""}
               />
