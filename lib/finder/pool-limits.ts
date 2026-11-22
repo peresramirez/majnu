@@ -65,7 +65,7 @@ export async function countPoolsToday(ownerId: string, now: Date): Promise<numbe
 // finder's "start a new search" (a calendar has one session).
 export type CalendarSearchClaim =
   | { ok: true; claimId: number }
-  | { ok: false; reason: Exclude<FinderLimitReason, "session_full">; message: string }
+  | { ok: false; reason: Exclude<FinderLimitReason, "session_full" | "files_limit">; message: string }
 
 function forCalendar(claim: SearchClaim): CalendarSearchClaim {
   if (claim.ok) return claim

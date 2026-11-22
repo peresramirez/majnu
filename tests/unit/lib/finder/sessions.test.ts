@@ -6,7 +6,7 @@ const calls: { table: string; method: string; args: unknown[] }[] = []
 let result: { data: unknown; error: unknown } = { data: null, error: null }
 function recorder(table: string) {
   const builder: Record<string, unknown> = {}
-  for (const method of ["insert", "update", "select", "eq", "single", "maybeSingle"]) {
+  for (const method of ["insert", "update", "select", "eq", "is", "single", "maybeSingle"]) {
     builder[method] = (...args: unknown[]) => {
       calls.push({ table, method, args })
       return builder
@@ -57,11 +57,14 @@ describe("saving a turn", () => {
   it("writes only the session's own row, matched by id and owner", async () => {
     result = { data: { id: "s1" }, error: null }
     await saveFinderSession({ id: "s1", ownerId: "user-1" }, { chat: [], context: { language: "de" }, lastOptions: null })
+    // Read, then written: both matched by id and owner.
     expect(calls.filter((c) => c.method === "eq").map((c) => c.args)).toEqual([
       ["id", "s1"],
       ["owner_id", "user-1"],
+      ["id", "s1"],
+      ["owner_id", "user-1"],
     ])
-    expect(calls.find((c) => c.method === "update")?.args[0]).toEqual({ chat: [], context: { language: "de" }, last_options: null })
+    expect(calls.find((c) => c.method === "update")?.args[0]).toEqual({ chat: [], context: { language: "de", rev: 1 }, last_options: null })
   })
 
   it("throws when the row is not there", async () => {

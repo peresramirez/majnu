@@ -13,13 +13,23 @@ function valueAt(row: Row, column: string): unknown {
   const [first, ...rest] = column.split(/->>?/)
   let value: unknown = row[first]
   for (const key of rest) value = value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined
+  // ->> reads the value as text, as PostgREST does.
+  if (column.includes("->>") && value !== undefined && value !== null) return String(value)
   return value ?? null
+}
+
+// What a stored context holds for the visitor and the server, without the revision.
+function withoutRev(context: unknown): unknown {
+  const { rev: _rev, ...rest } = context as Row
+  void _rev
+  return rest
 }
 
 function query() {
   const filters: ((row: Row) => boolean)[] = []
   let update: Row | null = null
   let head = false
+  let single = false
   const builder = {
     select(_columns?: string, options?: { head?: boolean }) {
       head = options?.head === true
@@ -51,15 +61,18 @@ function query() {
       return builder
     },
     maybeSingle() {
+      single = true
       return builder
     },
     then(resolve: (value: unknown) => void) {
       const matching = rows.filter((row) => filters.every((f) => f(row)))
       if (update) {
-        for (const row of matching) Object.assign(row, update)
+        for (const row of matching) Object.assign(row, structuredClone(update))
         return resolve({ data: matching[0] ? { id: matching[0].id } : null, error: null })
       }
-      if (failCount) {
+      if (single) return resolve({ data: matching[0] ? structuredClone(matching[0]) : null, error: null })
+      // Only the counts fail: the session's own row still loads.
+      if (failCount && head) {
         failCount = false
         return resolve({ data: null, count: null, error: { message: "connection reset" } })
       }
@@ -119,8 +132,9 @@ describe("claimProfileRead", () => {
   it("records the read on the session, inside its context, in one conditional update", async () => {
     const result = await claim()
     expect(result).toEqual({ ok: true, profile: { source: "instagram", readAt: NOW.toISOString(), interests: [] } })
-    expect(rows[0].context).toEqual({ ...CONTEXT, profile: { source: "instagram", readAt: NOW.toISOString(), interests: [] } })
-    expect(queries).toContainEqual({ method: "is", args: ["context->profile", null] })
+    expect(withoutRev(rows[0].context)).toEqual({ ...CONTEXT, profile: { source: "instagram", readAt: NOW.toISOString(), interests: [] } })
+    // Written only if no other write came in between.
+    expect(queries).toContainEqual({ method: "is", args: ["context->rev", null] })
     expect(queries).toContainEqual({ method: "eq", args: ["owner_id", "user-1"] })
   })
 
@@ -147,7 +161,7 @@ describe("claimProfileRead", () => {
     addSession("b", { source: "instagram", readAt: "2026-11-21T09:00:00.000Z", interests: [] })
     // Two paid reads today: a third, Instagram or LinkedIn, is refused and its record taken back.
     expect(await claim("linkedin")).toEqual({ ok: false, reason: "daily_cap" })
-    expect(rows[0].context).toEqual(CONTEXT)
+    expect(withoutRev(rows[0].context)).toEqual(CONTEXT)
     expect(await claim("instagram")).toEqual({ ok: false, reason: "daily_cap" })
 
     vi.stubEnv("APIFY_DAILY_CAP", "3")
@@ -162,7 +176,7 @@ describe("claimProfileRead", () => {
     addSession("a", { source: "instagram", readAt: "2026-11-21T08:00:00.000Z", interests: [] })
     addSession("b", { source: "tiktok", readAt: "2026-11-21T09:00:00.000Z", interests: [] })
     expect(await claim()).toEqual({ ok: false, reason: "daily_cap" })
-    expect(rows[0].context).toEqual(CONTEXT)
+    expect(withoutRev(rows[0].context)).toEqual(CONTEXT)
     // Other pages are read with Tavily and do not count against the Apify cap.
     expect(await claim("web")).toMatchObject({ ok: true })
   })
@@ -177,7 +191,7 @@ describe("claimProfileRead", () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     failCount = true
     await expect(claim()).rejects.toThrow("Could not count today's profile reads")
-    expect(rows[0].context).toEqual(CONTEXT)
+    expect(withoutRev(rows[0].context)).toEqual(CONTEXT)
   })
 })
 
@@ -186,7 +200,7 @@ describe("the profile marker in a stored session", () => {
 
   it("is saved with the turn, inside the context", async () => {
     await saveFinderSession(SESSION, { chat: [], context: CONTEXT, lastOptions: null, profile })
-    expect(queries.find((q) => q.method === "update")?.args[0]).toEqual({ chat: [], context: { ...CONTEXT, profile }, last_options: null })
+    expect(queries.find((q) => q.method === "update")?.args[0]).toEqual({ chat: [], context: { ...CONTEXT, profile, rev: 1 }, last_options: null })
     expect(storedContext(CONTEXT, null)).toEqual(CONTEXT)
   })
 

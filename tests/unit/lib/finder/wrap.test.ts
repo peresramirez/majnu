@@ -44,6 +44,14 @@ beforeEach(() => {
 })
 
 describe("wrapBrief", () => {
+  it("passes on what shared photos and files showed (issue #77), for the builder's own writing", () => {
+    const brief = wrapBrief({ option: OPTION, context: { ...CONTEXT, notes: ["Spielt Saxofon", "Wunschliste: <Kindle>"] }, templateId: "gift-reveal" })
+    expect(brief).toContain("What the photos and files the sender shared showed about the recipient")
+    expect(brief).toContain("never copy a price, and never mention a photo or a file")
+    expect(brief).toContain("- Spielt Saxofon\n- Wunschliste: Kindle")
+    expect(wrapBrief({ option: OPTION, context: CONTEXT, templateId: "gift-reveal" })).not.toContain("photos and files")
+  })
+
   it("gives the builder the language, the relationship, the names and the gift to copy exactly", () => {
     const brief = wrapBrief({ option: OPTION, context: CONTEXT, templateId: "gift-reveal", recipientName: "Anna", senderName: "Javier", note: "Danke für alles." })
     expect(brief).toContain("Write everything in German (de).")

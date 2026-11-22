@@ -7,8 +7,11 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { VoiceButton } from "@/components/voice/voice-button"
 import { contextChips } from "./context-chips"
 import { Conversation, MORE_PLACEHOLDER } from "./conversation"
-import { finderAnnouncement, statusLit } from "./finder-state"
+import { AttachButton, AttachmentTray, DropOverlay } from "./attachment-tray"
+import { filesFromClipboard } from "./attachments"
+import { ANSWER_PLACEHOLDER, filesSent, finderAnnouncement, hasAnswers, openQuestions, statusLit } from "./finder-state"
 import { focusRing } from "./styles"
+import { useAttachments, useFileDrop } from "./use-attachments"
 import type { Finder } from "./use-finder"
 import { useVisualViewportVars } from "./visual-viewport"
 import { WRAP_PLACEHOLDER, WrapFooter, WrapView } from "./wrap-view"
@@ -50,6 +53,12 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
   // The message box stays while the visitor chooses a design and fills in the
   // page: what they type there goes to Majnu with their choice (issue #70).
   const composing = wrap.stage === "closed" || wrap.stage === "choose"
+  // Majnu's questions are waiting for answers (issue #82).
+  const answering = !wrapping && openQuestions(state.items).length > 0
+  // Photos and documents waiting to go with the next message (issue #77).
+  const attachments = useAttachments(filesSent(state.items))
+  const drop = useFileDrop((files) => void attachments.add(files), composing)
+  const sendable = (draft.trim() !== "" || hasAnswers(state) || attachments.items.length > 0) && !attachments.preparing
 
   // Grow the message box with its text, up to a few lines.
   useLayoutEffect(() => {
@@ -98,9 +107,16 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
     content.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus({ preventScroll: true })
   }, [wrap.stage, open])
 
+  // Sends what is typed, with the answers picked for Majnu's open questions
+  // (issue #82): Enter, the send button and "Send answers" all come here.
   function submit(e?: FormEvent) {
     e?.preventDefault()
-    if (send(draft)) setDraft("")
+    // A photo still being made smaller goes with the message, so wait for it.
+    if (attachments.preparing) return
+    if (send(draft, { answers: true, files: attachments.items })) {
+      setDraft("")
+      attachments.clear()
+    }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -129,6 +145,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
         <DialogPrimitive.Overlay className="fixed inset-x-0 top-[var(--vv-top,0px)] z-50 flex h-[var(--vv-height,100dvh)] flex-col bg-night-deep/75 pt-2 backdrop-blur-sm motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 md:inset-0 md:h-auto md:items-center md:px-6 md:pb-6 md:pt-[max(24px,8vh)]">
           <DialogPrimitive.Content
             ref={content}
+            {...drop.handlers}
             // Focus the panel itself on open: no phone keyboard pops up, and
             // the next Tab reaches the first control.
             onOpenAutoFocus={(e) => {
@@ -146,6 +163,7 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                 : "md:max-h-[min(820px,calc(100dvh-max(24px,8vh)-24px))] md:max-w-[720px]"
             }`}
           >
+            <DropOverlay show={drop.dragging} />
             <header className="flex shrink-0 items-center gap-3 border-b border-night-petal/10 py-1.5 pl-4 pr-1.5 sm:pl-5">
               <MoonPhase lit={lit} size={24} className="shrink-0 text-night-rose" />
               <div className="min-w-0 flex-1">
@@ -198,9 +216,14 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     state={state}
                     onSend={(text) => void send(text)}
                     onChoose={choose}
+                    onAnswer={finder.answer}
+                    onProfile={finder.setProfile}
+                    onSendAnswers={() => submit()}
+                    draftReady={draft.trim() !== ""}
                     onNewSearch={() => {
                       finder.reset()
                       setDraft("")
+                      attachments.clear()
                       requestAnimationFrame(() => composer.current?.focus())
                     }}
                   />
@@ -212,7 +235,10 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
 
             {composing && (
               <form onSubmit={submit} className="shrink-0 border-t border-night-petal/10 bg-night-plum px-4 pb-[max(10px,var(--safe-bottom))] pt-2.5 sm:px-5">
-                <div className="flex items-end gap-2 rounded-[22px] bg-night-velvet py-1 pl-4 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
+                <AttachmentTray items={attachments.items} preparing={attachments.preparing} error={attachments.error} onRemove={attachments.remove} />
+                <div className="flex items-end gap-1 rounded-[22px] bg-night-velvet py-1 pl-1 pr-1 ring-1 ring-inset ring-night-petal/15 transition-shadow duration-200 focus-within:ring-night-rose/60">
+                  {/* Photos and documents about the person (issue #77). */}
+                  <AttachButton onFiles={(files) => void attachments.add(files)} disabled={state.streaming} />
                   <label htmlFor="finder-message" className="sr-only">
                     Message to Majnu
                   </label>
@@ -223,10 +249,17 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={onKeyDown}
+                    onPaste={(e) => {
+                      // A pasted photo or screenshot becomes a preview; text pastes as usual.
+                      const files = filesFromClipboard(e.clipboardData)
+                      if (files.length === 0) return
+                      e.preventDefault()
+                      void attachments.add(files)
+                    }}
                     enterKeyHint="send"
                     maxLength={1000}
-                    placeholder={wrapping ? WRAP_PLACEHOLDER : MORE_PLACEHOLDER}
-                    className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
+                    placeholder={wrapping ? WRAP_PLACEHOLDER : answering ? ANSWER_PLACEHOLDER : MORE_PLACEHOLDER}
+                    className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:truncate placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none"
                   />
                   <VoiceButton
                     ensureSession={() => transport.ensureSession(() => checkHostRef.current)}
@@ -244,7 +277,9 @@ export function FinderDialog({ finder, open, onOpenChange }: Props) {
                   <button
                     type="submit"
                     aria-label="Send"
-                    aria-disabled={state.streaming || !draft.trim()}
+                    // Focus stays in the message box, so the keyboard stays up mid-tap.
+                    onMouseDown={(e) => e.preventDefault()}
+                    aria-disabled={state.streaming || !sendable}
                     className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-night-rose text-night-plum transition-[background-color,opacity,transform] duration-200 before:absolute before:-inset-0.5 before:content-[''] hover:bg-[#F1C4A9] active:scale-95 aria-disabled:opacity-50 ${focusRing}`}
                   >
                     <ArrowUp className="h-5 w-5" aria-hidden="true" />

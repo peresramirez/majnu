@@ -20,6 +20,9 @@ function displayName(type: "region" | "language", code: string, locale: string):
 
 const capitalise = (s: string) => (s ? s[0].toLocaleUpperCase() + s.slice(1) : s)
 
+const MAX_NOTE_CHIPS = 4
+const MAX_NOTE_LABEL = 40
+
 // `locale` is the language the chips are written in (the page is English).
 export function contextChips(context: FinderContext | null, locale = "en"): ContextChip[] {
   if (!context) return []
@@ -57,6 +60,17 @@ export function contextChips(context: FinderContext | null, locale = "en"): Cont
     const shown = context.interests.slice(0, 3).join(", ")
     chips.push({ key: "interests", label: `Likes ${shown}`, description: `Likes ${shown}. Add what they like`, prefill: "They also love " })
   }
+  // What Majnu noted from photos and documents (issue #77), newest last: the
+  // newest four, each its own chip, so a wrong one can be corrected.
+  const notes = (context.notes ?? []).map((note) => note.trim()).filter(Boolean).slice(-MAX_NOTE_CHIPS)
+  notes.forEach((note, i) => {
+    chips.push({
+      key: `note-${i}`,
+      label: note.length > MAX_NOTE_LABEL ? `${note.slice(0, MAX_NOTE_LABEL - 1)}…` : note,
+      description: `From what you shared: ${note}. Correct it`,
+      prefill: `About “${note}”: `,
+    })
+  })
   if (context.country) {
     const country = displayName("region", context.country.toUpperCase(), locale)
     chips.push({ key: "country", label: country, description: `Shops in ${country}. Change the country`, prefill: "Look for shops in " })
