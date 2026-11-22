@@ -206,12 +206,15 @@ function DoorDialog({ door, onClose }: { door: OpenDoor | null; onClose: () => v
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--paper-muted)]">
             Door {door.day} · {formatDay(door.opensOn)}
           </p>
+          {/* A door filled with a gift only (issue #48) may have no title or note. */}
           <h2 id="door-dialog-title" tabIndex={-1} className="mt-2 text-balance text-[32px] leading-[1.08] outline-none" style={displayStyle}>
-            {door.title}
+            {door.title.trim() || (door.gift ? "A little something" : `Door ${door.day}`)}
           </h2>
-          <p className="mt-4" style={bodyStyle}>
-            {door.message}
-          </p>
+          {door.message.trim() ? (
+            <p className="mt-4 whitespace-pre-line" style={bodyStyle}>
+              {door.message}
+            </p>
+          ) : null}
           {door.gift ? <GiftCard gift={door.gift} day={door.day} codeShown eyebrow="Behind this door" className="mt-6" /> : null}
           <button
             type="button"

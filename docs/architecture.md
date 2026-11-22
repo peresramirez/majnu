@@ -244,5 +244,6 @@ The gift finder's pages are added to [features/README.md](features/README.md) by
 - [Voice input](features/voice-input.md)
 - [Gift list on invitations](features/gift-list.md)
 - [Voice notes in gifts](features/audio-note.md)
+- [Advent calendars, filled door by door](features/advent-calendar.md)
 
 The business model (free product, a paid personalised wrapper) is in [business-plan.md](business-plan.md).
