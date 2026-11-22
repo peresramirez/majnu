@@ -9,8 +9,9 @@ export const metadata: Metadata = {
 }
 
 // viewport-fit=cover makes the phone's safe-area insets available to the tab
-// bar; resizes-content lets Android shrink the page when the keyboard opens,
-// so the message box stays above it.
+// bar, which pads with --safe-bottom (app/globals.css) so it also clears
+// Safari's floating toolbar; resizes-content lets Android shrink the page when
+// the keyboard opens, so the message box stays above it.
 export const viewport: Viewport = {
   themeColor: "#1B1226",
   viewportFit: "cover",

@@ -374,7 +374,7 @@ function PickerBody(props: PickerProps & { door: CalendarDoor }) {
         </section>
       </div>
 
-      <div className="flex flex-none flex-wrap items-center gap-3 border-t border-night-petal/10 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-6">
+      <div className="flex flex-none flex-wrap items-center gap-3 border-t border-night-petal/10 px-5 pb-[calc(1rem+var(--safe-bottom))] pt-4 sm:px-7 sm:pb-6">
         {error ? (
           <p role="alert" className="w-full text-[14px] text-night-orchid">
             {error}

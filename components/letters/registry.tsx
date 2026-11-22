@@ -18,7 +18,15 @@ import { PartyBox } from "./templates/party-box"
 import { Postcard } from "./templates/postcard"
 import { TreasureMap } from "./templates/treasure-map"
 import { WeddingEnvelope3D } from "./templates/wedding-envelope-3d"
-import { themeStyle } from "./theme"
+import { paletteOf, themeStyle } from "./theme"
+
+// Safari 26 and later colour their status bar and toolbar from the root's
+// background (theme-color is ignored), so the page's root takes the template's
+// own flat colour. It comes from the fixed palette table, never from content.
+// Two pseudo-classes, so it wins over the night surface of the owner layout.
+function rootColourCss(colour: string) {
+  return `:root:has([data-letter-page]),:root:has([data-letter-page]) body{background-color:${colour}}`
+}
 
 function Template({ letter }: { letter: PublicLetter }) {
   if (letter.kind === "calendar") {
@@ -58,8 +66,10 @@ export function LetterRenderer({ letter, audio }: { letter: PublicLetter; audio?
       className={`${letterFontVariables} min-h-[100svh] antialiased`}
       style={{ ...themeStyle(letter.content.theme), background: "var(--page-flat)", color: "var(--page-ink)" }}
       data-template={letter.templateId}
+      data-letter-page=""
       data-audio-space={note ? "" : undefined}
     >
+      <style>{rootColourCss(paletteOf(letter.content.theme).pageFlat)}</style>
       {note ? <style>{AUDIO_SPACE_CSS}</style> : null}
       {/* First in the page, as it is first on screen: keyboards and screen readers meet it before the letter. */}
       {note && letter.kind === "letter" ? <AudioNote audio={note} senderName={letter.content.senderName} /> : null}

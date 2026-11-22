@@ -20,11 +20,19 @@ const icons: Record<TabId, LucideIcon> = { find: Search, gifts: Gift, create: Pe
 // the tab bar. While a message box has focus on a phone, the tab bar steps
 // aside to give the keyboard the room. The gift finder's state lives here
 // (FinderProvider), so a conversation in Find a gift survives the other tabs.
+//
+// On iPhones the tab bar pads its bottom with --safe-bottom (app/globals.css):
+// the home indicator in a home-screen web app, and the room Safari's floating
+// toolbar takes over the page in a browser tab. Only <main> scrolls, so Safari
+// keeps its toolbar expanded here; the padding is sized for that state, and
+// the smaller collapsed toolbar falls inside it too. data-surface="night"
+// gives the root the plum background Safari colours its bars from.
 export function AppShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
-  const current = activeTab(usePathname() ?? "")
+  const pathname = usePathname() ?? ""
+  const current = activeTab(pathname)
 
   return (
-    <div className="dark group/shell flex h-screen h-dvh flex-col bg-night-plum text-night-petal">
+    <div data-surface="night" className="dark group/shell flex h-screen h-dvh flex-col bg-night-plum text-night-petal">
       <a
         href="#main"
         className="sr-only z-50 rounded-full bg-night-rose px-4 py-2 font-semibold text-night-plum focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
@@ -63,7 +71,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         </div>
       </header>
 
-      {user.isGuest && <GuestNotice />}
+      {user.isGuest && <GuestNotice pathname={pathname} />}
 
       <main id="main" className="min-h-0 flex-1 overflow-y-auto">
         <FinderProvider>{children}</FinderProvider>
@@ -71,7 +79,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
       <nav
         aria-label="Main"
-        className="flex-none border-t border-night-petal/10 bg-night-plum pb-[env(safe-area-inset-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
+        className="flex-none border-t border-night-petal/10 bg-night-plum pb-[var(--safe-bottom)] md:hidden group-has-[textarea[data-composer]:focus]/shell:hidden"
       >
         <ul className="grid" style={{ gridTemplateColumns: `repeat(${appTabs.length}, minmax(0, 1fr))` }}>
           {appTabs.map((tab) => {

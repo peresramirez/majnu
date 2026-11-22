@@ -114,6 +114,10 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
           <label id="finder-hero-label" htmlFor="finder-hero-message" className="sr-only">
             Who is the gift for?
           </label>
+          {/* 44px tall: 10px + one 24px line + 10px, so the text and the typed
+              example sit centred beside the 44px buttons. appearance-none and
+              the zeroed border, radius and shadow drop iOS Safari's own textarea
+              styling, which otherwise nudges the placeholder off that line. */}
           <textarea
             id="finder-hero-message"
             ref={field}
@@ -124,7 +128,7 @@ export function HeroFinder({ transport = fetchTransport, suggestions = SUGGESTIO
             enterKeyHint="send"
             maxLength={1000}
             rows={1}
-            className="block h-11 max-h-[116px] min-w-0 flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/75 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
+            className="block h-11 max-h-[116px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2.5 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/75 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
           />
           {/* Speak instead of typing (issue #37). The words land in the box for
               the visitor to check; nothing is sent until they press the button.

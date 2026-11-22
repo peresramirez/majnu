@@ -320,7 +320,7 @@ export function FinderPanel({ finder, suggestions = SUGGESTIONS }: Props) {
                 enterKeyHint="send"
                 maxLength={1000}
                 placeholder={empty ? placeholder : "Tell Majnu more about them"}
-                className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
+                className="max-h-[112px] min-h-[40px] min-w-0 flex-1 resize-none appearance-none rounded-none border-0 bg-transparent px-0 py-2 text-[16px] leading-6 shadow-none placeholder:leading-6 text-night-petal placeholder:text-night-lilac/70 focus:outline-none group-has-[[data-voice-phase]:not([data-voice-phase=idle])]/row:placeholder:text-transparent"
               />
               {/* Speak instead of typing (issue #37): the words land in the box
                   for the sender to check, and nothing is sent until they do. */}

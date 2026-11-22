@@ -12,6 +12,9 @@ import { X } from "lucide-react"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { focusRing, primaryButton, smallButton } from "@/components/app/styles"
 
+// A guest who signs up from a calendar template comes back to the gallery.
+const SIGN_UP_HERE = `/signup?next=${encodeURIComponent("/dashboard/templates")}`
+
 function templateHref(id: string) {
   return `/dashboard?template=${encodeURIComponent(id)}`
 }
@@ -33,7 +36,7 @@ export function TemplateActions({
   const [open, setOpen] = useState(false)
   const href = templateHref(id)
   const use = needsAccount ? (
-    <Link href="/signup" className={smallPrimary}>
+    <Link href={SIGN_UP_HERE} className={smallPrimary}>
       Create an account<span className="sr-only">: {name}</span>
     </Link>
   ) : (
@@ -83,10 +86,10 @@ export function TemplateActions({
             <iframe src={`/dev/templates/${id}`} title={`${name}, a preview with example words`} className="relative block h-full w-full" />
           </div>
 
-          <div className="flex-none border-t border-night-petal/10 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          <div className="flex-none border-t border-night-petal/10 px-4 pb-[max(1rem,var(--safe-bottom))] pt-3">
             <p className="mb-3 line-clamp-2 text-[13px] leading-snug text-night-lilac">{description}</p>
             {needsAccount ? (
-              <Link href="/signup" className={`${primaryButton} w-full`}>
+              <Link href={SIGN_UP_HERE} className={`${primaryButton} w-full`}>
                 Create an account to make one
               </Link>
             ) : (

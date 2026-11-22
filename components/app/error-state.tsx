@@ -3,15 +3,20 @@
 import Link from "next/link"
 import { useEffect } from "react"
 import { MoonPhase } from "@/components/brand/moon-phase"
+import { BackLink } from "@/lib/navigation/use-back"
 import { primaryButton, secondaryButton } from "./styles"
+import { APP_HOME } from "./tabs"
 
 // What a screen shows when loading it failed: what happened, and what to do.
+// Without a `back`, the way out is "Go back": the page this tab came from
+// (lib/navigation/back.ts), or Find a gift when there is none. A `back` names
+// a fixed destination instead (My gifts), and null shows none.
 export function ErrorState({
   error,
   reset,
   title,
   body,
-  back = { href: "/dashboard", label: "Create a gift" },
+  back,
 }: {
   error?: Error & { digest?: string }
   reset?: () => void
@@ -34,11 +39,15 @@ export function ErrorState({
             Try again
           </button>
         )}
-        {back && (
+        {back ? (
           <Link href={back.href} className={reset ? secondaryButton : primaryButton}>
             {back.label}
           </Link>
-        )}
+        ) : back === undefined ? (
+          <BackLink fallback={APP_HOME} className={reset ? secondaryButton : primaryButton}>
+            Go back
+          </BackLink>
+        ) : null}
       </div>
       {error?.digest && <p className="mt-8 text-xs text-night-lilac/60">Reference {error.digest}</p>}
     </div>

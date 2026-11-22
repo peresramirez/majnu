@@ -4,7 +4,7 @@ import { MoonPhase } from "@/components/brand/moon-phase"
 import { TemplateIcon } from "@/components/create/template-bits"
 import type { LetterSummary } from "@/lib/letters/store"
 import { getTemplate } from "@/lib/letters/templates"
-import { shortDate } from "../format"
+import { displayName, shortDate } from "../format"
 import { pagePadding, primaryButton } from "../styles"
 import { TimeZoneNote } from "./time-zone-note"
 import { TrackedGift, type TrackedGiftInfo } from "./tracked-gift"
@@ -49,7 +49,7 @@ export function TrackerView({ letters, events, now }: { letters: LetterSummary[]
           const gift: TrackedGiftInfo = {
             id: letter.id,
             kind: letter.kind,
-            name: letter.recipientName ? `For ${letter.recipientName}` : letter.title ?? "A gift in progress",
+            name: letter.recipientName ? `For ${displayName(letter.recipientName)}` : letter.title ?? "A gift in progress",
             eyebrow: `${template?.name ?? "No design yet"} · ${shortDate(letter.createdAt, now)}`,
             hasContent: letter.hasContent,
             stats: letter.stats,

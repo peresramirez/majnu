@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 }
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-[100svh] bg-night-plum">{children}</div>
+  return <div data-surface="night" className="min-h-[100svh] bg-night-plum">{children}</div>
 }
