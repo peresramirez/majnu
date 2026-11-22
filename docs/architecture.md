@@ -133,21 +133,25 @@ sequenceDiagram
   R-->>C: letter event, the address becomes /create/id
   R->>M: stored history and the new message
   M->>A: streamed request
-  A-->>M: text and a suggest_templates call
-  M-->>C: text deltas and template cards
-  S->>C: taps a card, writes a memory
+  A-->>M: text, build_letter (a first draft) and suggest_templates
+  M-->>C: text deltas
+  M->>B: brief, today's date, timezone
+  B->>A: streamed structured output against the schema
+  B-->>C: draft events: the page is written in the preview
+  B->>DB: save the validated content
+  M-->>C: preview event and template cards
+  C->>C: the preview reloads, share panel shows the link
+  S->>C: writes her name and a memory
   C->>R: next message
   M->>A: request with the history replayed
-  A-->>M: build_letter with a full brief
-  M->>B: brief, today's date, timezone
-  B->>A: structured output against the schema
-  B->>DB: save the content
-  M-->>C: preview event
-  C->>C: the preview reloads, share panel shows the link
+  A-->>M: edit_letter with the new facts
+  M->>B: current content and the change
+  B-->>C: draft events over the current page
+  B->>DB: save, then the preview event reloads it
   R->>DB: save the conversation, append-only
 ```
 
-The sender writes on the **Create** tab. The first message creates the letter, and the address moves to `/create/<id>` without interrupting the reply. The main agent leads in steps (who it is for, the template, the words and details, build, share, offer a calendar) and calls four tools: `suggest_templates`, `research_gifts`, `build_letter` and `edit_letter`. The builder makes one structured-output call validated against the contract and retried once; the research agent searches the web at most four times. The conversation is stored exactly as the API returned it and replayed append-only. Every route that calls the model is behind the spending guard: 5 new gifts per user per day, 40 messages per gift, 4,000 characters per message, 6 model requests per message. Details: [features/letters-chat.md](features/letters-chat.md).
+The sender writes on the **Create** tab. The first message creates the letter, and the address moves to `/create/<id>` without interrupting the reply. The main agent leads in steps and the preview grows with them (issue #30): a first draft as soon as it knows who it is for and the occasion, template cards to switch, then an edit in the same turn for every message that adds a fact, then share and offer a calendar. It calls five tools: `suggest_templates`, `research_gifts`, `build_letter`, `edit_letter` and `update_gift_list`. The builder makes one streamed structured-output call validated against the contract and retried once, and the create page shows its draft while it writes (never stored, no codes or links); the research agent searches the web at most four times. The conversation is stored exactly as the API returned it and replayed append-only. Every route that calls the model is behind the spending guard: 5 new gifts per user per day, 40 messages per gift, 4,000 characters per message, 6 model requests per message. Details: [features/letters-chat.md](features/letters-chat.md).
 
 ### A recipient opening a gift
 
